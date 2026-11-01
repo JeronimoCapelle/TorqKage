@@ -1,7 +1,6 @@
 ---
 name: coder
 description: "Autonomous source code implementer that writes production logic in src/ against failing test suites until compiler and tests pass."
-model: flash
 effort: medium
 permissionMode: acceptEdits
 commandExecutionPolicy: off
@@ -14,6 +13,7 @@ tools:
   - run_cargo_verification
   - run_cargo_test
   - run_cargo_clippy
+  - run_cargo_clippy_fix
   - query_tool_help
 ---
 

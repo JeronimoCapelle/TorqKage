@@ -1,7 +1,6 @@
 ---
 name: perf-analyst
 description: "Hardware performance profiler and memory safety auditor generating diagnostic reports"
-model: pro
 effort: high
 mainAgent: true
 permissionMode: plan

@@ -1,7 +1,6 @@
 ---
 name: finisher
 description: "Backward-looking adversarial gatekeeper reviewing diffs, ARCHITECTURE.md, and release readiness"
-model: pro
 effort: high
 mainAgent: true
 permissionMode: acceptEdits
@@ -11,8 +10,12 @@ tools:
   - search_codebase
   - query_project_spec
   - inspect_module_structure
+  - inspect_workspace_diff
+  - inspect_project_state
+  - run_cargo_nextest
   - run_cargo_clippy
   - run_git_cliff
+  - ask_question
   - query_tool_help
 ---
 

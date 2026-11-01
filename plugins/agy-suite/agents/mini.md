@@ -1,7 +1,6 @@
 ---
 name: mini
 description: "Narrow mathematical, symbolic, and analytical calculation subagent"
-model: flash_lite
 effort: low
 mainAgent: true
 subagent: true

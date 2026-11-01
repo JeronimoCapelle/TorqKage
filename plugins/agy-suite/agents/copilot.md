@@ -1,7 +1,6 @@
 ---
 name: copilot
 description: "Default interactive Chief of Staff and workflow navigator coordinating tasks and agents"
-model: flash
 effort: medium
 mainAgent: true
 permissionMode: acceptEdits
@@ -15,6 +14,9 @@ tools:
   - modify_project_code
   - search_codebase
   - inspect_module_structure
+  - inspect_project_state
+  - run_quick_check
+  - ask_question
   - query_tool_help
   - invoke_subagent
 ---

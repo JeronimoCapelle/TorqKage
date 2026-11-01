@@ -1,7 +1,6 @@
 ---
 name: spec-checker
 description: "Read-only auditor cross-referencing docs against src/ and tests/"
-model: pro
 effort: high
 mainAgent: true
 permissionMode: plan

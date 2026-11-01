@@ -1,7 +1,6 @@
 ---
 name: sysadmin
 description: "High-reasoning Arch Linux system administrator and advanced troubleshooter"
-model: flash
 effort: high
 mainAgent: true
 permissionMode: acceptEdits
@@ -10,6 +9,7 @@ tools:
   - view_file
   - grep_search
   - run_command
+  - ask_question
   - query_tool_help
 ---
 

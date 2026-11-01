@@ -508,3 +508,11 @@ command = ["agy-hooks", "inspect-state"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
+
+[tools.inspect_workspace_diff]
+description = "Inspects the active working tree diff (jj diff or git diff) with automatic line truncation"
+action = "static_command"
+command = ["jj", "diff"]
+output_capture = "stdout"
+truncate_lines = 200
+timeout_seconds = 10

@@ -1,13 +1,13 @@
 ---
 name: test-author
 description: "Comprehensive test suite engineer with coverage, nextest, mutants, insta, fuzz, and proptest tooling"
-model: flash
 effort: medium
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
 tools:
   - read_project_file
+  - search_codebase
   - write_test_file
   - modify_test_code
   - run_cargo_verification
