@@ -25,35 +25,5 @@
         "timeout": 2
       }
     ]
-  },
-  "finisher-clippy-guard": {
-    "enabled": false,
-    "PreToolUse": [
-      {
-        "matcher": "run_git_cliff",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "agy-hooks check-clippy",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  },
-  "deauthorized-agent-guard": {
-    "enabled": false,
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "agy-hooks deny-all",
-            "timeout": 2
-          }
-        ]
-      }
-    ]
   }
 }

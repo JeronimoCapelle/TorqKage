@@ -12,8 +12,8 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 use agy_common::{
-    HookDecision, PreInvocationInput, PreInvocationResponse, PreToolResponse, PreToolUseInput,
-    SessionStartInput, SessionStartResponse, StopInput, StopResponse,
+    PreInvocationInput, PreInvocationResponse, SessionStartInput, SessionStartResponse, StopInput,
+    StopResponse,
 };
 
 fn run_hook_subcommand(subcmd: &str, stdin_json: Option<&str>) -> (bool, String, String) {
@@ -41,46 +41,6 @@ fn run_hook_subcommand(subcmd: &str, stdin_json: Option<&str>) -> (bool, String,
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
 
     (output.status.success(), stdout, stderr)
-}
-
-#[test]
-fn test_deny_all_e2e() {
-    let sample_payload = r#"{
-        "toolCall": { "name": "run_command", "args": { "CommandLine": "rm -rf /" } },
-        "stepIdx": 1,
-        "conversationId": "test-deny-conv"
-    }"#;
-
-    let (success, stdout, _) = run_hook_subcommand("deny-all", Some(sample_payload));
-    assert!(success);
-
-    let resp: PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse JSON");
-    assert_eq!(resp.decision, HookDecision::Deny);
-    assert!(resp.reason.as_deref().unwrap_or("").contains("Security policy"));
-}
-
-#[test]
-fn test_check_clippy_on_temp_dir_e2e() {
-    let temp_dir = std::env::temp_dir();
-    let payload = PreToolUseInput {
-        tool_call: None,
-        step_idx: Some(5),
-        common: agy_common::CommonHookPayload {
-            conversation_id: Some("clippy-test-conv".to_owned()),
-            workspace_paths: vec![temp_dir],
-            transcript_path: None,
-            artifact_directory_path: None,
-            model_name: Some("gemini-3.8-flash".to_owned()),
-            last_user_input: Some("cargo check".to_owned()),
-        },
-    };
-
-    let input_json = serde_json::to_string(&payload).expect("serialize payload");
-    let (success, stdout, _) = run_hook_subcommand("check-clippy", Some(&input_json));
-    assert!(success);
-
-    let resp: PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse JSON");
-    assert_eq!(resp.decision, HookDecision::Allow);
 }
 
 #[test]

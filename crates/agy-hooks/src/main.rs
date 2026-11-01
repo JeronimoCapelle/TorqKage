@@ -5,8 +5,6 @@
 #![allow(clippy::print_stdout, reason = "CLI hook tool emits ProtoJSON directly to stdout")]
 #![allow(clippy::print_stderr, reason = "CLI diagnostics are emitted to stderr")]
 
-mod clippy;
-mod deny;
 mod handoff;
 mod state;
 mod stdin;
@@ -19,14 +17,6 @@ fn main() -> ExitCode {
     let command = args.get(1).map_or("help", String::as_str);
 
     match command {
-        "check-clippy" => {
-            clippy::execute();
-            ExitCode::SUCCESS
-        }
-        "deny-all" => {
-            deny::execute();
-            ExitCode::SUCCESS
-        }
         "detect-wip" => {
             wip::execute();
             ExitCode::SUCCESS
@@ -63,8 +53,6 @@ fn print_usage() {
            agy-hooks <COMMAND>\n\
          \n\
          COMMANDS:\n\
-           check-clippy    PreToolUse gate checking compiler lints via cargo clippy\n\
-           deny-all        PreToolUse hard denial for deauthorized agents\n\
            detect-wip      PreInvocation ephemeral notification on working tree modification\n\
            record-handoff  Stop hook recording session metadata to .pipeline/last_handoff.md\n\
            inject-wake     SessionStart hook injecting last handoff state into conversation\n\
