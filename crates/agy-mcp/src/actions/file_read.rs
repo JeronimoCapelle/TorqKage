@@ -1,7 +1,7 @@
 //! `file_read` action handler with path confinement and safe truncation.
 
 use std::path::Path;
-use crate::guards::{check_dangerous_files, resolve_safe_path, truncate_output};
+use crate::guards::{check_dangerous_files, check_enforce_boundaries, resolve_safe_path, truncate_output};
 use crate::models::ToolDefinition;
 
 /// Executes a bounded file read action.
@@ -27,6 +27,13 @@ pub(crate) fn execute(
         path_str,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds,
+    )?;
+
+    check_enforce_boundaries(
+        workspace_root,
+        &safe_path,
+        tool.enforce_dir.as_deref(),
+        tool.enforce_file_target.as_deref(),
     )?;
 
     let raw_content = std::fs::read_to_string(&safe_path)

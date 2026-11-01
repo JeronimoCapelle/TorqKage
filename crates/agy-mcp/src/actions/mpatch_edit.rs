@@ -2,7 +2,7 @@
 
 use std::path::Path;
 use mpatch::{patch_content_str, ApplyOptions};
-use crate::guards::{check_dangerous_files, resolve_safe_path};
+use crate::guards::{check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
 use crate::models::ToolDefinition;
 
 /// Executes a bounded fuzzy code modification using `mpatch`.
@@ -33,6 +33,13 @@ pub(crate) fn execute(
         path_str,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds,
+    )?;
+
+    check_enforce_boundaries(
+        workspace_root,
+        &safe_path,
+        tool.enforce_dir.as_deref(),
+        tool.enforce_file_target.as_deref(),
     )?;
 
     if !safe_path.exists() {

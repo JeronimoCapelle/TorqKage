@@ -1,7 +1,7 @@
 //! `file_write` action handler with path confinement, directory allowlisting, and security guards.
 
 use std::path::Path;
-use crate::guards::{check_dangerous_files, resolve_safe_path};
+use crate::guards::{check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
 use crate::models::ToolDefinition;
 
 /// Executes a bounded file write action.
@@ -32,6 +32,13 @@ pub(crate) fn execute(
         path_str,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds,
+    )?;
+
+    check_enforce_boundaries(
+        workspace_root,
+        &safe_path,
+        tool.enforce_dir.as_deref(),
+        tool.enforce_file_target.as_deref(),
     )?;
 
     if let Some(parent) = safe_path.parent()
@@ -136,5 +143,27 @@ mod tests {
         let res = execute(&tool, &temp, &args);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("outside allowed directories"));
+    }
+
+    #[test]
+    fn test_file_write_enforce_file_target_and_dir() {
+        let temp = create_test_dir("enforce");
+        let tool = ToolDefinition {
+            name: "write_spec".to_owned(),
+            enforce_file_target: Some(".pipeline/spec.md".to_owned()),
+            ..Default::default()
+        };
+
+        let bad_args = json!({
+            "path": ".pipeline/other.md",
+            "content": "# Other"
+        });
+        assert!(execute(&tool, &temp, &bad_args).is_err());
+
+        let good_args = json!({
+            "path": ".pipeline/spec.md",
+            "content": "# Spec"
+        });
+        assert!(execute(&tool, &temp, &good_args).is_ok());
     }
 }

@@ -131,6 +131,54 @@ pub(crate) fn resolve_safe_path(
     Ok(candidate)
 }
 
+/// Enforces single-directory confinement (`enforce_dir`) and single-file target locking (`enforce_file_target`).
+///
+/// # Errors
+/// Returns an error if the candidate path is outside `enforce_dir` or does not match `enforce_file_target`.
+pub(crate) fn check_enforce_boundaries(
+    workspace_root: &Path,
+    candidate: &Path,
+    enforce_dir: Option<&str>,
+    enforce_file_target: Option<&str>,
+) -> Result<(), String> {
+    let relative = candidate
+        .strip_prefix(workspace_root)
+        .unwrap_or(candidate);
+    let rel_lossy = relative.to_string_lossy();
+
+    // 1. Enforce single-file target locking
+    if let Some(target) = enforce_file_target {
+        let expected_rel = Path::new(target)
+            .strip_prefix(workspace_root)
+            .unwrap_or_else(|_| Path::new(target));
+        let expected_lossy = expected_rel.to_string_lossy();
+
+        if rel_lossy != expected_lossy {
+            return Err(format!(
+                "Security policy violation: Tool is strictly locked to target file '{expected_lossy}', but '{rel_lossy}' was requested."
+            ));
+        }
+    }
+
+    // 2. Enforce single-directory confinement
+    if let Some(dir) = enforce_dir {
+        let clean_dir = dir.trim_matches(['/', '\\']);
+        let allowed = rel_lossy == clean_dir
+            || rel_lossy.starts_with(&format!("{clean_dir}/"))
+            || rel_lossy.starts_with(&format!("{clean_dir}\\"))
+            || rel_lossy.contains(&format!("/{clean_dir}/"))
+            || rel_lossy.contains(&format!("\\{clean_dir}\\"));
+
+        if !allowed {
+            return Err(format!(
+                "Security policy violation: Path '{rel_lossy}' is outside enforced directory '{clean_dir}'"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Truncates string output by lines and bytes safely on UTF-8 boundaries.
 pub(crate) fn truncate_output(
     text: &str,
@@ -228,5 +276,22 @@ mod tests {
         let truncated = truncate_output(sample, Some(2), None, true);
         assert!(truncated.contains("Line 1\nLine 2"));
         assert!(truncated.contains("[TRUNCATION NOTICE:"));
+    }
+
+    #[test]
+    fn test_enforce_boundaries() {
+        let root = std::env::temp_dir();
+
+        // Enforce file target
+        let good_file = root.join("ARCHITECTURE.md");
+        let bad_file = root.join("src/lib.rs");
+        assert!(check_enforce_boundaries(&root, &good_file, None, Some("ARCHITECTURE.md")).is_ok());
+        assert!(check_enforce_boundaries(&root, &bad_file, None, Some("ARCHITECTURE.md")).is_err());
+
+        // Enforce dir
+        let good_dir = root.join("docs/specs/rv32.md");
+        let bad_dir = root.join("src/main.rs");
+        assert!(check_enforce_boundaries(&root, &good_dir, Some("docs"), None).is_ok());
+        assert!(check_enforce_boundaries(&root, &bad_dir, Some("docs"), None).is_err());
     }
 }

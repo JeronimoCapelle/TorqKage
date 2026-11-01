@@ -1,6 +1,6 @@
 //! Validation engine verifying tool specifications and host binary prerequisites.
 
-use crate::models::{ToolAction, ToolDefinition};
+use crate::models::{OutputCapture, ToolAction, ToolDefinition};
 
 /// Diagnostic summary produced when inspecting the declarative toolset at boot.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -54,8 +54,25 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
     for tool in tools {
         match tool.action {
             ToolAction::StaticCommand
-            | ToolAction::ParameterizedCommand
-            | ToolAction::CargoJsonDiagnostics => {
+            | ToolAction::ParameterizedCommand => {
+                if tool.output_capture == OutputCapture::JsonSpans {
+                    report.warnings.push(format!(
+                        "Tool '{}' specifies output_capture='json_spans' on a command action; falling back to combined output. Use 'cargo_json_diagnostics' action for structured compiler spans.",
+                        tool.name
+                    ));
+                }
+
+                if let Some(binary) = tool.primary_binary() {
+                    if which::which(binary).is_ok() {
+                        report.verified_tools = report.verified_tools.saturating_add(1);
+                    } else {
+                        report.missing_binaries.push((tool.name.clone(), binary.to_owned()));
+                    }
+                } else {
+                    report.warnings.push(format!("Tool '{}' has command action but empty command vector", tool.name));
+                }
+            }
+            ToolAction::CargoJsonDiagnostics => {
                 if let Some(binary) = tool.primary_binary() {
                     if which::which(binary).is_ok() {
                         report.verified_tools = report.verified_tools.saturating_add(1);
@@ -115,5 +132,20 @@ mod tests {
         assert_eq!(report.verified_tools, 1);
         assert_eq!(report.missing_binaries.len(), 1);
         assert_eq!(report.missing_binaries[0].0, "run_nonexistent_binary_xyz");
+    }
+
+    #[test]
+    fn test_validator_warning_on_json_spans() {
+        let tools = vec![ToolDefinition {
+            name: "custom_cmd".to_owned(),
+            action: ToolAction::StaticCommand,
+            command: vec!["cargo".to_owned()],
+            output_capture: OutputCapture::JsonSpans,
+            ..Default::default()
+        }];
+
+        let report = validate_tools(&tools);
+        assert_eq!(report.warnings.len(), 1);
+        assert!(report.warnings[0].contains("specifies output_capture='json_spans' on a command action"));
     }
 }
