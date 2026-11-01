@@ -10,6 +10,11 @@ allowed_subagents:
 tools:
   - ask_question
   - invoke_subagent
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "planner"]
 mcp_tools:
   - read_project_file
   - write_design_doc

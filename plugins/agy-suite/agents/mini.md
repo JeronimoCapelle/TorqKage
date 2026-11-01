@@ -4,6 +4,11 @@ description: "Narrow mathematical, symbolic, and analytical calculation subagent
 effort: low
 mainAgent: true
 subagent: true
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "mini"]
 tools: []
 mcp_tools:
   - eval_symbolic_math

@@ -4,10 +4,10 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Resolves the requested agent from command line arguments, environment variables, or parent process cmdline.
+/// Resolves the requested agent from command line arguments, environment variables, or `.pipeline/active_agent.json`.
 #[must_use]
-pub(crate) fn resolve_agent_scope(args: &[String]) -> Option<String> {
-    // 1. Check CLI args
+pub(crate) fn resolve_agent_scope(args: &[String], workspace_root: &Path) -> Option<String> {
+    // 1. Check CLI args (--agent, -a, --scope, -s)
     let mut i = 1;
     while i < args.len() {
         if let Some(arg) = args.get(i)
@@ -19,7 +19,7 @@ pub(crate) fn resolve_agent_scope(args: &[String]) -> Option<String> {
         i = i.saturating_add(1);
     }
 
-    // 2. Check environment variables
+    // 2. Check environment variables (AGY_AGENT, MCP_SCOPE)
     if let Ok(val) = std::env::var("AGY_AGENT")
         && !val.trim().is_empty()
     {
@@ -31,49 +31,36 @@ pub(crate) fn resolve_agent_scope(args: &[String]) -> Option<String> {
         return Some(val.trim().to_owned());
     }
 
-    // 3. Inspect parent process cmdline on Linux (/proc/$PPID/cmdline)
-    if let Some(agent) = detect_agent_from_parent_process() {
+    // 3. Check persistent pipeline state bridge (.pipeline/active_agent.json or .pipeline/active_agent)
+    if let Some(agent) = read_active_agent_from_pipeline(workspace_root) {
         return Some(agent);
     }
 
     None
 }
 
-/// Detects `--agent <name>` from the parent process command line if running under `agy`.
-fn detect_agent_from_parent_process() -> Option<String> {
-    #[cfg(target_os = "linux")]
+/// Reads the active agent identity from `.pipeline/active_agent.json` or `.pipeline/active_agent`.
+fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
+    let json_path = workspace_root.join(".pipeline/active_agent.json");
+    if json_path.is_file()
+        && let Ok(content) = fs::read_to_string(&json_path)
+        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
+        && !name.trim().is_empty()
     {
-        let ppid = std::os::unix::process::parent_id();
-        let cmdline_path = format!("/proc/{ppid}/cmdline");
-        if let Ok(bytes) = fs::read(cmdline_path) {
-            let cmd_parts: Vec<&str> = bytes
-                .split(|&b| b == 0)
-                .filter_map(|s| std::str::from_utf8(s).ok())
-                .collect();
+        return Some(name.trim().to_owned());
+    }
 
-            let is_agy = cmd_parts.first().is_some_and(|exe| exe.contains("agy"));
-
-            let mut i = 0;
-            while i < cmd_parts.len() {
-                if let Some(&arg) = cmd_parts.get(i) {
-                    if let Some(val) = arg.strip_prefix("--agent=") {
-                        return Some(val.trim().to_owned());
-                    }
-                    if (arg == "--agent" || arg == "-a")
-                        && let Some(&val) = cmd_parts.get(i.saturating_add(1))
-                        && !val.starts_with('-')
-                    {
-                        return Some(val.trim().to_owned());
-                    }
-                }
-                i = i.saturating_add(1);
-            }
-
-            if is_agy {
-                return Some("copilot".to_owned());
-            }
+    let txt_path = workspace_root.join(".pipeline/active_agent");
+    if txt_path.is_file()
+        && let Ok(content) = fs::read_to_string(&txt_path)
+    {
+        let name = content.trim();
+        if !name.is_empty() {
+            return Some(name.to_owned());
         }
     }
+
     None
 }
 
@@ -309,5 +296,23 @@ mod tests {
         let mini_tools = canonical_agent_tools("mini");
         assert_eq!(mini_tools.len(), 1);
         assert!(mini_tools.contains("eval_symbolic_math"));
+    }
+
+    #[test]
+    fn test_read_active_agent_from_pipeline() {
+        let temp_dir = std::env::temp_dir().join(format!("agy_agent_scope_test_{}", std::process::id()));
+        let pipeline_dir = temp_dir.join(".pipeline");
+        fs::create_dir_all(&pipeline_dir).expect("create pipeline dir");
+
+        // 1. JSON state
+        fs::write(pipeline_dir.join("active_agent.json"), r#"{"agent": "test-author"}"#).expect("write json");
+        assert_eq!(read_active_agent_from_pipeline(&temp_dir), Some("test-author".to_owned()));
+
+        // 2. Text fallback
+        fs::remove_file(pipeline_dir.join("active_agent.json")).expect("remove json");
+        fs::write(pipeline_dir.join("active_agent"), "finisher\n").expect("write txt");
+        assert_eq!(read_active_agent_from_pipeline(&temp_dir), Some("finisher".to_owned()));
+
+        drop(fs::remove_dir_all(&temp_dir));
     }
 }

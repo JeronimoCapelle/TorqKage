@@ -9,6 +9,11 @@ allowed_subagents:
   - mini
 tools:
   - invoke_subagent
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "perf-analyst"]
 mcp_tools:
   - read_project_file
   - search_codebase

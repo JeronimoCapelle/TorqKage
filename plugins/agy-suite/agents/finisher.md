@@ -7,6 +7,11 @@ permissionMode: acceptEdits
 commandExecutionPolicy: off
 tools:
   - ask_question
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "finisher"]
 mcp_tools:
   - read_project_file
   - search_codebase

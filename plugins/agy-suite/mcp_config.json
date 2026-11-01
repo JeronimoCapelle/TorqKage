@@ -2,7 +2,7 @@
   "mcpServers": {
     "agy-tools": {
       "command": "/home/infinite/.cargo/bin/agy-mcp",
-      "args": []
+      "args": ["--agent", "copilot"]
     }
   }
 }

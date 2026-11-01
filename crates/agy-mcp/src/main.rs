@@ -14,7 +14,7 @@ mod schema;
 mod server;
 mod validator;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use agy_common::WorkspaceResolver;
 use server::McpServer;
@@ -74,24 +74,32 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf, Option<String>) {
         i = i.saturating_add(1);
     }
 
-    let agent_name = agent_scope::resolve_agent_scope(&args);
+    let workspace_root = custom_workspace.unwrap_or_else(|| {
+        WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+    });
 
     let config_path = custom_config.unwrap_or_else(|| {
-        let ws = custom_workspace.clone().unwrap_or_else(|| {
-            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
-        });
-        ws.join("tools.toml")
-    });
-
-    let workspace_root = custom_workspace.unwrap_or_else(|| {
-        if let Some(parent) = config_path.parent()
-            && parent != Path::new("")
-        {
-            parent.to_path_buf()
+        let candidate = workspace_root.join("tools.toml");
+        if candidate.is_file() {
+            candidate
         } else {
-            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+            let candidate_plugin = workspace_root.join("plugins/agy-suite/tools.toml");
+            if candidate_plugin.is_file() {
+                candidate_plugin
+            } else if let Ok(home) = std::env::var("HOME") {
+                let home_candidate = PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
+                if home_candidate.is_file() {
+                    home_candidate
+                } else {
+                    candidate
+                }
+            } else {
+                candidate
+            }
         }
     });
+
+    let agent_name = agent_scope::resolve_agent_scope(&args, &workspace_root);
 
     (workspace_root, config_path, agent_name)
 }

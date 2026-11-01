@@ -7,6 +7,11 @@ commandExecutionPolicy: off
 mainAgent: true
 subagent: true
 tools: []
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "coder"]
 mcp_tools:
   - read_project_file
   - modify_source_code

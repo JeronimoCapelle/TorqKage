@@ -6,6 +6,11 @@ mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
 tools: []
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "test-author"]
 mcp_tools:
   - read_project_file
   - search_codebase

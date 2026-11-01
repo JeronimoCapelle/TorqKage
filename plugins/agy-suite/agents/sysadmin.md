@@ -10,6 +10,11 @@ tools:
   - grep_search
   - run_command
   - ask_question
+inheritMcp: false
+mcpServers:
+  - name: agy-tools
+    command: /home/infinite/.cargo/bin/agy-mcp
+    args: ["--agent", "sysadmin"]
 mcp_tools:
   - query_tool_help
 ---
