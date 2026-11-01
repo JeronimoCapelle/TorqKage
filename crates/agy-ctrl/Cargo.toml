@@ -14,7 +14,9 @@ agy-common = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 toml = { workspace = true }
+which = { workspace = true }
 
 [lints]
 workspace = true
