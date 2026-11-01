@@ -134,6 +134,10 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
         return !val.chars().any(char::is_control);
     }
 
+    if pattern.contains("\\x00") {
+        return !val.contains('\0');
+    }
+
     if let Some(inner) = pattern.strip_prefix("^[").and_then(|p| p.strip_suffix("]+$")) {
         let has_alnum = inner.contains("a-zA-Z0-9")
             || (inner.contains("a-z") && inner.contains("A-Z") && inner.contains("0-9"));
@@ -175,6 +179,8 @@ mod tests {
         assert!(matches_pattern("unit-test_1", "^[a-zA-Z0-9_-]+$"));
         assert!(matches_pattern("struct ToolDefinition", "^[^\\x00-\\x1f]+$"));
         assert!(!matches_pattern("bad\0text", "^[^\\x00-\\x1f]+$"));
+        assert!(matches_pattern("import sympy\nx = sympy.Symbol('x')", "^[^\\x00]+$"));
+        assert!(!matches_pattern("bad\0code", "^[^\\x00]+$"));
         assert!(!matches_pattern("foo; rm -rf /", "^[a-zA-Z0-9_:]+$"));
         assert!(!matches_pattern("foo bar", "^[a-zA-Z0-9_:]+$"));
     }

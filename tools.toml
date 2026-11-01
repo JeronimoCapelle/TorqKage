@@ -475,7 +475,7 @@ timeout_seconds = 30
 
 [tools.eval_symbolic_math]
 description = "Executes exact symbolic mathematics (ODEs, Jacobians, Taylor series, simplifications) via SymPy inside an isolated, network-less Bubblewrap jail"
-action = "static_command"
+action = "parameterized_command"
 command = [
     "bwrap",
     "--unshare-all",
@@ -486,6 +486,9 @@ command = [
     "--proc", "/proc",
     "--dev", "/dev",
     "python3", "-c"
+]
+args = [
+    { name = "code", required = true, regex = "^[^\\x00]+$", description = "Python expression or multi-line snippet importing sympy to evaluate" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
