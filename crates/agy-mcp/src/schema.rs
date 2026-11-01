@@ -103,36 +103,7 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
             }
         }),
 
-        ToolAction::ParameterizedCommand => {
-            let mut properties = serde_json::Map::new();
-            let mut required = Vec::new();
-
-            for arg in &def.args {
-                let mut prop = serde_json::Map::new();
-                prop.insert("type".to_owned(), json!("string"));
-                if !arg.description.is_empty() {
-                    prop.insert("description".to_owned(), json!(arg.description));
-                }
-                properties.insert(arg.name.clone(), serde_json::Value::Object(prop));
-
-                if arg.required {
-                    required.push(arg.name.clone());
-                }
-            }
-
-            if required.is_empty() {
-                json!({
-                    "type": "object",
-                    "properties": properties
-                })
-            } else {
-                json!({
-                    "type": "object",
-                    "properties": properties,
-                    "required": required
-                })
-            }
-        }
+        ToolAction::ParameterizedCommand => build_parameterized_schema(&def.args),
 
         ToolAction::StaticCommand | ToolAction::CargoJsonDiagnostics | ToolAction::Unknown(_) => {
             json!({
@@ -140,6 +111,37 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
                 "properties": {}
             })
         }
+    }
+}
+
+fn build_parameterized_schema(args: &[crate::models::ToolArg]) -> serde_json::Value {
+    let mut properties = serde_json::Map::new();
+    let mut required = Vec::new();
+
+    for arg in args {
+        let mut prop = serde_json::Map::new();
+        prop.insert("type".to_owned(), json!("string"));
+        if !arg.description.is_empty() {
+            prop.insert("description".to_owned(), json!(arg.description));
+        }
+        properties.insert(arg.name.clone(), serde_json::Value::Object(prop));
+
+        if arg.required {
+            required.push(arg.name.clone());
+        }
+    }
+
+    if required.is_empty() {
+        json!({
+            "type": "object",
+            "properties": properties
+        })
+    } else {
+        json!({
+            "type": "object",
+            "properties": properties,
+            "required": required
+        })
     }
 }
 

@@ -3,6 +3,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
+use agy_common::SubprocessSupervisor;
 use crate::guards::truncate_output;
 use crate::models::ToolDefinition;
 
@@ -28,11 +29,11 @@ pub(crate) fn execute(
         args.push("--color=never".to_owned());
     }
 
-    let output = Command::new(binary)
-        .args(&args)
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|err| format!("Failed to spawn cargo command '{binary}': {err}"))?;
+    let mut cmd = Command::new(binary);
+    cmd.args(&args);
+    cmd.current_dir(workspace_root);
+
+    let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
     let (rendered_diagnostics, error_codes, has_errors) = parse_cargo_json(&stdout_str);

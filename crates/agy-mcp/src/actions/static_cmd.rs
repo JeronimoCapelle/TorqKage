@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use agy_common::SubprocessSupervisor;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
@@ -26,9 +27,7 @@ pub(crate) fn execute(
     cmd.args(args);
     cmd.current_dir(workspace_root);
 
-    let output = cmd
-        .output()
-        .map_err(|err| format!("Failed to spawn command '{program}': {err}"))?;
+    let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
 
     let is_error = !output.status.success();
 

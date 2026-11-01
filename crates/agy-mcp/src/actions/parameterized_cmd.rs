@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use agy_common::SubprocessSupervisor;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
@@ -58,13 +59,18 @@ pub(crate) fn execute(
     let mut cmd = Command::new(binary);
     cmd.args(base_args);
     cmd.args(&dynamic_args);
+    if binary == "rg" {
+        cmd.arg(".");
+    }
     cmd.current_dir(workspace_root);
 
-    let output = cmd
-        .output()
-        .map_err(|err| format!("Failed to spawn command '{binary}': {err}"))?;
+    let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
 
-    let is_error = !output.status.success();
+    let is_error = if binary == "rg" && output.status.code() == Some(1) && output.stdout.is_empty() {
+        false
+    } else {
+        !output.status.success()
+    };
 
     let raw_text = match tool.output_capture {
         OutputCapture::ExitCodeOnly => {
@@ -87,7 +93,12 @@ pub(crate) fn execute(
         }
 
         OutputCapture::Stdout | OutputCapture::JsonSpans => {
-            String::from_utf8_lossy(&output.stdout).into_owned()
+            let text = String::from_utf8_lossy(&output.stdout);
+            if binary == "rg" && text.trim().is_empty() {
+                "No occurrences found in codebase for the specified search query.".to_owned()
+            } else {
+                text.into_owned()
+            }
         }
     };
 
@@ -117,6 +128,10 @@ pub(crate) fn execute(
 fn matches_pattern(val: &str, pattern: &str) -> bool {
     if val.is_empty() {
         return false;
+    }
+
+    if pattern.contains("\\x00-\\x1f") {
+        return !val.chars().any(char::is_control);
     }
 
     if let Some(inner) = pattern.strip_prefix("^[").and_then(|p| p.strip_suffix("]+$")) {
@@ -158,6 +173,8 @@ mod tests {
         assert!(matches_pattern("Processor", "^[a-zA-Z0-9_:]+$"));
         assert!(matches_pattern("types::state", "^[a-zA-Z0-9_:]+$"));
         assert!(matches_pattern("unit-test_1", "^[a-zA-Z0-9_-]+$"));
+        assert!(matches_pattern("struct ToolDefinition", "^[^\\x00-\\x1f]+$"));
+        assert!(!matches_pattern("bad\0text", "^[^\\x00-\\x1f]+$"));
         assert!(!matches_pattern("foo; rm -rf /", "^[a-zA-Z0-9_:]+$"));
         assert!(!matches_pattern("foo bar", "^[a-zA-Z0-9_:]+$"));
     }

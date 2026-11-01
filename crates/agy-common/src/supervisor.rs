@@ -85,4 +85,70 @@ impl SubprocessSupervisor {
 
         Ok(ChildGuard::new(child, pgid))
     }
+
+    /// Executes a command with process group supervision and an optional timeout deadline.
+    ///
+    /// # Errors
+    /// Returns an error string if spawning fails or the command exceeds the timeout.
+    pub fn run_supervised(
+        mut command: Command,
+        timeout_seconds: u64,
+    ) -> std::result::Result<std::process::Output, String> {
+        command.stdout(std::process::Stdio::piped());
+        command.stderr(std::process::Stdio::piped());
+
+        #[cfg(target_os = "linux")]
+        {
+            use std::os::unix::process::CommandExt;
+            // SAFETY: `pre_exec` registers the single post-fork initialization routine
+            unsafe {
+                command.pre_exec(configure_child_process_group);
+            }
+        }
+
+        let child = command
+            .spawn()
+            .map_err(|err| format!("Failed to spawn process: {err}"))?;
+
+        let child_pid = child.id();
+        let process_group_id = i32::try_from(child_pid).unwrap_or(0);
+
+        if timeout_seconds > 0 {
+            let timeout_dur = std::time::Duration::from_secs(timeout_seconds);
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            let worker = std::thread::spawn(move || {
+                let res = child.wait_with_output();
+                drop(tx.send(res));
+            });
+
+            if let Ok(res) = rx.recv_timeout(timeout_dur) {
+                drop(worker.join());
+                res.map_err(|err| format!("Failed to read process output: {err}"))
+            } else {
+                // Timeout expired: kill process group with SIGKILL
+                #[cfg(unix)]
+                {
+                    let target_pgid = process_group_id.saturating_neg();
+                    // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
+                    unsafe {
+                        libc::kill(target_pgid, libc::SIGKILL);
+                    }
+                    let raw_pid = i32::try_from(child_pid).unwrap_or(0);
+                    // SAFETY: Sending SIGKILL directly to process id ensures termination
+                    unsafe {
+                        libc::kill(raw_pid, libc::SIGKILL);
+                    }
+                }
+                drop(worker.join());
+                Err(format!(
+                    "Execution timed out after {timeout_seconds}s and was terminated."
+                ))
+            }
+        } else {
+            child
+                .wait_with_output()
+                .map_err(|err| format!("Failed to read process output: {err}"))
+        }
+    }
 }

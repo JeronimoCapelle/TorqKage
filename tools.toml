@@ -39,6 +39,17 @@ enforce_workspace_bounds = true
 truncate_lines = 150
 timeout_seconds = 10
 
+[tools.search_codebase]
+description = "Searches the codebase for a text or regex pattern using ripgrep (bounded to project root)"
+action = "parameterized_command"
+command = ["rg", "--max-count", "30", "--max-columns", "200", "--"]
+args = [
+    { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 15
+
 # --- Tier 1: Project Code Modification & Creation (Root Supervised) ---
 
 [tools.modify_project_code]
@@ -490,7 +501,7 @@ timeout_seconds = 10
 [tools.inspect_project_state]
 description = "Inspects repository state: active checkpoint (.pipeline/checkpoint.json), uncommitted changes (jj diff --stat), and recent handoff notes"
 action = "static_command"
-command = ["agy-mcp", "inspect-state"]
+command = ["agy-hooks", "inspect-state"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
