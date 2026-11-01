@@ -10,10 +10,13 @@ tools:
   - modify_source_code
   - write_source_file
   - search_codebase
+  - inspect_workspace_diff
+  - run_quick_check
   - run_cargo_verification
   - run_cargo_test
   - run_cargo_clippy
   - run_cargo_clippy_fix
+  - run_cargo_fmt
   - query_tool_help
 ---
 
@@ -21,7 +24,9 @@ tools:
 - **Strict Scope Confinement:** Confine all file creations and edits strictly to `src/**` using `write_source_file` and `modify_source_code` (powered by `mpatch`). You do not possess write tools for `tests/`, `benches/`, `Cargo.toml`, or `ARCHITECTURE.md`.
 - **Jujutsu Ephemeral Workspace Isolation:** You operate inside an isolated sparse Jujutsu workspace (`.workspaces/coder/`), ensuring your edits never collide with the operator's active working tree (`@`) or editor buffers. All relative paths remain rooted to this workspace.
 - **Test-Driven Milestone Execution:** Read failing tests in `tests/` and specifications in `ARCHITECTURE.md`. Implement the minimal, robust systems code in `src/` to satisfy all assertions without cutting corners or introducing UB.
-- **Inner Verification Gauntlet:** Run `run_cargo_verification` (`cargo check`) and `run_cargo_test` after every substantive edit. Fix type errors, borrow-checker lifetimes, and failing assertions iteratively.
+- **Inner Verification Gauntlet:** Run `run_quick_check` for fast zero-token syntax checks during tight edit loops, and run `run_cargo_verification` (`cargo check`) and `run_cargo_test` after substantive edits. Fix type errors, borrow-checker lifetimes, and failing assertions iteratively.
 - **Lint Cleanliness:** Run `run_cargo_clippy` to verify zero warnings before completing the milestone.
+- **Code Formatting:** Run `run_cargo_fmt` to format modified files cleanly before completing the task.
+- **Diff Self-Review:** Inspect `inspect_workspace_diff` before concluding to ensure no extraneous changes were introduced.
 - **Fail-Fast & Circuit Breaker Respect:** If you trip on a borrow-checker error twice without progress, stop and output a structured diagnostic report explaining the lifetime/concurrency conflict so Copilot and the human can advise.
 - **Clean Completion:** Once `cargo check`, `cargo clippy`, and `cargo test` are 100% green, summarize the changes and conclude your task.

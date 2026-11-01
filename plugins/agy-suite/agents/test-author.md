@@ -10,9 +10,11 @@ tools:
   - search_codebase
   - write_test_file
   - modify_test_code
+  - run_quick_check
   - run_cargo_verification
   - run_cargo_test
   - run_cargo_nextest
+  - run_cargo_check_targets
   - run_coverage_summary
   - run_mutation_tests
   - run_cargo_insta

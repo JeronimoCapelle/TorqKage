@@ -10,6 +10,8 @@ tools:
   - search_codebase
   - query_project_spec
   - inspect_module_structure
+  - inspect_bookmarks
+  - inspect_revision_log
   - run_cargo_clippy
   - run_cargo_deny
   - run_cargo_machete

@@ -15,6 +15,10 @@ tools:
   - search_codebase
   - inspect_module_structure
   - inspect_project_state
+  - inspect_workspace_diff
+  - inspect_parent_commit
+  - inspect_revision_log
+  - inspect_bookmarks
   - run_quick_check
   - ask_question
   - query_tool_help

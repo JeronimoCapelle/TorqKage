@@ -25,5 +25,19 @@
         "timeout": 2
       }
     ]
+  },
+  "conflict-blocker": {
+    "PreToolUse": [
+      {
+        "matcher": "run_cargo_.*|run_concurrency_tests|run_property_tests|run_mutation_tests|run_coverage_summary|run_quick_check",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agy-hooks check-conflicts",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
   }
 }

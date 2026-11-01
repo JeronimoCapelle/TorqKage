@@ -133,9 +133,14 @@ require_permission_gate = true
 # --- Architectural & High-Level Introspection Tooling ---
 
 [tools.inspect_module_structure]
-description = "Visualizes crate module tree, visibility boundaries (pub/crate), and internal dependencies"
-action = "static_command"
-command = ["cargo", "modules", "structure"]
+description = "Visualizes crate module tree and visibility boundaries (pub/crate). Defaults to clean module tree; can focus on specific modules or packages."
+action = "parameterized_command"
+command = ["cargo", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus tree on a specific path, e.g. 'actions' or 'server'" },
+    { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
+]
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
@@ -516,3 +521,59 @@ command = ["jj", "diff"]
 output_capture = "stdout"
 truncate_lines = 200
 timeout_seconds = 10
+
+[tools.inspect_parent_commit]
+description = "Inspects the parent commit (@-) metadata, commit message, and full diff in Jujutsu"
+action = "static_command"
+command = ["jj", "show", "@-"]
+output_capture = "stdout"
+truncate_lines = 250
+timeout_seconds = 10
+
+[tools.inspect_revision_log]
+description = "Displays the recent Jujutsu revision history and change graph with change IDs and descriptions"
+action = "static_command"
+command = ["jj", "log", "-n", "10", "--no-graph"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 10
+
+[tools.inspect_workspace_conflicts]
+description = "Checks if any commits or files in the Jujutsu repository contain unresolved merge/rebase conflicts"
+action = "static_command"
+command = ["jj", "log", "-r", "conflicts()", "--no-graph"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
+
+[tools.inspect_bookmarks]
+description = "Lists Jujutsu bookmarks (git branches) and their remote tracking status"
+action = "static_command"
+command = ["jj", "bookmark", "list"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
+
+[tools.run_cargo_doc]
+description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
+action = "static_command"
+command = ["cargo", "doc", "--no-deps"]
+output_capture = "both"
+truncate_lines = 100
+timeout_seconds = 120
+
+[tools.run_cargo_check_targets]
+description = "Verifies compilation health of benches and examples (cargo check --benches --examples)"
+action = "static_command"
+command = ["cargo", "check", "--benches", "--examples"]
+output_capture = "both"
+truncate_lines = 100
+timeout_seconds = 60
+
+[tools.run_cargo_fmt]
+description = "Formats all workspace source files according to rustfmt style guidelines"
+action = "static_command"
+command = ["cargo", "fmt"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 30

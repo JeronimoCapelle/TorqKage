@@ -133,3 +133,12 @@ fn test_inspect_state_e2e() {
     assert!(stdout.contains("# Project State: Ready"));
     assert!(stdout.contains("- Branch:"));
 }
+
+#[test]
+fn test_check_conflicts_e2e() {
+    let (success, stdout, _) = run_hook_subcommand("check-conflicts", None);
+    assert!(success);
+    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    // Clean working repo should allow
+    assert_eq!(resp.decision, agy_common::HookDecision::Allow);
+}

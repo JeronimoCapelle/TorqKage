@@ -5,6 +5,7 @@
 #![allow(clippy::print_stdout, reason = "CLI hook tool emits ProtoJSON directly to stdout")]
 #![allow(clippy::print_stderr, reason = "CLI diagnostics are emitted to stderr")]
 
+mod conflicts;
 mod handoff;
 mod state;
 mod stdin;
@@ -19,6 +20,10 @@ fn main() -> ExitCode {
     match command {
         "detect-wip" => {
             wip::execute();
+            ExitCode::SUCCESS
+        }
+        "check-conflicts" => {
+            conflicts::execute();
             ExitCode::SUCCESS
         }
         "record-handoff" => {
@@ -54,6 +59,7 @@ fn print_usage() {
          \n\
          COMMANDS:\n\
            detect-wip      PreInvocation ephemeral notification on working tree modification\n\
+           check-conflicts PreToolUse hook blocking builds/tests when unresolved conflicts exist\n\
            record-handoff  Stop hook recording session metadata to .pipeline/last_handoff.md\n\
            inject-wake     SessionStart hook injecting last handoff state into conversation\n\
            inspect-state   Concise Markdown repository state summary for tools.toml\n"
