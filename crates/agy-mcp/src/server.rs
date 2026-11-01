@@ -1,7 +1,9 @@
 //! The Model Context Protocol (MCP) server daemon handling JSON-RPC 2.0 requests over stdio.
 
+use std::path::PathBuf;
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use crate::actions;
 use crate::models::ToolDefinition;
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::schema::McpTool;
@@ -11,15 +13,20 @@ use crate::schema::McpTool;
 pub(crate) struct McpServer {
     tools: Vec<ToolDefinition>,
     mcp_tools: Vec<McpTool>,
+    workspace_root: PathBuf,
 }
 
 impl McpServer {
     /// Constructs a new `McpServer` instance, pre-generating MCP tool schemas for fast responses.
     #[must_use]
-    pub(crate) fn new(tools: Vec<ToolDefinition>) -> Self {
+    pub(crate) fn new(tools: Vec<ToolDefinition>, workspace_root: PathBuf) -> Self {
         let mcp_tools = tools.iter().map(McpTool::from_definition).collect();
 
-        Self { tools, mcp_tools }
+        Self {
+            tools,
+            mcp_tools,
+            workspace_root,
+        }
     }
 
     /// Handles a single incoming JSON-RPC request and produces a response (if not a notification).
@@ -71,24 +78,35 @@ impl McpServer {
                     ));
                 }
 
-                let tool_exists = self.tools.iter().any(|t| t.name == tool_name);
-                if !tool_exists {
+                let Some(tool) = self.tools.iter().find(|t| t.name == tool_name) else {
                     return Some(JsonRpcResponse::error(
                         id,
                         -32602,
                         format!("Tool '{tool_name}' is not recognized by agy-mcp"),
                     ));
-                }
+                };
 
-                // Initial response scaffold pending full execution engine implementation
+                let empty_args = json!({});
+                let arguments = req
+                    .params
+                    .as_ref()
+                    .and_then(|p| p.get("arguments"))
+                    .unwrap_or(&empty_args);
+
+                let (content_text, is_error) =
+                    match actions::dispatch_action(tool, &self.workspace_root, arguments) {
+                        Ok((text, err)) => (text, err),
+                        Err(err_msg) => (err_msg, true),
+                    };
+
                 let result = json!({
                     "content": [
                         {
                             "type": "text",
-                            "text": format!("agy-mcp: tool '{tool_name}' verified (execution engine scaffold)")
+                            "text": content_text
                         }
                     ],
-                    "isError": false
+                    "isError": is_error
                 });
 
                 Some(JsonRpcResponse::success(id, result))
@@ -183,7 +201,7 @@ mod tests {
             },
         ];
 
-        McpServer::new(tools)
+        McpServer::new(tools, std::env::temp_dir())
     }
 
     #[test]
@@ -237,19 +255,32 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_call_scaffold() {
-        let server = sample_server();
+    fn test_tools_call_file_read() {
+        let temp_dir = std::env::temp_dir().join(format!("agy_test_read_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).expect("create dir");
+        let test_file = temp_dir.join("test.txt");
+        std::fs::write(&test_file, "Hello from file_read action test!").expect("write test file");
+
+        let tools = vec![ToolDefinition {
+            name: "read_project_file".to_owned(),
+            action: ToolAction::FileRead,
+            ..Default::default()
+        }];
+
+        let server = McpServer::new(tools, temp_dir.clone());
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(3)),
             method: "tools/call".to_owned(),
-            params: Some(json!({ "name": "read_project_file", "arguments": { "path": "Cargo.toml" } })),
+            params: Some(json!({ "name": "read_project_file", "arguments": { "path": "test.txt" } })),
         };
 
         let resp = server.handle_request(req).expect("response expected");
         let res = resp.result.expect("result expected");
         assert_eq!(res["isError"], false);
         let content = res["content"].as_array().expect("content array");
-        assert!(content[0]["text"].as_str().unwrap_or("").contains("read_project_file"));
+        assert!(content[0]["text"].as_str().unwrap_or("").contains("Hello from file_read"));
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }
