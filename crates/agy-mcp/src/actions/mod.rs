@@ -1,7 +1,12 @@
 //! Bounded tool action execution engines.
 
+pub(crate) mod cargo_json;
 pub(crate) mod cli_manual;
 pub(crate) mod file_read;
+pub(crate) mod file_search;
+pub(crate) mod file_write;
+pub(crate) mod mpatch_edit;
+pub(crate) mod parameterized_cmd;
 pub(crate) mod static_cmd;
 
 use std::path::Path;
@@ -24,19 +29,34 @@ pub(crate) fn dispatch_action(
             Ok((content, false))
         }
 
-        ToolAction::StaticCommand | ToolAction::CargoJsonDiagnostics => {
-            static_cmd::execute(tool, workspace_root)
+        ToolAction::FileWrite => {
+            let content = file_write::execute(tool, workspace_root, arguments)?;
+            Ok((content, false))
         }
+
+        ToolAction::MpatchEdit => {
+            let content = mpatch_edit::execute(tool, workspace_root, arguments)?;
+            Ok((content, false))
+        }
+
+        ToolAction::FileSearch => {
+            let content = file_search::execute(tool, workspace_root, arguments)?;
+            Ok((content, false))
+        }
+
+        ToolAction::StaticCommand => static_cmd::execute(tool, workspace_root),
+
+        ToolAction::ParameterizedCommand => {
+            parameterized_cmd::execute(tool, workspace_root, arguments)
+        }
+
+        ToolAction::CargoJsonDiagnostics => cargo_json::execute(tool, workspace_root),
 
         ToolAction::CliManual => Ok(cli_manual::execute(tool, arguments)),
 
-        ToolAction::FileWrite
-        | ToolAction::MpatchEdit
-        | ToolAction::FileSearch
-        | ToolAction::ParameterizedCommand
-        | ToolAction::Unknown(_) => Err(format!(
-            "Tool '{}' action '{:?}' is queued for the next implementation phase.",
-            tool.name, tool.action
+        ToolAction::Unknown(_) => Err(format!(
+            "Unknown or unsupported tool action for tool '{}'",
+            tool.name
         )),
     }
 }

@@ -283,4 +283,64 @@ mod tests {
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }
+
+    #[test]
+    fn test_tools_call_write_modify_roundtrip() {
+        let temp_dir = std::env::temp_dir().join(format!("agy_test_wm_{}", std::process::id()));
+        std::fs::create_dir_all(&temp_dir).expect("create dir");
+
+        let tools = vec![
+            ToolDefinition {
+                name: "write_project_file".to_owned(),
+                action: ToolAction::FileWrite,
+                ..Default::default()
+            },
+            ToolDefinition {
+                name: "modify_project_code".to_owned(),
+                action: ToolAction::MpatchEdit,
+                ..Default::default()
+            },
+        ];
+
+        let server = McpServer::new(tools, temp_dir.clone());
+
+        // 1. Write file
+        let write_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_owned(),
+            id: Some(json!("w-1")),
+            method: "tools/call".to_owned(),
+            params: Some(json!({
+                "name": "write_project_file",
+                "arguments": {
+                    "path": "test.rs",
+                    "content": "fn calculate() -> i32 {\n    10\n}\n"
+                }
+            })),
+        };
+
+        let write_resp = server.handle_request(write_req).expect("write resp");
+        assert_eq!(write_resp.result.unwrap()["isError"], false);
+
+        // 2. Modify file with Aider block
+        let modify_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_owned(),
+            id: Some(json!("m-1")),
+            method: "tools/call".to_owned(),
+            params: Some(json!({
+                "name": "modify_project_code",
+                "arguments": {
+                    "path": "test.rs",
+                    "patch": "<<<<<<< SEARCH\n    10\n=======\n    42\n>>>>>>> REPLACE"
+                }
+            })),
+        };
+
+        let mod_resp = server.handle_request(modify_req).expect("mod resp");
+        assert_eq!(mod_resp.result.unwrap()["isError"], false);
+
+        let final_content = std::fs::read_to_string(temp_dir.join("test.rs")).unwrap();
+        assert!(final_content.contains("42"));
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
 }

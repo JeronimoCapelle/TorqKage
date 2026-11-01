@@ -114,7 +114,11 @@ pub(crate) fn resolve_safe_path(
 
         let rel_lossy = relative.to_string_lossy();
         let allowed = allowed_directories.iter().any(|dir| {
-            rel_lossy == *dir || rel_lossy.starts_with(&format!("{dir}/")) || rel_lossy.starts_with(&format!("{dir}\\"))
+            rel_lossy == *dir
+                || rel_lossy.starts_with(&format!("{dir}/"))
+                || rel_lossy.starts_with(&format!("{dir}\\"))
+                || rel_lossy.contains(&format!("/{dir}/"))
+                || rel_lossy.contains(&format!("\\{dir}\\"))
         });
 
         if !allowed {
@@ -214,6 +218,7 @@ mod tests {
         let allowed = vec!["tests".to_owned(), "benches".to_owned()];
 
         assert!(resolve_safe_path(&root, "tests/unit_test.rs", &allowed, false).is_ok());
+        assert!(resolve_safe_path(&root, "crates/core/tests/test.rs", &allowed, false).is_ok());
         assert!(resolve_safe_path(&root, "src/main.rs", &allowed, false).is_err());
     }
 

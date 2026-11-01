@@ -20,9 +20,9 @@ use server::McpServer;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let workspace_root = WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."));
-    let config_path = resolve_config_path(&workspace_root);
+    let (workspace_root, config_path) = resolve_workspace_and_config();
 
+    eprintln!("[agy-mcp] Workspace root: '{}'", workspace_root.display());
     eprintln!("[agy-mcp] Loading declarative tools configuration from '{}'...", config_path.display());
 
     let tools = match config::load_tools_from_path(&config_path) {
@@ -50,29 +50,45 @@ async fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn resolve_config_path(workspace_root: &Path) -> PathBuf {
+fn resolve_workspace_and_config() -> (PathBuf, PathBuf) {
     let args: Vec<String> = std::env::args().collect();
+    let mut custom_config = None;
+    let mut custom_workspace = None;
 
-    for i in 1..args.len() {
-        if let Some(arg) = args.get(i)
-            && (arg == "--config" || arg == "-c")
-            && let Some(val) = args.get(i.saturating_add(1))
-        {
-            return PathBuf::from(val);
+    let mut i = 1;
+    while i < args.len() {
+        if let Some(arg) = args.get(i) {
+            if (arg == "--config" || arg == "-c")
+                && let Some(val) = args.get(i.saturating_add(1))
+            {
+                custom_config = Some(PathBuf::from(val));
+                i = i.saturating_add(1);
+            } else if (arg == "--workspace" || arg == "-w")
+                && let Some(val) = args.get(i.saturating_add(1))
+            {
+                custom_workspace = Some(PathBuf::from(val));
+                i = i.saturating_add(1);
+            }
         }
+        i = i.saturating_add(1);
     }
 
-    // Default 1: current directory
-    let local = Path::new("tools.toml");
-    if local.exists() {
-        return local.to_path_buf();
-    }
+    let config_path = custom_config.unwrap_or_else(|| {
+        let ws = custom_workspace.clone().unwrap_or_else(|| {
+            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+        });
+        ws.join("tools.toml")
+    });
 
-    // Default 2: workspace root
-    let root_config = workspace_root.join("tools.toml");
-    if root_config.exists() {
-        return root_config;
-    }
+    let workspace_root = custom_workspace.unwrap_or_else(|| {
+        if let Some(parent) = config_path.parent()
+            && parent != Path::new("")
+        {
+            parent.to_path_buf()
+        } else {
+            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+        }
+    });
 
-    PathBuf::from("tools.toml")
+    (workspace_root, config_path)
 }

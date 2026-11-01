@@ -1,0 +1,197 @@
+//! `mpatch_edit` action handler applying fuzzy Aider search/replace blocks and unified diffs.
+
+use std::path::Path;
+use mpatch::{patch_content_str, ApplyOptions};
+use crate::guards::{check_dangerous_files, resolve_safe_path};
+use crate::models::ToolDefinition;
+
+/// Executes a bounded fuzzy code modification using `mpatch`.
+///
+/// # Errors
+/// Returns an error message if guards fail, the file cannot be read, or the patch fails to apply.
+pub(crate) fn execute(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    arguments: &serde_json::Value,
+) -> Result<String, String> {
+    let path_str = arguments
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "Missing required parameter 'path'".to_owned())?;
+
+    let patch = arguments
+        .get("patch")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| "Missing required parameter 'patch'".to_owned())?;
+
+    if tool.ban_dangerous_files {
+        check_dangerous_files(Path::new(path_str))?;
+    }
+
+    let safe_path = resolve_safe_path(
+        workspace_root,
+        path_str,
+        &tool.allowed_directories,
+        tool.enforce_workspace_bounds,
+    )?;
+
+    if !safe_path.exists() {
+        return Err(format!(
+            "Target file '{path_str}' does not exist. Use a file creation tool instead."
+        ));
+    }
+
+    let original = std::fs::read_to_string(&safe_path)
+        .map_err(|err| format!("Failed to read target file '{}': {err}", safe_path.display()))?;
+
+    let options = ApplyOptions::new();
+
+    // 1. Try applying patch directly via mpatch
+    let patched_res = patch_content_str(patch, Some(&original), &options);
+
+    // 2. If mpatch needed a file path prefix for Aider block, try with path header prepended
+    let new_content = if let Ok(patched) = patched_res {
+        patched
+    } else {
+        let prefixed = format!("{path_str}\n{patch}");
+        if let Ok(patched) = patch_content_str(&prefixed, Some(&original), &options) {
+            patched
+        } else if let Some(fallback_content) = apply_exact_aider_block(&original, patch) {
+            fallback_content
+        } else {
+            return Err(format!(
+                "Failed to apply patch to '{path_str}'. Verify search block matches existing file content."
+            ));
+        }
+    };
+
+    if new_content == original {
+        return Ok(format!(
+            "Patch applied to '{path_str}' with 0 net changes (identical content)."
+        ));
+    }
+
+    std::fs::write(&safe_path, new_content.as_bytes())
+        .map_err(|err| format!("Failed to write patched file '{}': {err}", safe_path.display()))?;
+
+    let lines_before = original.lines().count();
+    let lines_after = new_content.lines().count();
+
+    Ok(format!(
+        "Successfully modified '{path_str}' via mpatch ({lines_before} -> {lines_after} lines)."
+    ))
+}
+
+fn apply_exact_aider_block(original: &str, patch: &str) -> Option<String> {
+    const SEARCH_MARKER: &str = "<<<<<<< SEARCH";
+    const DIVIDER_MARKER: &str = "=======";
+    const REPLACE_MARKER: &str = ">>>>>>> REPLACE";
+
+    let search_idx = patch.find(SEARCH_MARKER)?;
+    let divider_idx = patch.find(DIVIDER_MARKER)?;
+    let replace_idx = patch.find(REPLACE_MARKER)?;
+
+    if !(search_idx < divider_idx && divider_idx < replace_idx) {
+        return None;
+    }
+
+    let search_start = search_idx.saturating_add(SEARCH_MARKER.len());
+    let search_block = patch.get(search_start..divider_idx)?;
+    let replace_start = divider_idx.saturating_add(DIVIDER_MARKER.len());
+    let replace_block = patch.get(replace_start..replace_idx)?;
+
+    let search_clean = search_block.trim_start_matches(['\r', '\n']).trim_end_matches(['\r', '\n']);
+    let replace_clean = replace_block.trim_start_matches(['\r', '\n']).trim_end_matches(['\r', '\n']);
+
+    if search_clean.is_empty() {
+        return None;
+    }
+
+    if original.contains(search_clean) {
+        let replaced = original.replacen(search_clean, replace_clean, 1);
+        Some(replaced)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::assertions_on_result_states,
+    reason = "Unit test assertions"
+)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn create_test_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "agy-test-mpatch-{tag}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        dir
+    }
+
+    #[test]
+    fn test_mpatch_aider_block() {
+        let temp = create_test_dir("aider");
+        let src_dir = temp.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let file_path = src_dir.join("lib.rs");
+        std::fs::write(&file_path, "fn old_func() -> i32 {\n    42\n}\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "modify_source_code".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            enforce_workspace_bounds: true,
+            ..Default::default()
+        };
+
+        let patch = "<<<<<<< SEARCH\nfn old_func() -> i32 {\n    42\n}\n=======\nfn new_func() -> i32 {\n    100\n}\n>>>>>>> REPLACE";
+
+        let args = json!({
+            "path": "src/lib.rs",
+            "patch": patch
+        });
+
+        let res = execute(&tool, &temp, &args);
+        assert!(res.is_ok());
+
+        let modified = std::fs::read_to_string(&file_path).unwrap();
+        assert!(modified.contains("new_func()"));
+        assert!(modified.contains("100"));
+    }
+
+    #[test]
+    fn test_mpatch_mismatched_search_fails() {
+        let temp = create_test_dir("mismatch");
+        let src_dir = temp.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let file_path = src_dir.join("lib.rs");
+        std::fs::write(&file_path, "fn existing_code() {}\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "modify_source_code".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        let patch = "<<<<<<< SEARCH\nfn non_existent_code() {}\n=======\nfn replacement() {}\n>>>>>>> REPLACE";
+
+        let args = json!({
+            "path": "src/lib.rs",
+            "patch": patch
+        });
+
+        let res = execute(&tool, &temp, &args);
+        assert!(res.is_err());
+    }
+}
