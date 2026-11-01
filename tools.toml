@@ -1,0 +1,496 @@
+# tools.toml — Declarative MCP Tool Definitions & Guard Policies for agy-mcp
+
+# ==============================================================================
+# BASE TOOL TEMPLATES (Abstract engines inherited by concrete scoped tools)
+# ==============================================================================
+
+[base_tools.code_modifier]
+description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
+action = "mpatch_edit"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+
+[base_tools.file_creator]
+description = "Creates a new file strictly within the canonical workspace bounds"
+action = "file_write"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+
+# ==============================================================================
+# CONCRETE TOOLS (Declarative, Scoped, Inheriting from Base Templates)
+# ==============================================================================
+
+# --- Filesystem Inspection ---
+
+[tools.read_project_file]
+description = "Reads a file within the project root. Output is truncated safely."
+action = "file_read"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+truncate_lines = 800
+truncate_bytes = 46080
+emit_truncation_notice = true
+
+[tools.query_project_spec]
+description = "Searches the in-repo docs/ directory for grep-ready specs, opcodes, and ABI definitions"
+action = "file_search"
+enforce_dir = "docs"
+enforce_workspace_bounds = true
+truncate_lines = 150
+timeout_seconds = 10
+
+# --- Tier 1: Project Code Modification & Creation (Root Supervised) ---
+
+[tools.modify_project_code]
+inherit = "base_tools.code_modifier"
+allowed_directories = ["src", "tests", "benches", "examples", "docs"]
+
+[tools.write_project_file]
+inherit = "base_tools.file_creator"
+allowed_directories = ["src", "tests", "benches", "examples", "docs"]
+
+# --- Tier 1B: Source Code Implementation (Coder Confined strictly to src/) ---
+
+[tools.modify_source_code]
+inherit = "base_tools.code_modifier"
+description = "Applies Aider search/replace blocks strictly within src/ via mpatch"
+allowed_directories = ["src"]
+
+[tools.write_source_file]
+inherit = "base_tools.file_creator"
+description = "Creates a new source code module file strictly inside src/"
+allowed_directories = ["src"]
+
+# --- Tier 2: Test Suites & Benchmarks (Test Author Confined) ---
+
+[tools.modify_test_code]
+inherit = "base_tools.code_modifier"
+description = "Applies Aider search/replace blocks strictly within tests/ and benches/ via mpatch"
+allowed_directories = ["tests", "benches"]
+
+[tools.write_test_file]
+inherit = "base_tools.file_creator"
+description = "Creates a new test suite or harness file strictly inside tests/ or benches/"
+allowed_directories = ["tests", "benches"]
+
+# --- Tier 3: Design Documents & Architecture Specs (Planner Confined) ---
+
+[tools.modify_design_doc]
+inherit = "base_tools.code_modifier"
+description = "Applies design edits strictly to ARCHITECTURE.md and .scratchpad/ via mpatch"
+allowed_directories = ["ARCHITECTURE.md", ".scratchpad"]
+
+[tools.write_design_doc]
+inherit = "base_tools.file_creator"
+description = "Writes design artifacts, architecture notes, and reports strictly to ARCHITECTURE.md or .scratchpad/"
+allowed_directories = ["ARCHITECTURE.md", ".scratchpad"]
+
+# --- Compilation & Compiler Diagnostics ---
+
+[tools.run_quick_check]
+description = "Runs cargo check with zero token noise. Returns exit code only."
+action = "static_command"
+command = ["cargo", "check", "--tests"]
+output_capture = "exit_code_only"
+timeout_seconds = 60
+
+[tools.run_cargo_verification]
+description = "Runs cargo check and returns filtered JSON error spans."
+action = "cargo_json_diagnostics"
+command = ["cargo", "check", "--message-format=json"]
+output_capture = "json_spans"
+attach_rustc_explain = true
+timeout_seconds = 120
+
+[tools.run_cargo_clippy]
+description = "Runs cargo clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
+action = "cargo_json_diagnostics"
+command = ["cargo", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
+output_capture = "json_spans"
+attach_rustc_explain = true
+timeout_seconds = 120
+
+[tools.run_cargo_clippy_fix]
+description = "Runs cargo clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
+action = "static_command"
+command = ["cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+require_permission_gate = true
+
+# --- Architectural & High-Level Introspection Tooling ---
+
+[tools.inspect_module_structure]
+description = "Visualizes crate module tree, visibility boundaries (pub/crate), and internal dependencies"
+action = "static_command"
+command = ["cargo", "modules", "structure"]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 30
+
+[tools.run_cargo_deny]
+description = "Checks supply-chain security, RustSec advisories, banned crates, license allowlists, and sources via cargo-deny"
+action = "static_command"
+command = ["cargo", "deny", "check"]
+output_capture = "stdout"
+truncate_lines = 120
+timeout_seconds = 60
+
+[tools.run_cargo_machete]
+description = "Scans Cargo.toml manifests for unused dependencies via cargo-machete"
+action = "static_command"
+command = ["cargo", "machete"]
+output_capture = "stdout"
+truncate_lines = 80
+timeout_seconds = 45
+
+[tools.run_cargo_public_api]
+description = "Inspects and diffs the exposed public API surface of the crate against git revisions"
+action = "static_command"
+command = ["cargo", "public-api", "diff"]
+output_capture = "stdout"
+truncate_lines = 120
+timeout_seconds = 60
+
+[tools.run_cargo_semver_checks]
+description = "Verifies semantic versioning contract rules against the published API baseline"
+action = "static_command"
+command = ["cargo", "semver-checks", "check-release"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_cargo_hack]
+description = "Performs matrix verification checking all feature flag combinations (--each-feature)"
+action = "static_command"
+command = ["cargo", "hack", "check", "--each-feature"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_cargo_outdated]
+description = "Scans dependencies to find available SemVer updates and compatibility ranges"
+action = "static_command"
+command = ["cargo", "outdated", "--depth", "1"]
+output_capture = "stdout"
+truncate_lines = 60
+timeout_seconds = 60
+
+[tools.run_cargo_expand]
+description = "Expands macros and visualizes generated compiler tokens for a specific item (struct, enum, fn, module) with token-smart fallback on error"
+action = "parameterized_command"
+command = ["cargo", "expand"]
+args = [
+    { name = "item_path", required = true, regex = "^[a-zA-Z0-9_:]+$", description = "Target item or module path to expand (e.g. 'Processor' or 'types::state')" }
+]
+error_fallback = "token_smart_not_found"
+output_capture = "stdout"
+truncate_lines = 250
+timeout_seconds = 60
+
+[tools.run_ast_grep]
+description = "Performs structural AST pattern queries across source trees via ast-grep"
+action = "static_command"
+command = ["ast-grep", "scan"]
+output_capture = "stdout"
+truncate_lines = 120
+timeout_seconds = 30
+
+# --- Test Suite & Verification Tooling ---
+
+[tools.run_cargo_test]
+description = "Executes unit and integration tests via standard cargo test with optional target/filter overrides"
+action = "parameterized_command"
+command = ["cargo", "test"]
+args = [
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 180
+
+[tools.run_cargo_nextest]
+description = "Executes unit and integration tests in parallel via nextest with optional target/filter overrides"
+action = "parameterized_command"
+command = ["cargo", "nextest", "run"]
+args = [
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional integration test target" },
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 120
+
+[tools.run_coverage_summary]
+description = "Extracts line and branch coverage summary via cargo llvm-cov"
+action = "static_command"
+command = ["cargo", "llvm-cov", "--summary-only"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_mutation_tests]
+description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs"
+action = "static_command"
+command = ["cargo", "mutants", "--no-shuffle"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 300
+
+[tools.run_cargo_insta]
+description = "Executes snapshot tests for golden ASTs, opcode decoders, and struct serialization"
+action = "static_command"
+command = ["cargo", "insta", "test", "--accept"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 120
+
+[tools.run_cargo_fuzz]
+description = "Executes libFuzzer target to discover crashes, panics, and out-of-bounds byte accesses"
+action = "static_command"
+command = ["cargo", "fuzz", "run", "--", "-max_total_time=60"]
+output_capture = "stderr"
+truncate_lines = 100
+timeout_seconds = 90
+
+[tools.run_property_tests]
+description = "Executes generative property-based tests via proptest with randomized inputs (optional filter override)"
+action = "parameterized_command"
+command = ["cargo", "test", "--test", "property_test"]
+args = [
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional property test name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 120
+
+[tools.run_concurrency_tests]
+description = "Executes exhaustive state-space permutation tests for atomic algorithms via loom (optional filter override)"
+action = "parameterized_command"
+command = ["cargo", "test", "--test", "concurrency_test"]
+args = [
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional loom test name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+
+# --- Performance Profiling & Hardware Diagnostics Tooling ---
+
+[tools.run_cargo_asm]
+description = "Disassembles functions to inspect generated assembly, auto-vectorization, and spills"
+action = "static_command"
+command = ["cargo", "asm"]
+output_capture = "stdout"
+truncate_lines = 250
+timeout_seconds = 60
+
+[tools.run_cargo_bench]
+description = "Executes benchmark suites across Divan, Criterion2, and Gungraun with optional target/filter overrides"
+action = "parameterized_command"
+command = ["cargo", "bench"]
+args = [
+    { name = "bench_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--bench", description = "Specific benchmark target ('benchmark', 'criterion_bench', 'gungraun_bench')" },
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 240
+
+[tools.run_gungraun_bench]
+description = "Executes deterministic instruction/cache profiling benchmarks via Gungraun (Valgrind Callgrind/Cachegrind/DHAT + Linux perf)"
+action = "parameterized_command"
+command = ["cargo", "bench", "--bench", "gungraun_bench"]
+args = [
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 240
+
+[tools.run_criterion_bench]
+description = "Executes statistical throughput and latency distribution benchmarks via Criterion2"
+action = "parameterized_command"
+command = ["cargo", "bench", "--bench", "criterion_bench"]
+args = [
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 240
+
+[tools.run_divan_bench]
+description = "Executes fast, allocation-aware microbenchmarks via Divan"
+action = "parameterized_command"
+command = ["cargo", "bench", "--bench", "benchmark"]
+args = [
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 180
+
+[tools.run_cargo_careful]
+description = "Executes tests with extra debug checks to detect undefined behavior and invalid operations"
+action = "static_command"
+command = ["cargo", "careful", "test"]
+output_capture = "stderr"
+truncate_lines = 150
+timeout_seconds = 180
+
+[tools.run_cargo_miri]
+description = "Runs tests inside Miri interpreter to verify strict pointer provenance and Tree Borrows"
+action = "static_command"
+command = ["cargo", "miri", "test"]
+output_capture = "stderr"
+truncate_lines = 200
+timeout_seconds = 300
+
+[tools.run_flamegraph]
+description = "Generates CPU flame graphs to identify profiling hotspots and callstack bottlenecks"
+action = "static_command"
+command = ["cargo", "flamegraph", "--root", "--deterministic"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 240
+
+[tools.run_cargo_perf]
+description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count)"
+action = "static_command"
+command = ["perf", "stat", "-B", "cargo", "test", "--no-run"]
+output_capture = "stderr"
+truncate_lines = 50
+timeout_seconds = 60
+
+[tools.run_valgrind_cachegrind]
+description = "Simulates L1/LLC cache references, misses, and branch mispredictions via Valgrind Cachegrind"
+action = "static_command"
+command = ["valgrind", "--tool=cachegrind", "--cache-sim=yes", "cargo", "test", "--no-run"]
+output_capture = "stderr"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_strace_summary]
+description = "Collects statistical call counts, errors, and time spent in Linux kernel system calls via strace"
+action = "static_command"
+command = ["strace", "-c", "-f", "cargo", "test", "--no-run"]
+output_capture = "stderr"
+truncate_lines = 80
+timeout_seconds = 60
+
+[tools.run_cargo_bloat]
+description = "Analyzes binary size per symbol and crate to pinpoint monomorphization bloat"
+action = "static_command"
+command = ["cargo", "bloat", "--release", "-n", "30"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 60
+
+[tools.run_hyperfine]
+description = "Executes black-box binary benchmarking via hyperfine with statistical timing and warmup"
+action = "static_command"
+command = ["hyperfine", "--warmup", "3"]
+output_capture = "stdout"
+truncate_lines = 40
+timeout_seconds = 120
+
+[tools.run_samply_profile]
+description = "Samples CPU execution with samply and generates profile data for the Firefox Profiler UI"
+action = "static_command"
+command = ["samply", "record", "--no-open"]
+output_capture = "stdout"
+truncate_lines = 30
+timeout_seconds = 180
+
+[tools.inspect_binary_sections]
+description = "Prints section sizes (.text, .data, .bss) of compiled ELF binaries using cargo-size / rust-size"
+action = "static_command"
+command = ["cargo", "size", "--release"]
+output_capture = "stdout"
+truncate_lines = 30
+timeout_seconds = 30
+
+[tools.inspect_symbol_table]
+description = "Dumps demangled symbols and object exports using cargo-nm / rust-nm"
+action = "static_command"
+command = ["cargo", "nm", "--release", "--demangle"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 30
+
+[tools.analyze_llvm_mca]
+description = "Pipes generated assembly into llvm-mca to simulate CPU instruction ports, latency, and register pressure"
+action = "static_command"
+command = ["llvm-mca", "-march=x86-64", "-mcpu=native"]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 30
+
+[tools.run_cargo_zigbuild]
+description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
+action = "static_command"
+command = ["cargo", "zigbuild", "check"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_nasm_check]
+description = "Assembles x86 real-mode and bare-metal bootloader assembly sources via NASM"
+action = "static_command"
+command = ["nasm", "-f", "elf64", "-v"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 30
+
+[tools.run_qemu_kernel_test]
+description = "Boots bare-metal OS kernel images headlessly under QEMU x86_64 emulator with serial stdout capture"
+action = "static_command"
+command = ["qemu-system-x86_64", "-display", "none", "-serial", "stdio", "-no-reboot"]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 60
+
+# --- Release Automation & High-Level Mathematics Tooling ---
+
+[tools.run_git_cliff]
+description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
+action = "static_command"
+command = ["git-cliff", "--unreleased", "--strip", "header"]
+output_capture = "stdout"
+truncate_lines = 120
+timeout_seconds = 30
+
+[tools.eval_symbolic_math]
+description = "Executes exact symbolic mathematics (ODEs, Jacobians, Taylor series, simplifications) via SymPy inside an isolated, network-less Bubblewrap jail"
+action = "static_command"
+command = [
+    "bwrap",
+    "--unshare-all",
+    "--tmpfs", "/",
+    "--ro-bind", "/usr", "/usr",
+    "--ro-bind", "/lib", "/lib",
+    "--ro-bind", "/lib64", "/lib64",
+    "--proc", "/proc",
+    "--dev", "/dev",
+    "python3", "-c"
+]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 15
+
+[tools.query_tool_help]
+description = "Retrieves live tldr or --help usage for a local CLI binary"
+action = "cli_manual"
+sanitize_input = "^[a-zA-Z0-9_-]+$"
+truncate_lines = 100
+timeout_seconds = 10
+
+[tools.inspect_project_state]
+description = "Inspects repository state: active checkpoint (.pipeline/checkpoint.json), uncommitted changes (jj diff --stat), and recent handoff notes"
+action = "static_command"
+command = ["agy-mcp", "inspect-state"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
