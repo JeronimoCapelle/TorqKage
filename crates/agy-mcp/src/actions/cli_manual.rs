@@ -147,13 +147,11 @@ fn extract_man_snippet(man_text: &str) -> Option<String> {
             break;
         }
 
-        if !started {
-            if !trimmed.is_empty() {
-                started = true;
-                snippet_lines.push(line);
-                count = count.saturating_add(1);
-            }
-        } else {
+        if started {
+            snippet_lines.push(line);
+            count = count.saturating_add(1);
+        } else if !trimmed.is_empty() {
+            started = true;
             snippet_lines.push(line);
             count = count.saturating_add(1);
         }
