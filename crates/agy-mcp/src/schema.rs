@@ -94,7 +94,11 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
             "properties": {
                 "tool_name": {
                     "type": "string",
-                    "description": "Optional name of tool or command to look up manual and usage notes for"
+                    "description": "Name of the CLI binary or command to look up manual, recipes, or usage for (e.g. 'cargo', 'git', 'perf', 'valgrind')"
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional specific topic or task to search from navi cheatsheets (e.g. 'rebase', 'cache', 'filter')"
                 }
             }
         }),
