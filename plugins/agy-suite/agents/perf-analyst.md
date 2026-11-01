@@ -8,6 +8,8 @@ commandExecutionPolicy: off
 allowed_subagents:
   - mini
 tools:
+  - invoke_subagent
+mcp_tools:
   - read_project_file
   - search_codebase
   - run_cargo_asm
@@ -32,7 +34,6 @@ tools:
   - inspect_symbol_table
   - write_design_doc
   - query_tool_help
-  - invoke_subagent
 ---
 
 # Directives

@@ -5,6 +5,7 @@
 #![allow(clippy::print_stderr, reason = "Daemon diagnostics are logged to stderr")]
 
 mod actions;
+mod agent_scope;
 mod config;
 mod guards;
 mod models;
@@ -20,7 +21,7 @@ use server::McpServer;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let (workspace_root, config_path) = resolve_workspace_and_config();
+    let (workspace_root, config_path, agent_name) = resolve_workspace_and_config();
 
     eprintln!("[agy-mcp] Workspace root: '{}'", workspace_root.display());
     eprintln!("[agy-mcp] Loading declarative tools configuration from '{}'...", config_path.display());
@@ -40,7 +41,7 @@ async fn main() -> ExitCode {
         eprintln!("[agy-mcp] Warning: {warning}");
     }
 
-    let server = McpServer::new(tools, workspace_root);
+    let server = McpServer::new(tools, workspace_root, agent_name);
 
     if let Err(err) = server.run_stdio().await {
         eprintln!("🛑 [agy-mcp] Stdio loop error: {err}");
@@ -50,7 +51,7 @@ async fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn resolve_workspace_and_config() -> (PathBuf, PathBuf) {
+fn resolve_workspace_and_config() -> (PathBuf, PathBuf, Option<String>) {
     let args: Vec<String> = std::env::args().collect();
     let mut custom_config = None;
     let mut custom_workspace = None;
@@ -73,6 +74,8 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf) {
         i = i.saturating_add(1);
     }
 
+    let agent_name = agent_scope::resolve_agent_scope(&args);
+
     let config_path = custom_config.unwrap_or_else(|| {
         let ws = custom_workspace.clone().unwrap_or_else(|| {
             WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
@@ -90,5 +93,5 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf) {
         }
     });
 
-    (workspace_root, config_path)
+    (workspace_root, config_path, agent_name)
 }

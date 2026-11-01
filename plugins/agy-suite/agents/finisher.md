@@ -6,6 +6,8 @@ mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
 tools:
+  - ask_question
+mcp_tools:
   - read_project_file
   - search_codebase
   - query_project_spec
@@ -22,7 +24,6 @@ tools:
   - run_cargo_fmt
   - run_cargo_check_targets
   - run_git_cliff
-  - ask_question
   - query_tool_help
 ---
 

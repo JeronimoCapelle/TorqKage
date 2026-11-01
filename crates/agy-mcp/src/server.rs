@@ -14,18 +14,42 @@ pub(crate) struct McpServer {
     tools: Vec<ToolDefinition>,
     mcp_tools: Vec<McpTool>,
     workspace_root: PathBuf,
+    agent: Option<String>,
 }
 
 impl McpServer {
     /// Constructs a new `McpServer` instance, pre-generating MCP tool schemas for fast responses.
+    /// If `agent_name` is provided, tools are filtered to only those authorized for that agent.
     #[must_use]
-    pub(crate) fn new(tools: Vec<ToolDefinition>, workspace_root: PathBuf) -> Self {
+    pub(crate) fn new(
+        tools: Vec<ToolDefinition>,
+        workspace_root: PathBuf,
+        agent_name: Option<String>,
+    ) -> Self {
+        let (tools, agent) = match agent_name {
+            Some(name) => {
+                let allowed = crate::agent_scope::resolve_allowed_tools(&workspace_root, &name);
+                let total = tools.len();
+                let filtered: Vec<_> = tools
+                    .into_iter()
+                    .filter(|t| allowed.contains(&t.name))
+                    .collect();
+                eprintln!(
+                    "[agy-mcp] Scoped to agent '{name}': exposing {} of {total} tools",
+                    filtered.len()
+                );
+                (filtered, Some(name))
+            }
+            None => (tools, None),
+        };
+
         let mcp_tools = tools.iter().map(McpTool::from_definition).collect();
 
         Self {
             tools,
             mcp_tools,
             workspace_root,
+            agent,
         }
     }
 
@@ -79,10 +103,13 @@ impl McpServer {
                 }
 
                 let Some(tool) = self.tools.iter().find(|t| t.name == tool_name) else {
+                    let agent_hint = self.agent.as_ref().map_or_else(String::new, |a| {
+                        format!(" (unauthorized for agent '{a}')")
+                    });
                     return Some(JsonRpcResponse::error(
                         id,
                         -32602,
-                        format!("Tool '{tool_name}' is not recognized by agy-mcp"),
+                        format!("Tool '{tool_name}' is not recognized by agy-mcp{agent_hint}"),
                     ));
                 };
 
@@ -201,7 +228,7 @@ mod tests {
             },
         ];
 
-        McpServer::new(tools, std::env::temp_dir())
+        McpServer::new(tools, std::env::temp_dir(), None)
     }
 
     #[test]
@@ -267,7 +294,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let server = McpServer::new(tools, temp_dir.clone());
+        let server = McpServer::new(tools, temp_dir.clone(), None);
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(3)),
@@ -302,7 +329,7 @@ mod tests {
             },
         ];
 
-        let server = McpServer::new(tools, temp_dir.clone());
+        let server = McpServer::new(tools, temp_dir.clone(), None);
 
         // 1. Write file
         let write_req = JsonRpcRequest {
@@ -342,5 +369,53 @@ mod tests {
         assert!(final_content.contains("42"));
 
         drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_agent_scoping_coder_cannot_call_design_doc() {
+        let tools = vec![
+            ToolDefinition {
+                name: "modify_source_code".to_owned(),
+                description: "Modify source code".to_owned(),
+                action: ToolAction::MpatchEdit,
+                ..Default::default()
+            },
+            ToolDefinition {
+                name: "modify_design_doc".to_owned(),
+                description: "Modify design doc".to_owned(),
+                action: ToolAction::MpatchEdit,
+                ..Default::default()
+            },
+        ];
+
+        // Scope to coder
+        let server = McpServer::new(tools, std::env::temp_dir(), Some("coder".to_owned()));
+
+        // 1. tools/list should ONLY have modify_source_code, NOT modify_design_doc
+        let list_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_owned(),
+            id: Some(json!(1)),
+            method: "tools/list".to_owned(),
+            params: None,
+        };
+        let list_resp = server.handle_request(list_req).expect("list resp");
+        let tool_list = list_resp.result.unwrap()["tools"].as_array().unwrap().clone();
+        assert_eq!(tool_list.len(), 1);
+        assert_eq!(tool_list[0]["name"], "modify_source_code");
+
+        // 2. tools/call on modify_design_doc should fail with error
+        let call_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_owned(),
+            id: Some(json!(2)),
+            method: "tools/call".to_owned(),
+            params: Some(json!({
+                "name": "modify_design_doc",
+                "arguments": { "path": "ARCHITECTURE.md", "patch": "..." }
+            })),
+        };
+        let call_resp = server.handle_request(call_req).expect("call resp");
+        assert!(call_resp.error.is_some());
+        let err = call_resp.error.unwrap();
+        assert!(err.message.contains("unauthorized for agent 'coder'"));
     }
 }

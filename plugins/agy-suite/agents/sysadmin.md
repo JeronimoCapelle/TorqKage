@@ -10,6 +10,7 @@ tools:
   - grep_search
   - run_command
   - ask_question
+mcp_tools:
   - query_tool_help
 ---
 

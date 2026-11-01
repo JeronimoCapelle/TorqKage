@@ -4,7 +4,8 @@ description: "Narrow mathematical, symbolic, and analytical calculation subagent
 effort: low
 mainAgent: true
 subagent: true
-tools:
+tools: []
+mcp_tools:
   - eval_symbolic_math
 ---
 

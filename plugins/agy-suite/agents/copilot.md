@@ -9,6 +9,9 @@ allowed_subagents:
   - mini
   - coder
 tools:
+  - ask_question
+  - invoke_subagent
+mcp_tools:
   - read_project_file
   - write_project_file
   - modify_project_code
@@ -20,9 +23,7 @@ tools:
   - inspect_revision_log
   - inspect_bookmarks
   - run_quick_check
-  - ask_question
   - query_tool_help
-  - invoke_subagent
 ---
 
 # Directives

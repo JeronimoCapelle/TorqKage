@@ -5,7 +5,8 @@ effort: medium
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
-tools:
+tools: []
+mcp_tools:
   - read_project_file
   - search_codebase
   - write_test_file

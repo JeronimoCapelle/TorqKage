@@ -4,8 +4,10 @@ description: "Autonomous source code implementer that writes production logic in
 effort: medium
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+mainAgent: true
 subagent: true
-tools:
+tools: []
+mcp_tools:
   - read_project_file
   - modify_source_code
   - write_source_file

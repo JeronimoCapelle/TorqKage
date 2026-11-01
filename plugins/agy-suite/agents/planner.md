@@ -8,15 +8,16 @@ commandExecutionPolicy: off
 allowed_subagents:
   - mini
 tools:
+  - ask_question
+  - invoke_subagent
+mcp_tools:
   - read_project_file
   - write_design_doc
   - modify_design_doc
   - search_codebase
   - inspect_module_structure
   - query_project_spec
-  - ask_question
   - query_tool_help
-  - invoke_subagent
 ---
 
 # Directives

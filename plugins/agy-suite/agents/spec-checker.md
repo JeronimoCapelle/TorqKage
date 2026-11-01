@@ -5,7 +5,8 @@ effort: high
 mainAgent: true
 permissionMode: plan
 commandExecutionPolicy: off
-tools:
+tools: []
+mcp_tools:
   - read_project_file
   - search_codebase
   - query_project_spec
