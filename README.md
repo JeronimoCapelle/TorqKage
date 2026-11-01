@@ -36,3 +36,19 @@ This skeleton is pre-configured with the complete suite of low-level verificatio
 - **Public API Diff:** `cargo public-api` (diffs exposed API surface)
 - **Module Hierarchy:** `cargo modules structure`
 - **Assembly Disassembly:** `cargo asm-fn`
+
+---
+
+## 📋 Technical Debt & Future Hardening Backlog
+
+1. **Re-Enable `cargo::unused_dependencies` Lint:**
+   - Temporarily set to `"allow"` in `[workspace.lints.cargo]` during workspace bootstrapping.
+   - **Action:** Re-enable strict checking (`"warn"` / `"-D warnings"`) once all crate features in `agy-ctrl` and `agy-mcp` are fully wired up.
+
+2. **Refactor Boolean Security Flags to Typed Enums:**
+   - `ToolDefinition` in `agy-mcp` currently uses boolean flags matching `tools.toml` toggles (`enforce_workspace_bounds`, `ban_dangerous_files`, etc.), requiring `#[allow(clippy::struct_excessive_bools)]`.
+   - **Action:** Refactor these primitive flags into typed two-variant or multi-variant domain enums (`BoundaryPolicy`, `SanitizationPolicy`, etc.) to prevent boolean blindness and eliminate the lint suppression.
+
+3. **Evaluate Safe Crate Abstractions for Process Hygiene:**
+   - `SubprocessSupervisor` in `agy-common` currently uses scoped `unsafe` blocks for `libc::prctl(PR_SET_PDEATHSIG)` and `libc::setpgid`.
+   - **Action:** Audit established community crates (e.g. `process-wrap`, `command-group`, or safe bindings) that encapsulate Linux orphan prevention in safe abstractions, allowing `unsafe_code = "forbid"` to be restored at the workspace root.
