@@ -1,0 +1,209 @@
+cargo-features = ["panic-immediate-abort"]
+
+[workspace]
+resolver = "3"
+members = [
+    "crates/agy-common",
+    "crates/agy-mcp",
+    "crates/agy-hooks",
+    "crates/agy-ctrl",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+authors = ["infinite"]
+repository = "https://github.com/JeronimoCapelle/agy-suite"
+readme = "README.md"
+keywords = ["mcp", "agentic", "systems", "ratatui", "antigravity"]
+categories = ["development-tools", "command-line-utilities"]
+
+[workspace.dependencies]
+# Internal workspace crates
+agy-common = { path = "crates/agy-common" }
+
+# Serialization & Configuration
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Error Handling & Systems Utilities
+thiserror = "2.0"
+which = "7.0"
+libc = "0.2"
+mpatch = "1.7"
+jiff = "0.2"
+
+# Asynchronous Runtime (for agy-mcp stdio transport)
+tokio = { version = "1.43", features = ["full"] }
+
+# Terminal UI (for offline agy-ctrl configuration deck)
+ratatui = "0.29"
+crossterm = "0.28"
+
+# Test & Bench Dev-Dependencies
+criterion2 = "3.0"
+divan = "0.1"
+gungraun = "0.20"
+insta = { version = "1.49", features = ["yaml", "redactions"] }
+loom = "0.7"
+proptest = "1.6"
+
+# ==============================================================================
+# WORKSPACE COMPILER LINTS
+# ==============================================================================
+[workspace.lints.rust]
+unsafe_code = "allow" # Allowed for low-level systems calls (prctl, setpgid in agy-common)
+non_ascii_idents = "forbid"
+let_underscore_drop = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unreachable_pub = "deny"
+unused_qualifications = "deny"
+elided_lifetimes_in_paths = "deny"
+single_use_lifetimes = "deny"
+
+[workspace.lints.cargo]
+unused_dependencies = "allow"
+unused_workspace_dependencies = "allow"
+unused_workspace_package_fields = "allow"
+
+[workspace.lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious  = { level = "deny", priority = -1 }
+style       = { level = "warn", priority = -1 }
+complexity  = { level = "warn", priority = -1 }
+perf        = { level = "warn", priority = -1 }
+pedantic    = { level = "warn", priority = -1 }
+nursery     = { level = "warn", priority = -1 }
+cargo       = { level = "warn", priority = -1 }
+
+# Conflict resolutions
+multiple_crate_versions = "allow"
+redundant_pub_crate = "allow"
+missing_errors_doc = "allow"
+module_name_repetitions = "allow"
+
+# Hard Invariants
+semicolon_if_nothing_returned = "forbid"
+unseparated_literal_suffix = "forbid"
+undocumented_unsafe_blocks = "forbid"
+multiple_unsafe_ops_per_block = "forbid"
+allow_attributes_without_reason = "deny"
+
+# Memory & Clone Hygiene
+clone_on_ref_ptr = "deny"
+redundant_clone = "deny"
+str_to_string = "deny"
+implicit_clone = "deny"
+string_add = "deny"
+
+# Cast Safety
+as_conversions = "deny"
+as_underscore = "deny"
+as_pointer_underscore = "deny"
+fn_to_numeric_cast_any = "deny"
+cast_possible_truncation = "deny"
+cast_sign_loss = "deny"
+cast_possible_wrap = "deny"
+cast_precision_loss = "deny"
+cast_ptr_alignment = "deny"
+lossy_float_literal = "deny"
+float_cmp = "deny"
+float_cmp_const = "deny"
+
+# Arithmetic & Bitwise
+arithmetic_side_effects = "deny"
+suspicious_xor_used_as_pow = "deny"
+
+# Dangerous APIs
+mem_forget = "deny"
+exit = "deny"
+create_dir = "deny"
+rc_buffer = "deny"
+rc_mutex = "deny"
+mutex_atomic = "deny"
+infinite_loop = "deny"
+empty_drop = "deny"
+empty_structs_with_brackets = "deny"
+empty_enum_variants_with_brackets = "deny"
+try_err = "deny"
+map_err_ignore = "deny"
+let_underscore_must_use = "deny"
+
+# Dev-Tolerated (Warns in dev, fails with -D warnings)
+todo = "warn"
+unimplemented = "warn"
+panic = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+unreachable = "warn"
+unwrap_in_result = "warn"
+panic_in_result_fn = "warn"
+indexing_slicing = "warn"
+string_slice = "warn"
+get_unwrap = "warn"
+assertions_on_result_states = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+use_debug = "warn"
+
+# Code Hygiene
+cfg_not_test = "warn"
+tests_outside_test_module = "warn"
+unnecessary_self_imports = "warn"
+unnecessary_safety_comment = "warn"
+unnecessary_safety_doc = "warn"
+unneeded_field_pattern = "warn"
+rest_pat_in_fully_bound_structs = "warn"
+redundant_type_annotations = "warn"
+pathbuf_init_then_push = "warn"
+string_lit_chars_any = "warn"
+verbose_file_reads = "warn"
+filetype_is_file = "warn"
+needless_raw_strings = "warn"
+non_zero_suggestions = "warn"
+unused_result_ok = "warn"
+return_and_then = "warn"
+same_name_method = "warn"
+shadow_unrelated = "warn"
+
+# ==============================================================================
+# CUSTOM COMPILATION PROFILES
+# ==============================================================================
+[profile.fast]
+inherits = "dev"
+opt-level = 0
+debug = 0
+strip = "none"
+panic = "abort"
+debug-assertions = false
+overflow-checks = false
+incremental = true
+codegen-units = 256
+
+[profile.fast.package."*"]
+opt-level = 0
+
+[profile.perf]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+
+[profile.min-size]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false

@@ -1,0 +1,33 @@
+# Build Artifacts
+/target/
+Cargo.lock.tmp
+**/*.rs.bk
+.cargo-ok
+
+# C/C++ Artifacts
+compile_commands.json
+.cache/
+*.o
+*.a
+*.so
+*.dylib
+
+# Profiling, Coverage & Mutation Testing
+perf.data*
+flamegraph.svg
+*.profraw
+*.profdata
+lcov.info
+coverage/
+mutants.out/
+
+# Environments & IDEs
+.env
+.env.*
+!.env.example
+.idea/
+.zed/*
+!.zed/debug.json
+!.zed/tasks.json
+*.swp
+*~
