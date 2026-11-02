@@ -87,7 +87,9 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
             | ToolAction::FileWrite
             | ToolAction::MpatchEdit
             | ToolAction::FileSearch
-            | ToolAction::CliManual => {
+            | ToolAction::CliManual
+            | ToolAction::ProjectState
+            | ToolAction::WorkspaceEnsure => {
                 // In-process native actions are always verified
                 report.verified_tools = report.verified_tools.saturating_add(1);
             }

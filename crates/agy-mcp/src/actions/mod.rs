@@ -7,7 +7,9 @@ pub(crate) mod file_search;
 pub(crate) mod file_write;
 pub(crate) mod mpatch_edit;
 pub(crate) mod parameterized_cmd;
+pub(crate) mod project_state;
 pub(crate) mod static_cmd;
+pub(crate) mod workspace_ensure;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -115,6 +117,10 @@ pub(crate) fn dispatch_action(
         ToolAction::CargoJsonDiagnostics => cargo_json::execute(tool, workspace_root),
 
         ToolAction::CliManual => Ok(cli_manual::execute(tool, arguments)),
+
+        ToolAction::ProjectState => Ok(project_state::execute(workspace_root)),
+
+        ToolAction::WorkspaceEnsure => workspace_ensure::execute(workspace_root, arguments),
 
         ToolAction::Unknown(_) => Err(format!(
             "Unknown or unsupported tool action for tool '{}'",

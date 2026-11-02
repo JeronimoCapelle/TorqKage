@@ -67,10 +67,12 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         "inspect-state" => {
+            eprintln!("[agy-hooks] Advisory: 'inspect-state' in agy-hooks is deprecated; use agy-mcp tool 'inspect_project_state' instead.");
             state::execute();
             ExitCode::SUCCESS
         }
         "reset-circuit-breaker" => {
+            eprintln!("[agy-hooks] Advisory: 'reset-circuit-breaker' in agy-hooks is deprecated; use 'agy-ctrl reset-breaker' instead.");
             let root = agy_common::WorkspaceResolver::find_root(None).unwrap_or_else(|_| std::path::PathBuf::from("."));
             let mut ledger = agy_common::CircuitBreakerLedger::load(&root);
             if ledger.reset(&root).is_ok() {
@@ -82,6 +84,7 @@ fn main() -> ExitCode {
             }
         }
         "ensure-workspace" => {
+            eprintln!("[agy-hooks] Advisory: 'ensure-workspace' in agy-hooks is deprecated; use agy-mcp tool 'ensure_agent_workspace' or 'agy-ctrl workspace ensure' instead.");
             let agent = match args.get(2) {
                 Some(a) if !a.trim().is_empty() => a.trim(),
                 _ => {
@@ -103,6 +106,7 @@ fn main() -> ExitCode {
             }
         }
         "check-clean" => {
+            eprintln!("[agy-hooks] Advisory: 'check-clean' in agy-hooks is deprecated; use 'jj diff --summary' instead.");
             let target_path = args.get(2).map_or_else(
                 || agy_common::WorkspaceResolver::find_root(None).unwrap_or_else(|_| std::path::PathBuf::from(".")),
                 std::path::PathBuf::from,

@@ -39,9 +39,10 @@ pub(crate) fn resolve_agent_scope(args: &[String], workspace_root: &Path) -> Opt
     None
 }
 
-/// Reads the active agent identity from `.pipeline/active_agent.json` or `.pipeline/active_agent`.
+/// Reads the active agent identity from `.agy/state/active_agent.json` (or `.pipeline/active_agent.json` fallback).
 fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
-    let json_path = workspace_root.join(".pipeline/active_agent.json");
+    let paths = agy_common::AgyStatePaths::new(workspace_root);
+    let json_path = paths.active_agent_file();
     if json_path.is_file()
         && let Ok(content) = fs::read_to_string(&json_path)
         && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
@@ -51,9 +52,19 @@ fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
         return Some(name.trim().to_owned());
     }
 
-    let txt_path = workspace_root.join(".pipeline/active_agent");
+    let txt_path = paths.state_dir().join("active_agent");
     if txt_path.is_file()
         && let Ok(content) = fs::read_to_string(&txt_path)
+    {
+        let name = content.trim();
+        if !name.is_empty() {
+            return Some(name.to_owned());
+        }
+    }
+
+    let legacy_txt = workspace_root.join(".pipeline/active_agent");
+    if legacy_txt.is_file()
+        && let Ok(content) = fs::read_to_string(&legacy_txt)
     {
         let name = content.trim();
         if !name.is_empty() {

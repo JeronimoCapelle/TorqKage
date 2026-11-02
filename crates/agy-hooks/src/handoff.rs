@@ -31,9 +31,9 @@ pub(crate) fn execute_record_handoff() {
 
     let record = HandoffRecord::new(&agent_name, modified_files.clone(), &status);
 
-    let pipeline_dir = root.join(".pipeline");
-    if std::fs::create_dir_all(&pipeline_dir).is_ok() {
-        let handoff_path = pipeline_dir.join("last_handoff.md");
+    let paths = agy_common::AgyStatePaths::new(&root);
+    if std::fs::create_dir_all(paths.state_dir()).is_ok() {
+        let handoff_path = paths.handoff_md_file();
         drop(std::fs::write(&handoff_path, record.to_markdown()));
 
         let pipeline_handoff = PipelineHandoff::new(
@@ -45,7 +45,7 @@ pub(crate) fn execute_record_handoff() {
             status,
         );
         if let Ok(json_str) = serde_json::to_string_pretty(&pipeline_handoff) {
-            drop(std::fs::write(pipeline_dir.join("handoff.json"), json_str));
+            drop(std::fs::write(paths.handoff_json_file(), json_str));
         }
     }
 
@@ -57,15 +57,15 @@ pub(crate) fn execute_record_handoff() {
 
 /// Executes the `inject-wake` hook (`SessionStart`).
 ///
-/// Reads `.pipeline/handoff.json` (or `.pipeline/last_handoff.md`) if present and emits a `systemMessage` step
+/// Reads `.agy/state/handoff.json` (or `.agy/state/last_handoff.md`) if present and emits a `systemMessage` step
 /// providing immediate continuity context for the starting conversation session.
 pub(crate) fn execute_inject_wake() {
     let input: SessionStartInput = read_stdin_payload();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
-    let pipeline_dir = root.join(".pipeline");
-    let json_handoff = pipeline_dir.join("handoff.json");
-    let md_handoff = pipeline_dir.join("last_handoff.md");
+    let paths = agy_common::AgyStatePaths::new(&root);
+    let json_handoff = paths.handoff_json_file();
+    let md_handoff = paths.handoff_md_file();
 
     let resp = if json_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&json_handoff)

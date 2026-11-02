@@ -274,7 +274,7 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
         Line::from(vec![
             Span::styled("Workspace: ", Style::default().fg(Color::DarkGray)),
             if app.isolated_workspace() {
-                Span::styled(format!("Isolated (.workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+                Span::styled(format!("Isolated (.agy/workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
             } else {
                 Span::styled("Direct (@)", Style::default().fg(Color::DarkGray))
             },
@@ -688,7 +688,7 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
         ]),
         Line::from(vec![
             Span::styled("  w               ", Style::default().fg(Color::Cyan)),
-            Span::styled("Toggle Jujutsu workspace isolation (.workspaces/<agent>)", Style::default().fg(Color::White)),
+            Span::styled("Toggle Jujutsu workspace isolation (.agy/workspaces/<agent>)", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
             Span::styled("  k               ", Style::default().fg(Color::Cyan)),

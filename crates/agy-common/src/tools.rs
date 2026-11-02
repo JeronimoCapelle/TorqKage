@@ -16,6 +16,8 @@ pub enum ToolAction {
     ParameterizedCommand,
     CargoJsonDiagnostics,
     CliManual,
+    ProjectState,
+    WorkspaceEnsure,
     #[serde(untagged)]
     Unknown(String),
 }

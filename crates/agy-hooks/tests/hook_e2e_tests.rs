@@ -70,8 +70,8 @@ fn test_record_handoff_and_inject_wake_roundtrip_e2e() {
     let stop_resp: StopResponse = serde_json::from_str(&stdout_stop).expect("valid StopResponse JSON");
     assert_eq!(stop_resp.decision, None); // {} permits stop
 
-    // Check that .pipeline/last_handoff.md was created
-    let handoff_file = temp_workspace.join(".pipeline").join("last_handoff.md");
+    // Check that .agy/state/last_handoff.md was created
+    let handoff_file = agy_common::AgyStatePaths::new(&temp_workspace).handoff_md_file();
     assert!(handoff_file.exists());
 
     // 2. Run inject-wake

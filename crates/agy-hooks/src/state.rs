@@ -109,7 +109,7 @@ fn query_git_status(root: &Path) -> String {
 }
 
 fn read_last_handoff(root: &Path) -> Option<String> {
-    let handoff_path = root.join(".pipeline").join("last_handoff.md");
+    let handoff_path = agy_common::AgyStatePaths::new(root).handoff_md_file();
     if handoff_path.exists()
         && let Ok(content) = std::fs::read_to_string(&handoff_path)
     {

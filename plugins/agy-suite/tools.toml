@@ -504,11 +504,9 @@ truncate_lines = 100
 timeout_seconds = 10
 
 [tools.inspect_project_state]
-description = "Inspects repository state: active checkpoint (.pipeline/checkpoint.json), uncommitted changes (jj diff --stat), and recent handoff notes"
-action = "static_command"
+description = "Inspects repository state: active branch, uncommitted changes, and recent handoff notes"
+action = "project_state"
 category = "diagnostics"
-command = ["agy-hooks", "inspect-state"]
-output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
 
@@ -582,14 +580,12 @@ truncate_lines = 50
 timeout_seconds = 15
 
 [tools.ensure_agent_workspace]
-description = "Ensures an isolated Jujutsu workspace exists for a subagent (.workspaces/<agent>), automatically rebasing clean workspaces onto default@ and symlinking the shared build target cache"
-action = "parameterized_command"
+description = "Ensures an isolated Jujutsu workspace exists for a subagent (.agy/workspaces/<agent>), automatically rebasing clean workspaces onto default@ and symlinking the shared build target cache"
+action = "workspace_ensure"
 category = "diagnostics"
-command = ["agy-hooks", "ensure-workspace"]
 args = [
     { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name (e.g. 'coder', 'test-author', 'mini', 'perf-analyst')" }
 ]
-output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 15
 
@@ -597,10 +593,11 @@ timeout_seconds = 15
 description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
 action = "parameterized_command"
 category = "diagnostics"
-command = ["agy-hooks", "check-clean"]
+command = ["jj", "diff", "--summary"]
 args = [
-    { name = "workspace_path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Optional workspace path to inspect (defaults to current workspace)" }
+    { name = "workspace_path", required = false, flag = "-R", regex = "^[a-zA-Z0-9_./-]+$", description = "Optional workspace path to inspect (defaults to current workspace)" }
 ]
+empty_fallback = "Clean (0 uncommitted changes)"
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10

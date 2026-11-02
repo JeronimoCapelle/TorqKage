@@ -38,7 +38,7 @@ mcp_tools:
 - Detect undefined behavior, uninitialized memory, and pointer provenance violations via `run_cargo_careful` and `run_cargo_miri`.
 - Profile CPU bottlenecks using `run_flamegraph` and hardware counters (cache misses, branch mispredictions) via `run_cargo_perf`.
 - Audit executable footprint and generic monomorphization overhead using `run_cargo_bloat`.
-- Output a structured Markdown report to `.pipeline/perf_report.md` detailing:
+- Output a structured Markdown report to `.agy/artifacts/perf_report.md` detailing:
   1. **Hotspots & Bottlenecks:** Functions consuming disproportionate CPU cycles or hardware cache misses.
   2. **Microarchitectural Inefficiencies:** Assembly-level spills, bounds checks blocking SIMD, port contention.
   3. **Memory & UB Risks:** Provenance or stacked/tree borrow warnings from Miri/Careful.

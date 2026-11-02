@@ -35,7 +35,8 @@ mutants.out/
 *.swp
 *~
 
-# Multi-Agent Workspaces & Ephemeral State
+# Multi-Agent Workspaces & Ephemeral State (.agy)
+/.agy/
 /.workspaces/
 .pipeline/circuit_breaker.json
 

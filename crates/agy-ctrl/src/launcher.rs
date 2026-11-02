@@ -199,9 +199,9 @@ pub(crate) fn launch_agy_interactive(
 
     if was_isolated {
         println!("\n--------------------------------------------------------------------------------");
-        println!("🏁 [agy-ctrl] Session ended in isolated workspace: .workspaces/{}", agent.name);
+        println!("🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}", agent.name);
         println!("   Changes are committed to workspace '{}@'.", agent.name);
-        println!("   Use 'jj workspace list' or 'jj diff -R .workspaces/{}' to inspect.", agent.name);
+        println!("   Use 'jj workspace list' or 'jj diff -R .agy/workspaces/{}' to inspect.", agent.name);
         println!("--------------------------------------------------------------------------------");
     }
 
@@ -248,14 +248,14 @@ pub(crate) fn launch_agy_headless(
             "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
-            if was_isolated { "YES (.workspaces)" } else { "NO" }
+            if was_isolated { "YES (.agy/workspaces)" } else { "NO" }
         );
     } else {
         println!(
             "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
-            if was_isolated { "YES (.workspaces)" } else { "NO" }
+            if was_isolated { "YES (.agy/workspaces)" } else { "NO" }
         );
     }
 
@@ -278,7 +278,7 @@ pub(crate) fn launch_agy_headless(
     let res = cmd.status().map_err(|e| format!("Failed to spawn 'agy': {e}"));
 
     if was_isolated {
-        println!("\n🏁 [agy-ctrl] Session ended in isolated workspace: .workspaces/{}", agent.name);
+        println!("\n🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}", agent.name);
         println!("   Changes are committed to workspace '{}@'.", agent.name);
     }
 

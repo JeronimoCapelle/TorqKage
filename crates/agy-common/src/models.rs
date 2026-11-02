@@ -497,11 +497,11 @@ impl CircuitBreakerLedger {
         }
     }
 
-    /// Loads the circuit breaker state from `.pipeline/circuit_breaker.json` in `workspace_root`.
+    /// Loads the circuit breaker state from `.agy/state/circuit_breaker.json` (or `.pipeline/circuit_breaker.json` fallback).
     /// Returns a clean ledger with 0 failures if the file does not exist or is invalid.
     #[must_use]
     pub fn load(workspace_root: &Path) -> Self {
-        let path = workspace_root.join(".pipeline").join(Self::FILE_NAME);
+        let path = crate::state::AgyStatePaths::new(workspace_root).circuit_breaker_file();
         if let Ok(data) = std::fs::read_to_string(&path)
             && let Ok(ledger) = serde_json::from_str::<Self>(&data)
         {
@@ -510,12 +510,12 @@ impl CircuitBreakerLedger {
         Self::new("unknown")
     }
 
-    /// Saves the ledger state to `.pipeline/circuit_breaker.json`.
+    /// Saves the ledger state to `.agy/state/circuit_breaker.json`.
     ///
     /// # Errors
     /// Returns `io::Error` if directory creation or file writing fails.
     pub fn save(&self, workspace_root: &Path) -> std::io::Result<()> {
-        let dir = workspace_root.join(".pipeline");
+        let dir = crate::state::AgyStatePaths::new(workspace_root).state_dir();
         std::fs::create_dir_all(&dir)?;
         let data = serde_json::to_string_pretty(self)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;

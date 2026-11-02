@@ -21,6 +21,7 @@ pub mod jujutsu;
 pub mod models;
 pub mod resolver;
 pub mod sandbox;
+pub mod state;
 pub mod supervisor;
 pub mod tools;
 
@@ -41,4 +42,5 @@ pub use models::{
 };
 pub use resolver::WorkspaceResolver;
 pub use sandbox::{build_bubblewrap_command, is_inside_outer_sandbox};
+pub use state::AgyStatePaths;
 pub use supervisor::{ChildGuard, SubprocessSupervisor};

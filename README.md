@@ -51,7 +51,7 @@ flowchart TD
 
     subgraph RuntimeBridge ["Orchestration & Sandbox Bridge"]
         Ctrl -->|"fork() / execvp('agy')\n(Raw mode suspended)"| AgyCLI["agy CLI Agent Runtime"]
-        Ctrl -.->|"jj workspace add .workspaces/<agent>"| JJWorkspaces[".workspaces/<agent>\n(Jujutsu Isolation)"]
+        Ctrl -.->|"jj workspace add .agy/workspaces/<agent>"| JJWorkspaces[".agy/workspaces/<agent>\n(Jujutsu Isolation)"]
     end
 
     subgraph PluginServices ["Antigravity Lifecycle & Plugin Services"]
@@ -71,8 +71,8 @@ flowchart TD
         MCPDaemon -->|"SubprocessSupervisor\n(PR_SET_PDEATHSIG + setpgid)"| Supervisor["agy-common::SubprocessSupervisor"]
         Supervisor -->|"bwrap --unshare-all (Optional)"| BwrapJail["Bubblewrap Sandbox"]
         BwrapJail --> NativeTools["Native Binaries (cargo, jj, ast-grep, etc.)"]
-        MCPDaemon <-->|".agy/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
-        HooksRunner <-->|".pipeline/handoff.json"| HandoffState[("Session Handoff Bridge")]
+        MCPDaemon <-->|".agy/state/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
+        HooksRunner <-->|".agy/state/handoff.json"| HandoffState[("Session Handoff Bridge")]
     end
 ```
 
@@ -224,7 +224,7 @@ cp -r plugins/agy-suite/* ~/.gemini/config/plugins/agy-suite/
 4. **2-Strike Compiler Failure Circuit Breaker:**
    If mutating operations break the compiler or test suite across 2 consecutive turns, `CircuitBreakerLedger` trips. Mutating tools are immediately blocked until a successful verification pass or manual reset via `agy-hooks reset-circuit-breaker`.
 5. **Jujutsu Workspace Isolation:**
-   When launching agents in isolated mode, `agy-ctrl` creates a lightweight, sparse Jujutsu workspace at `.workspaces/<agent>`. The shared `target/` build cache is symlinked, and work is committed to independent revisions off `default@`, keeping the main working tree pristine.
+   When launching agents in isolated mode, `agy-ctrl` creates a lightweight, sparse Jujutsu workspace at `.agy/workspaces/<agent>`. The shared `target/` build cache is symlinked, and work is committed to independent revisions off `default@`, keeping the main working tree pristine.
 
 ---
 

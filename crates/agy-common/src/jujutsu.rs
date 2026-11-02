@@ -106,9 +106,16 @@ impl JujutsuWorkspace {
             return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
         }
 
-        let workspaces_dir = repo_root.join(".workspaces");
+        let paths = crate::state::AgyStatePaths::new(&repo_root);
+        let workspaces_dir = paths.workspaces_dir();
         std::fs::create_dir_all(&workspaces_dir)?;
-        let agent_ws_path = workspaces_dir.join(agent);
+        let modern_ws_path = paths.agent_workspace(agent);
+        let legacy_ws_path = repo_root.join(".workspaces").join(agent);
+        let agent_ws_path = if !modern_ws_path.exists() && legacy_ws_path.is_dir() {
+            legacy_ws_path
+        } else {
+            modern_ws_path
+        };
 
         if !Self::workspace_exists(&repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
@@ -181,7 +188,8 @@ impl JujutsuWorkspace {
     /// Returns `AgyError` if workspace forget fails.
     #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess errors")]
     pub fn forget_agent_workspace(workspace_root: &Path, agent: &str) -> Result<()> {
-        let agent_ws_path = workspace_root.join(".workspaces").join(agent);
+        let modern_ws_path = crate::state::AgyStatePaths::new(workspace_root).agent_workspace(agent);
+        let legacy_ws_path = workspace_root.join(".workspaces").join(agent);
         if Self::workspace_exists(workspace_root, agent) {
             let status = Command::new("jj")
                 .args(["--color=never", "workspace", "forget", agent])
@@ -194,8 +202,11 @@ impl JujutsuWorkspace {
                 );
             }
         }
-        if agent_ws_path.exists() {
-            std::fs::remove_dir_all(&agent_ws_path).map_err(AgyError::Io)?;
+        if modern_ws_path.exists() {
+            std::fs::remove_dir_all(&modern_ws_path).map_err(AgyError::Io)?;
+        }
+        if legacy_ws_path.exists() {
+            std::fs::remove_dir_all(&legacy_ws_path).map_err(AgyError::Io)?;
         }
         Ok(())
     }

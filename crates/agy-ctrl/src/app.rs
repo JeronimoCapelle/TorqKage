@@ -134,11 +134,11 @@ impl App {
         self.circuit_breaker_status = Some(agy_common::CircuitBreakerLedger::load(&self.workspace_root));
     }
 
-    /// Toggles Jujutsu workspace isolation (.workspaces/<agent>) for launched sessions.
+    /// Toggles Jujutsu workspace isolation (.agy/workspaces/<agent>) for launched sessions.
     pub(crate) fn toggle_isolated_workspace(&mut self) {
         self.launch_config.isolated_workspace = !self.launch_config.isolated_workspace;
         let mode = if self.launch_config.isolated_workspace {
-            "ENABLED (.workspaces/<agent>)"
+            "ENABLED (.agy/workspaces/<agent>)"
         } else {
             "DISABLED (direct repo root)"
         };

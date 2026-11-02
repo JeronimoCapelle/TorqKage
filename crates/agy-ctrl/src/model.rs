@@ -98,6 +98,8 @@ impl ToolItem {
                 ToolAction::FileSearch => "file_search".to_owned(),
                 ToolAction::CargoJsonDiagnostics => "cargo_json_diagnostics".to_owned(),
                 ToolAction::CliManual => "cli_manual".to_owned(),
+                ToolAction::ProjectState => "project_state".to_owned(),
+                ToolAction::WorkspaceEnsure => "workspace_ensure".to_owned(),
                 ToolAction::Unknown(s) => s,
             },
             category,
