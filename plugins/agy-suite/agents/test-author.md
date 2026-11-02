@@ -29,8 +29,6 @@ mcp_tools:
   - run_mutation_tests
   - run_cargo_insta
   - run_cargo_fuzz
-  - run_property_tests
-  - run_concurrency_tests
   - query_tool_help
 ---
 

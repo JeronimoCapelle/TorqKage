@@ -343,32 +343,6 @@ output_capture = "stderr"
 truncate_lines = 100
 timeout_seconds = 90
 
-[tools.run_property_tests]
-description = "Executes generative property-based tests via proptest with randomized inputs (optional filter override)"
-action = "parameterized_command"
-category = "testing"
-tracks_circuit_breaker = true
-command = ["cargo", "test", "--test", "property_test"]
-args = [
-    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional property test name filter" }
-]
-output_capture = "stdout"
-truncate_lines = 100
-timeout_seconds = 120
-
-[tools.run_concurrency_tests]
-description = "Executes exhaustive state-space permutation tests for atomic algorithms via loom (optional filter override)"
-action = "parameterized_command"
-category = "testing"
-tracks_circuit_breaker = true
-command = ["cargo", "test", "--test", "concurrency_test"]
-args = [
-    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional loom test name filter" }
-]
-output_capture = "stdout"
-truncate_lines = 100
-timeout_seconds = 180
-
 # --- Performance Profiling & Hardware Diagnostics Tooling ---
 
 [tools.run_cargo_asm]
@@ -393,45 +367,6 @@ args = [
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 240
-
-[tools.run_gungraun_bench]
-description = "Executes deterministic instruction/cache profiling benchmarks via Gungraun (Valgrind Callgrind/Cachegrind/DHAT + Linux perf)"
-action = "parameterized_command"
-category = "profiling"
-require_tests_passed = true
-command = ["cargo", "bench", "--bench", "gungraun_bench"]
-args = [
-    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
-]
-output_capture = "stdout"
-truncate_lines = 150
-timeout_seconds = 240
-
-[tools.run_criterion_bench]
-description = "Executes statistical throughput and latency distribution benchmarks via Criterion2"
-action = "parameterized_command"
-category = "profiling"
-require_tests_passed = true
-command = ["cargo", "bench", "--bench", "criterion_bench"]
-args = [
-    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
-]
-output_capture = "stdout"
-truncate_lines = 150
-timeout_seconds = 240
-
-[tools.run_divan_bench]
-description = "Executes fast, allocation-aware microbenchmarks via Divan"
-action = "parameterized_command"
-category = "profiling"
-require_tests_passed = true
-command = ["cargo", "bench", "--bench", "benchmark"]
-args = [
-    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
-]
-output_capture = "stdout"
-truncate_lines = 150
-timeout_seconds = 180
 
 [tools.run_cargo_careful]
 description = "Executes tests with extra debug checks to detect undefined behavior and invalid operations"
@@ -464,31 +399,14 @@ truncate_lines = 50
 timeout_seconds = 240
 
 [tools.run_cargo_perf]
-description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count)"
+description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count) during test execution via Linux perf"
 action = "static_command"
 category = "profiling"
-command = ["perf", "stat", "-B", "cargo", "test", "--no-run"]
+require_tests_passed = true
+command = ["perf", "stat", "-B", "cargo", "test"]
 output_capture = "stderr"
 truncate_lines = 50
-timeout_seconds = 60
-
-[tools.run_valgrind_cachegrind]
-description = "Simulates L1/LLC cache references, misses, and branch mispredictions via Valgrind Cachegrind"
-action = "static_command"
-category = "profiling"
-command = ["valgrind", "--tool=cachegrind", "--cache-sim=yes", "cargo", "test", "--no-run"]
-output_capture = "stderr"
-truncate_lines = 100
 timeout_seconds = 180
-
-[tools.run_strace_summary]
-description = "Collects statistical call counts, errors, and time spent in Linux kernel system calls via strace"
-action = "static_command"
-category = "profiling"
-command = ["strace", "-c", "-f", "cargo", "test", "--no-run"]
-output_capture = "stderr"
-truncate_lines = 80
-timeout_seconds = 60
 
 [tools.run_cargo_bloat]
 description = "Analyzes binary size per symbol and crate to pinpoint monomorphization bloat"
@@ -509,34 +427,6 @@ output_capture = "stdout"
 truncate_lines = 40
 timeout_seconds = 120
 
-[tools.run_samply_profile]
-description = "Samples CPU execution with samply and generates profile data for the Firefox Profiler UI"
-action = "static_command"
-category = "profiling"
-require_tests_passed = true
-command = ["samply", "record", "--no-open"]
-output_capture = "stdout"
-truncate_lines = 30
-timeout_seconds = 180
-
-[tools.inspect_binary_sections]
-description = "Prints section sizes (.text, .data, .bss) of compiled ELF binaries using cargo-size / rust-size"
-action = "static_command"
-category = "profiling"
-command = ["cargo", "size", "--release"]
-output_capture = "stdout"
-truncate_lines = 30
-timeout_seconds = 30
-
-[tools.inspect_symbol_table]
-description = "Dumps demangled symbols and object exports using cargo-nm / rust-nm"
-action = "static_command"
-category = "profiling"
-command = ["cargo", "nm", "--release", "--demangle"]
-output_capture = "stdout"
-truncate_lines = 100
-timeout_seconds = 30
-
 [tools.analyze_llvm_mca]
 description = "Pipes generated assembly into llvm-mca to simulate CPU instruction ports, latency, and register pressure"
 action = "static_command"
@@ -546,14 +436,14 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
 
-[tools.run_cargo_zigbuild]
-description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
-action = "static_command"
-category = "compilation"
-command = ["cargo", "zigbuild", "check"]
-output_capture = "stdout"
-truncate_lines = 100
-timeout_seconds = 180
+# [tools.run_cargo_zigbuild]
+# description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
+# action = "static_command"
+# category = "compilation"
+# command = ["cargo", "zigbuild", "check"]
+# output_capture = "stdout"
+# truncate_lines = 100
+# timeout_seconds = 180
 
 [tools.run_nasm_check]
 description = "Assembles x86 real-mode and bare-metal bootloader assembly sources via NASM"
@@ -564,14 +454,14 @@ output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 30
 
-[tools.run_qemu_kernel_test]
-description = "Boots bare-metal OS kernel images headlessly under QEMU x86_64 emulator with serial stdout capture"
-action = "static_command"
-category = "testing"
-command = ["qemu-system-x86_64", "-display", "none", "-serial", "stdio", "-no-reboot"]
-output_capture = "stdout"
-truncate_lines = 100
-timeout_seconds = 60
+# [tools.run_qemu_kernel_test]
+# description = "Boots bare-metal OS kernel images headlessly under QEMU x86_64 emulator with serial stdout capture"
+# action = "static_command"
+# category = "testing"
+# command = ["qemu-system-x86_64", "-display", "none", "-serial", "stdio", "-no-reboot"]
+# output_capture = "stdout"
+# truncate_lines = 100
+# timeout_seconds = 60
 
 # --- Release Automation & High-Level Mathematics Tooling ---
 

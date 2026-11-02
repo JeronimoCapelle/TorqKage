@@ -63,7 +63,7 @@ mcp_tools:
   - **Unsafe Code, Raw Pointers, or FFI:** Recommend running `cargo careful` (fast UB runtime check) and `cargo miri` (deep stacked/tree borrows provenance interpreter).
   - **Concurrency, Channels, or Atomics:** Recommend running `cargo loom` (concurrency permutation checking).
   - **State Machines or SMT Arithmetic:** Recommend running `cargo kani` (model checking) or `cargo fuzz` (fuzzing).
-  - **Binary Bloat & Footprint:** If release binary size is critical, recommend running `cargo bloat --release -n 30` or `cargo size`.
+  - **Binary Bloat & Footprint:** If release binary size is critical, recommend running `cargo bloat --release -n 30`.
   - **Performance Regressions:** Recommend running `hyperfine` with warmup runs for statistical benchmark comparison.
   - **Category A Barred Actions:** Remind the operator that registry publishing (`cargo publish`, `yank`), credentials (`login`), and global installs (`install`, `binstall`) are strictly operator-only and must be performed manually.
 - **Live CLI Ground Truth:** Never guess tool flags; use `query_tool_help(tool_name = "...")` to inspect live options.
