@@ -166,16 +166,45 @@ fn extract_man_snippet(man_text: &str) -> Option<String> {
 
 fn default_tool_catalog() -> String {
     "# Available CLI Tooling in agy-suite\n\
-     - cargo-nextest: Parallel test harness runner\n\
-     - cargo-mutants: Mutation testing framework\n\
-     - cargo-insta: Snapshot testing review tool\n\
-     - cargo-deny: Supply-chain security, RustSec advisories, licenses\n\
-     - cargo-machete: Unused Cargo.toml dependency scanner\n\
-     - cargo-llvm-cov: LLVM source-based code coverage\n\
-     - cargo-bloat: Binary size and monomorphization analyzer\n\
-     - cargo-expand: Macro expansion introspection\n\
-     - cargo-modules: Module tree visualization\n\
-     - agy-hooks: Ephemeral Antigravity lifecycle hook runner\n"
+     \n\
+     ## Category C: Test Synthesis & Verification (Agent: test-author)\n\
+     - cargo-nextest: Parallel test harness runner (3x faster than standard test runner)\n\
+     - cargo-llvm-cov: Source-based branch and line code coverage reports\n\
+     - cargo-mutants: Mutation testing framework uncovering weak test assertions\n\
+     - cargo-insta: Snapshot testing review tool for golden files, AST, and state\n\
+     - cargo-fuzz: Native libFuzzer integration for panic discovery and security bounds\n\
+     \n\
+     ## Category D: Performance & Hardware Diagnostics (Agent: perf-analyst)\n\
+     - cargo-show-asm: Disassembles Rust symbols to assembly or LLVM-IR (SIMD/loops)\n\
+     - cargo-bench: Latency and throughput microbenchmarks via Criterion/Divan\n\
+     - cargo-careful: Fast runtime undefined behavior (UB) and memory sanitizer\n\
+     - cargo-miri: Deep interpreter for stacked/tree borrows, UB, and pointer provenance\n\
+     - cargo-flamegraph: Generates CPU callstack flamegraphs to identify bottlenecks\n\
+     - cargo-perf: Linux hardware performance counters (cache misses, IPC, branch miss)\n\
+     - cargo-bloat: Binary footprint and monomorphization text-size analyzer\n\
+     - hyperfine: Statistical CLI benchmarking with warmup runs and cache clearing\n\
+     - samply: Sampling CPU profiler with Firefox Profiler visual flamecharts\n\
+     - cargo-binutils (size, nm, objdump): Low-level ELF sections, symbols, disassembly\n\
+     \n\
+     ## Category E: Static Analysis & SemVer (Agent: spec-checker)\n\
+     - cargo-clippy: Strict idiomatic Rust linter (-D warnings)\n\
+     - cargo-deny: Audits dependency tree for RUSTSEC advisories, copyleft licenses, bans\n\
+     - cargo-machete: Fast scanner detecting unused dependencies in Cargo.toml\n\
+     - cargo-semver-checks: Validates public API changes adhere to Semantic Versioning\n\
+     - cargo-public-api: Diffs exposed public crate API signatures across git revisions\n\
+     - cargo-hack: Matrix verification testing across all feature flag combinations\n\
+     - cargo-modules: Module tree visualization (visibility and internal hierarchy)\n\
+     - cargo-expand: Macro expansion introspection (macro_rules! and proc macros)\n\
+     \n\
+     ## Category B & Release (Agents: planner / finisher / operator)\n\
+     - cargo-zigbuild: Cross-compiles using Zig (musl, windows, aarch64, riscv)\n\
+     - git-cliff: Conventional commits changelog generator (Agent: finisher)\n\
+     - cargo-add / cargo-remove / cargo-update: Managed Cargo.toml dependency changes\n\
+     - cargo-generate: Scaffolds crates from git templates\n\
+     - agy-hooks: Ephemeral Antigravity lifecycle hook runner\n\
+     \n\
+     ## Category A: Strictly USER-ONLY Actions\n\
+     - cargo publish, cargo yank, cargo clean-all, cargo login: Banned from all autonomous agents\n"
         .to_owned()
 }
 

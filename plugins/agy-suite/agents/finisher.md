@@ -48,9 +48,17 @@ mcp_tools:
   4. Verify examples and benchmarks compile cleanly (`run_cargo_check_targets`).
   5. Enforce clean rustfmt code formatting across all modified files (`run_cargo_fmt`).
   6. Verify offline docs build cleanly without broken links (`run_cargo_doc`).
-- **Suggest Category C Specialized Tools:** Proactively suggest (to the user) running deep verification tools that are barred from autonomous agents:
-  - Unsafe code, raw pointers, or FFI modified -> suggest running `cargo miri` or `cargo careful`.
-  - Arithmetic boundaries, bitfields, or state machines modified -> suggest running `cargo kani` (SMT model checking).
-  - Concurrency, atomics, or channels modified -> suggest running `cargo loom`.
-  - Intermittent crashes or difficult bugs -> suggest Mozilla `rr` record/replay.
+  7. Generate changelog release notes from conventional commits using `run_git_cliff`.
+- **Proactive Verification & Release Tool Recommendations (`cargo_tooling_audit_and_assignment.md`):**
+  - **Security & Supply Chain:** When dependencies change or before a release, recommend running `cargo deny check` to audit for RUSTSEC vulnerabilities, banned crates, and copyleft licenses.
+  - **Dependency Hygiene:** Recommend running `cargo machete` to detect and remove unused dependencies from `Cargo.toml`.
+  - **Public API & SemVer Compatibility:** If public traits, structs, or functions were touched, recommend running `cargo semver-checks check-release` and `cargo public-api diff` to prevent breaking changes.
+  - **Feature Flag Matrix:** When feature flags exist in `Cargo.toml`, recommend running `cargo hack check --each-feature` to ensure zero compilation breaks under isolated flags.
+  - **Unsafe Code, Raw Pointers, or FFI:** Recommend running `cargo careful` (fast UB runtime check) and `cargo miri` (deep stacked/tree borrows provenance interpreter).
+  - **Concurrency, Channels, or Atomics:** Recommend running `cargo loom` (concurrency permutation checking).
+  - **State Machines or SMT Arithmetic:** Recommend running `cargo kani` (model checking) or `cargo fuzz` (fuzzing).
+  - **Binary Bloat & Footprint:** If release binary size is critical, recommend running `cargo bloat --release -n 30` or `cargo size`.
+  - **Performance Regressions:** Recommend running `hyperfine` with warmup runs for statistical benchmark comparison.
+  - **Category A Barred Actions:** Remind the operator that registry publishing (`cargo publish`, `yank`), credentials (`login`), and global installs (`install`, `binstall`) are strictly operator-only and must be performed manually.
+- **Live CLI Ground Truth:** Never guess tool flags; use `query_tool_help(tool_name = "...")` to inspect live options.
 - **Explicit Checkpoint Gate:** You can ONLY declare "We have reached a new stable project checkpoint" AFTER the human operator explicitly confirms. Never declare completion autonomously.
