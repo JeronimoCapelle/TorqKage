@@ -161,7 +161,7 @@ mod tests {
         std::fs::write(&file_path, "fn old_func() -> i32 {\n    42\n}\n").unwrap();
 
         let tool = ToolDefinition {
-            name: "modify_source_code".to_owned(),
+            name: "modify_code".to_owned(),
             allowed_directories: vec!["src".to_owned()],
             enforce_workspace_bounds: true,
             ..Default::default()
@@ -192,7 +192,7 @@ mod tests {
         std::fs::write(&file_path, "fn existing_code() {}\n").unwrap();
 
         let tool = ToolDefinition {
-            name: "modify_source_code".to_owned(),
+            name: "modify_code".to_owned(),
             allowed_directories: vec!["src".to_owned()],
             ..Default::default()
         };

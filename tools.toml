@@ -60,15 +60,6 @@ description = "Applies Aider search/replace blocks or diffs via context-aware fu
 inherit = "base_tools.file_creator"
 description = "Creates a new file strictly within the canonical workspace bounds"
 
-# Aliases for backward compatibility
-[tools.modify_project_code]
-inherit = "base_tools.code_modifier"
-description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
-
-[tools.write_project_file]
-inherit = "base_tools.file_creator"
-description = "Creates a new file strictly within the canonical workspace bounds"
-
 # ==============================================================================
 # DECLARATIVE PER-AGENT PATH & DIRECTORY GUARDS
 # ==============================================================================

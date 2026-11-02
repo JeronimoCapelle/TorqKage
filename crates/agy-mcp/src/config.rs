@@ -48,15 +48,6 @@ pub(crate) struct LoadedConfiguration {
     pub(crate) agent_guards: BTreeMap<String, AgentGuard>,
 }
 
-/// Parses and resolves all tools defined in a `tools.toml` content string.
-///
-/// # Errors
-/// Returns an error if the TOML syntax is invalid.
-#[allow(dead_code, reason = "Legacy helper preserved for backward compatibility and testing")]
-pub(crate) fn parse_tools_str(toml_str: &str) -> Result<Vec<ToolDefinition>, toml::de::Error> {
-    parse_full_config_str(toml_str).map(|c| c.tools)
-}
-
 /// Parses and resolves both tools and agent guards defined in a `tools.toml` string.
 ///
 /// # Errors
@@ -82,15 +73,6 @@ pub(crate) fn parse_full_config_str(
         tools: resolved_tools,
         agent_guards: raw.agent_guards,
     })
-}
-
-/// Loads and resolves all tools from a given `tools.toml` file path.
-///
-/// # Errors
-/// Returns an error if reading the file or parsing TOML fails.
-#[allow(dead_code, reason = "Legacy helper preserved for backward compatibility and testing")]
-pub(crate) fn load_tools_from_path(path: &Path) -> Result<Vec<ToolDefinition>, String> {
-    load_full_config_from_path(path).map(|c| c.tools)
 }
 
 /// Loads and resolves tools and agent guards from a given `tools.toml` file path.
@@ -213,7 +195,7 @@ mod tests {
             enforce_workspace_bounds = true
             ban_dangerous_files = true
 
-            [tools.modify_test_code]
+            [tools.modify_code]
             inherit = "base_tools.code_modifier"
             description = "Restricted test modifier"
             allowed_directories = ["tests"]
@@ -224,10 +206,11 @@ mod tests {
             command = ["cargo", "check"]
         "#;
 
-        let tools = parse_tools_str(toml_sample).expect("parse failed");
+        let loaded = parse_full_config_str(toml_sample).expect("parse failed");
+        let tools = loaded.tools;
         assert_eq!(tools.len(), 2);
 
-        let test_tool = tools.iter().find(|t| t.name == "modify_test_code").expect("not found");
+        let test_tool = tools.iter().find(|t| t.name == "modify_code").expect("not found");
         assert_eq!(test_tool.description, "Restricted test modifier");
         assert_eq!(test_tool.action, ToolAction::MpatchEdit);
         assert!(test_tool.enforce_workspace_bounds);

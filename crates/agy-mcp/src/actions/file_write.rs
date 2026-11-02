@@ -93,7 +93,7 @@ mod tests {
     fn test_file_write_success() {
         let temp = create_test_dir("success");
         let tool = ToolDefinition {
-            name: "write_project_file".to_owned(),
+            name: "write_file".to_owned(),
             allowed_directories: vec!["src".to_owned()],
             enforce_workspace_bounds: true,
             ban_dangerous_files: true,
@@ -117,7 +117,7 @@ mod tests {
     fn test_file_write_dangerous_file_blocked() {
         let temp = create_test_dir("danger");
         let tool = ToolDefinition {
-            name: "write_project_file".to_owned(),
+            name: "write_file".to_owned(),
             ban_dangerous_files: true,
             ..Default::default()
         };
@@ -137,7 +137,7 @@ mod tests {
     fn test_file_write_disallowed_directory_blocked() {
         let temp = create_test_dir("disallow");
         let tool = ToolDefinition {
-            name: "write_source_file".to_owned(),
+            name: "write_file".to_owned(),
             allowed_directories: vec!["src".to_owned()],
             ..Default::default()
         };

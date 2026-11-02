@@ -328,12 +328,12 @@ mod tests {
 
         let tools = vec![
             ToolDefinition {
-                name: "write_project_file".to_owned(),
+                name: "write_file".to_owned(),
                 action: ToolAction::FileWrite,
                 ..Default::default()
             },
             ToolDefinition {
-                name: "modify_project_code".to_owned(),
+                name: "modify_code".to_owned(),
                 action: ToolAction::MpatchEdit,
                 ..Default::default()
             },
@@ -347,7 +347,7 @@ mod tests {
             id: Some(json!("w-1")),
             method: "tools/call".to_owned(),
             params: Some(json!({
-                "name": "write_project_file",
+                "name": "write_file",
                 "arguments": {
                     "path": "test.rs",
                     "content": "fn calculate() -> i32 {\n    10\n}\n"
@@ -364,7 +364,7 @@ mod tests {
             id: Some(json!("m-1")),
             method: "tools/call".to_owned(),
             params: Some(json!({
-                "name": "modify_project_code",
+                "name": "modify_code",
                 "arguments": {
                     "path": "test.rs",
                     "patch": "<<<<<<< SEARCH\n    10\n=======\n    42\n>>>>>>> REPLACE"

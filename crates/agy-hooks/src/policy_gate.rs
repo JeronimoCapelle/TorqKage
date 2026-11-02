@@ -54,17 +54,7 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
 fn is_default_mutating_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
-        "run_cargo_clippy_fix"
-            | "modify_code"
-            | "write_file"
-            | "modify_project_code"
-            | "modify_source_code"
-            | "modify_test_code"
-            | "write_project_file"
-            | "write_source_file"
-            | "write_test_file"
-            | "modify_design_doc"
-            | "write_design_doc"
+        "run_cargo_clippy_fix" | "modify_code" | "write_file"
     )
 }
 
@@ -129,7 +119,7 @@ mod tests {
     fn test_mutating_tool_triggers_ask() {
         let input = PreToolUseInput {
             tool_call: Some(ToolCallPayload {
-                name: "modify_project_code".to_owned(),
+                name: "modify_code".to_owned(),
                 args: json!({"path": "src/lib.rs", "diff": "..."}),
             }),
             ..Default::default()

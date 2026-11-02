@@ -148,8 +148,6 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
             "read_project_file",
             "modify_code",
             "write_file",
-            "modify_project_code",
-            "write_project_file",
             "search_codebase",
             "inspect_workspace_diff",
             "run_quick_check",
@@ -164,8 +162,6 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
             "read_project_file",
             "write_file",
             "modify_code",
-            "write_project_file",
-            "modify_project_code",
             "search_codebase",
             "inspect_module_structure",
             "inspect_project_state",
@@ -222,15 +218,12 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
             "inspect_binary_sections",
             "inspect_symbol_table",
             "write_file",
-            "write_project_file",
             "query_tool_help",
         ],
         "planner" => &[
             "read_project_file",
             "write_file",
             "modify_code",
-            "write_project_file",
-            "modify_project_code",
             "search_codebase",
             "inspect_module_structure",
             "query_project_spec",
@@ -261,8 +254,6 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
             "search_codebase",
             "write_file",
             "modify_code",
-            "write_project_file",
-            "modify_project_code",
             "run_quick_check",
             "run_cargo_verification",
             "run_cargo_test",
@@ -289,12 +280,12 @@ mod tests {
 
     #[test]
     fn test_extract_mcp_tools_from_markdown() {
-        let md = "---\nname: coder\ntools: []\nmcp_tools:\n  - read_project_file\n  - modify_source_code\n  - write_source_file\n---\nSome body\n";
+        let md = "---\nname: coder\ntools: []\nmcp_tools:\n  - read_project_file\n  - modify_code\n  - write_file\n---\nSome body\n";
         let tools = extract_mcp_tools_from_markdown(md).unwrap();
         assert_eq!(tools.len(), 3);
         assert!(tools.contains("read_project_file"));
-        assert!(tools.contains("modify_source_code"));
-        assert!(tools.contains("write_source_file"));
+        assert!(tools.contains("modify_code"));
+        assert!(tools.contains("write_file"));
     }
 
     #[test]

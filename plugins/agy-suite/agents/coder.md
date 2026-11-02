@@ -16,8 +16,6 @@ mcp_tools:
   - read_project_file
   - modify_code
   - write_file
-  - modify_project_code
-  - write_project_file
   - search_codebase
   - inspect_workspace_diff
   - run_quick_check

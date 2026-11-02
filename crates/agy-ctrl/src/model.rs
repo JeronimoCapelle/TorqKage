@@ -103,12 +103,9 @@ impl ToolItem {
             || name == "run_cargo_miri"
         {
             ToolCategory::Profiling
-        } else if name.contains("project_file")
-            || name.contains("source_code")
-            || name.contains("source_file")
-            || name.contains("test_code")
-            || name.contains("test_file")
-            || name.contains("design_doc")
+        } else if name == "write_file"
+            || name == "modify_code"
+            || name == "read_project_file"
             || name == "search_codebase"
         {
             ToolCategory::Filesystem
@@ -542,7 +539,8 @@ mod tests {
         assert_eq!(ToolItem::infer_category("run_cargo_clippy"), ToolCategory::Compilation);
         assert_eq!(ToolItem::infer_category("run_cargo_nextest"), ToolCategory::Testing);
         assert_eq!(ToolItem::infer_category("analyze_llvm_mca"), ToolCategory::Profiling);
-        assert_eq!(ToolItem::infer_category("write_source_file"), ToolCategory::Filesystem);
+        assert_eq!(ToolItem::infer_category("write_file"), ToolCategory::Filesystem);
+        assert_eq!(ToolItem::infer_category("modify_code"), ToolCategory::Filesystem);
         assert_eq!(ToolItem::infer_category("run_cargo_deny"), ToolCategory::Release);
         assert_eq!(ToolItem::infer_category("inspect_project_state"), ToolCategory::Diagnostics);
         assert_eq!(ToolItem::infer_category("unknown_custom_tool"), ToolCategory::Other);

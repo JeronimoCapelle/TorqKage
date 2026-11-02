@@ -19,8 +19,6 @@ mcp_tools:
   - read_project_file
   - write_file
   - modify_code
-  - write_project_file
-  - modify_project_code
   - search_codebase
   - inspect_module_structure
   - query_project_spec

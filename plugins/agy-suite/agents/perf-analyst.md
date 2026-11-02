@@ -38,7 +38,6 @@ mcp_tools:
   - inspect_binary_sections
   - inspect_symbol_table
   - write_file
-  - write_project_file
   - query_tool_help
 ---
 

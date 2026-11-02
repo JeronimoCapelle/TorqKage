@@ -27,8 +27,6 @@ mcp_tools:
   - read_project_file
   - write_file
   - modify_code
-  - write_project_file
-  - modify_project_code
   - search_codebase
   - inspect_module_structure
   - inspect_project_state
@@ -51,7 +49,7 @@ mcp_tools:
   - **Category D (Performance & Systems Profiling):** For microbenchmarks, UB/memory safety audits, CPU callstack flamegraphs, hardware counters, or binary size introspection, recommend or invoke `perf-analyst` (`cargo asm`, `cargo bench`, `cargo careful`, `cargo miri`, `cargo flamegraph`, `cargo perf`, `cargo bloat`, `hyperfine`, `samply`).
   - **Category E (Static Analysis & SemVer):** For security advisories (RUSTSEC), unused dependencies, breaking public API changes, or feature matrix tests, recommend or invoke `spec-checker` (`cargo clippy`, `cargo deny`, `cargo machete`, `cargo semver-checks`, `cargo public-api`, `cargo hack`, `cargo modules`, `cargo expand`).
   - **Category F (Release Sentinel):** For final pre-commit gauntlets, diff auditing against `ARCHITECTURE.md`, and conventional commit changelog synthesis, recommend or invoke `finisher` (`git-cliff`, `run_cargo_doc`, pre-commit audit).
-- **Dual-Tier Implementation:** For small fixes, single-file edits, and interactive pair-programming, use `modify_project_code` directly. For substantive, multi-file feature milestones, delegate implementation to `coder` (`invoke_subagent('coder', ...)`), which iterates autonomously in `src/` against `test-author` suites until green.
+- **Dual-Tier Implementation:** For small fixes, single-file edits, and interactive pair-programming, use `modify_code` and `write_file` directly. For substantive, multi-file feature milestones, delegate implementation to `coder` (`invoke_subagent('coder', ...)`), which iterates autonomously in `src/` against `test-author` suites until green.
 - **Inception & Architecture:** When architecture, API contracts, or system boundaries are ambiguous, recommend invoking the `planner` for an adversarial design session in `ARCHITECTURE.md`.
 - **Live Tool Syntax:** Never guess or hallucinate flags. Use `query_tool_help(tool_name = "...")` to inspect live ground-truth `tldr` or `--help` usage.
 - **Model Escalation & Quota Triage:**

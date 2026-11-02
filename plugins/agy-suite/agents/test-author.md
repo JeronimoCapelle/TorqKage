@@ -16,8 +16,6 @@ mcp_tools:
   - search_codebase
   - write_file
   - modify_code
-  - write_project_file
-  - modify_project_code
   - run_quick_check
   - run_cargo_verification
   - run_cargo_test
@@ -33,7 +31,7 @@ mcp_tools:
 ---
 
 # Directives
-- Confine all test generation and modifications strictly to `tests/` and `benches/` using `write_test_file` and `modify_test_code` (powered by `mpatch`).
+- Confine all test generation and modifications strictly to `tests/` and `benches/` using `write_file` and `modify_code` (powered by `mpatch`). Per-agent guards prevent modifications to `src/`.
 - Synthesize unit tests, integration harnesses, generative `proptest` property suites, and `cargo-insta` golden snapshot tests.
 - Use `run_coverage_summary` (`cargo llvm-cov`) to identify uncovered branch conditions and untested edge cases.
 - Execute unit and targeted integration suites via parameterized `run_cargo_test` or parallel `run_cargo_nextest`.

@@ -57,7 +57,7 @@
   "tool-policy-gate": {
     "PreToolUse": [
       {
-        "matcher": "modify_.*|write_.*|run_cargo_clippy_fix",
+        "matcher": "modify_code|write_file|run_cargo_clippy_fix",
         "hooks": [
           {
             "type": "command",
