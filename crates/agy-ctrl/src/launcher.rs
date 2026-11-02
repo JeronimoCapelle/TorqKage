@@ -128,6 +128,7 @@ pub(crate) fn launch_agy_interactive(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     workspace_root: &Path,
     agent: &AgentManifest,
+    sandbox: bool,
 ) -> Result<ExitStatus, String> {
     // 1. Run pre-launch checks
     let report = run_pre_launch_checks(workspace_root, agent);
@@ -143,20 +144,24 @@ pub(crate) fn launch_agy_interactive(
     // Print friendly launcher header
     println!("\n================================================================================");
     println!("🚀 [agy-ctrl] Launching interactive agy session with agent: {}", agent.name);
-    println!("   Effort: {} | Permissions: {}", agent.effort, agent.permission_mode);
+    println!("   Effort: {} | Permissions: {} | Policy: {}", agent.effort, agent.permission_mode, agent.command_execution_policy);
+    println!("   Sandbox: {}", if sandbox { "ENABLED (Bubblewrap isolation)" } else { "DISABLED (direct host)" });
     println!("   Workspace: {}", workspace_root.display());
     println!("   (Exiting the agy session will return you directly to agy-ctrl)");
     println!("================================================================================\n");
 
     // 3. Spawn agy with inherited stdio
-    let status_res = Command::new("agy")
-        .arg("--agent")
-        .arg(&agent.name)
-        .current_dir(workspace_root)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status();
+    let mut cmd = Command::new("agy");
+    if sandbox {
+        cmd.arg("--sandbox");
+    }
+    cmd.arg("--agent").arg(&agent.name);
+    cmd.current_dir(workspace_root);
+    cmd.stdin(Stdio::inherit());
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
+
+    let status_res = cmd.status();
 
     // 4. Resume Ratatui & crossterm alternate screen regardless of status
     drop(enable_raw_mode());
@@ -172,23 +177,33 @@ pub(crate) fn launch_agy_interactive(
 ///
 /// # Errors
 /// Returns an error string if pre-launch checks fail or if `agy` cannot be spawned.
-pub(crate) fn launch_agy_headless(workspace_root: &Path, agent: &AgentManifest) -> Result<ExitStatus, String> {
+pub(crate) fn launch_agy_headless(
+    workspace_root: &Path,
+    agent: &AgentManifest,
+    sandbox: bool,
+) -> Result<ExitStatus, String> {
     let report = run_pre_launch_checks(workspace_root, agent);
     if !report.is_ok() {
         return Err(report.format_diagnostics());
     }
 
-    println!("🚀 [agy-ctrl] Launching agy session with agent: {}", agent.name);
+    println!(
+        "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {})",
+        agent.name,
+        if sandbox { "ENABLED" } else { "DISABLED" }
+    );
 
-    Command::new("agy")
-        .arg("--agent")
-        .arg(&agent.name)
-        .current_dir(workspace_root)
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .map_err(|e| format!("Failed to spawn 'agy': {e}"))
+    let mut cmd = Command::new("agy");
+    if sandbox {
+        cmd.arg("--sandbox");
+    }
+    cmd.arg("--agent").arg(&agent.name);
+    cmd.current_dir(workspace_root);
+    cmd.stdin(Stdio::inherit());
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
+
+    cmd.status().map_err(|e| format!("Failed to spawn 'agy': {e}"))
 }
 
 #[cfg(test)]

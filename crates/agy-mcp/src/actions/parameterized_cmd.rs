@@ -64,7 +64,30 @@ pub(crate) fn execute(
     }
     cmd.current_dir(workspace_root);
 
-    let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+    let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+    let output = if binary == "bwrap" && !out.status.success() {
+        let stderr_snippet = String::from_utf8_lossy(&out.stderr);
+        if stderr_snippet.contains("uid map")
+            || stderr_snippet.contains("Read-only file system")
+            || stderr_snippet.contains("Creating new namespace failed")
+            || stderr_snippet.contains("Permission denied")
+        {
+            // Nested Bubblewrap detected inside outer sandbox; fallback to inner binary directly
+            if let Some((inner_bin, inner_args)) = extract_inner_bwrap_command(&tool.command) {
+                let mut fallback_cmd = Command::new(inner_bin);
+                fallback_cmd.args(&inner_args);
+                fallback_cmd.args(&dynamic_args);
+                fallback_cmd.current_dir(workspace_root);
+                SubprocessSupervisor::run_supervised(fallback_cmd, tool.timeout_seconds)?
+            } else {
+                out
+            }
+        } else {
+            out
+        }
+    } else {
+        out
+    };
 
     let is_error = if binary == "rg" && output.status.code() == Some(1) && output.stdout.is_empty() {
         false
@@ -156,6 +179,39 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
     // Strict fallback: letters, numbers, underscore, colon, hyphen
     val.chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '-')
+}
+
+/// Extracts the underlying target command from a Bubblewrap invocation array.
+///
+/// Skips flags such as `--ro-bind <src> <dst>`, `--tmpfs <dir>`, and returns the first
+/// non-flag argument along with any subsequent arguments.
+fn extract_inner_bwrap_command(command: &[String]) -> Option<(&str, Vec<&str>)> {
+    let mut iter = command.iter().skip(1);
+    while let Some(arg) = iter.next() {
+        if arg == "--ro-bind"
+            || arg == "--bind"
+            || arg == "--dev-bind"
+            || arg == "--ro-bind-try"
+            || arg == "--bind-try"
+        {
+            let _ = iter.next();
+            let _ = iter.next();
+        } else if arg == "--tmpfs"
+            || arg == "--proc"
+            || arg == "--dev"
+            || arg == "--dir"
+            || arg == "--setenv"
+            || arg == "--unsetenv"
+            || arg == "--chdir"
+        {
+            let _ = iter.next();
+        } else if !arg.starts_with("--") {
+            let bin = arg.as_str();
+            let remaining: Vec<&str> = iter.map(String::as_str).collect();
+            return Some((bin, remaining));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -254,5 +310,22 @@ mod tests {
         let res = execute(&tool, &temp, &args);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("violates pattern"));
+    }
+
+    #[test]
+    fn test_extract_inner_bwrap_command() {
+        let bwrap_cmd = vec![
+            "bwrap".to_owned(),
+            "--unshare-all".to_owned(),
+            "--tmpfs".to_owned(),
+            "/".to_owned(),
+            "--ro-bind".to_owned(),
+            "/usr".to_owned(),
+            "/usr".to_owned(),
+            "python3".to_owned(),
+            "-c".to_owned(),
+        ];
+        let extracted = extract_inner_bwrap_command(&bwrap_cmd);
+        assert_eq!(extracted, Some(("python3", vec!["-c"])));
     }
 }

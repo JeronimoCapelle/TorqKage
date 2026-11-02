@@ -76,7 +76,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
     frame.render_widget(tabs, header_chunks[1]);
 
-    // Modified tracker
+    // Modified tracker & Sandbox state
     let modified_count = app.agents.iter().filter(|a| a.modified).count();
     let mod_span = if modified_count > 0 {
         Span::styled(
@@ -87,7 +87,13 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::styled(" [✔ CLEAN] ", Style::default().fg(Color::Green))
     };
 
-    let mod_para = Paragraph::new(Line::from(vec![mod_span]))
+    let sandbox_span = if app.sandbox_enabled {
+        Span::styled(" [SANDBOX: ON] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
+    };
+
+    let mod_para = Paragraph::new(Line::from(vec![mod_span, sandbox_span]))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
     frame.render_widget(mod_para, header_chunks[2]);
@@ -123,12 +129,17 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let is_selected = idx == app.selected_agent_idx;
             let marker = if is_selected { "▶ " } else { "  " };
             let mod_marker = if agent.modified { "*" } else { " " };
+            let policy_badge = match (agent.permission_mode.as_str(), agent.command_execution_policy.as_str()) {
+                ("plan", _) => Span::styled(" [PLAN]", Style::default().fg(Color::Cyan)),
+                (_, "ask" | "prompt") => Span::styled(" [ASK]", Style::default().fg(Color::Yellow)),
+                _ => Span::styled(" [AUTO]", Style::default().fg(Color::Green)),
+            };
             let tools_badge = format!(" [{} tools]", agent.mcp_tools.len());
 
             let line = Line::from(vec![
                 Span::styled(marker, Style::default().fg(Color::Yellow)),
                 Span::styled(
-                    format!("{:<13}", agent.name),
+                    format!("{:<11}", agent.name),
                     if is_selected {
                         Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
                     } else {
@@ -136,6 +147,7 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
                     },
                 ),
                 Span::styled(mod_marker, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                policy_badge,
                 Span::styled(tools_badge, Style::default().fg(Color::DarkGray)),
             ]);
 
@@ -321,6 +333,12 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let is_selected = idx == app.selected_tool_idx;
             let marker = if is_selected { "▶ " } else { "  " };
 
+            let gate_badge = if tool.require_permission_gate {
+                Span::styled(" [ASK]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            } else {
+                Span::styled(" [ALLOW]", Style::default().fg(Color::DarkGray))
+            };
+
             let line = Line::from(vec![
                 Span::styled(marker, Style::default().fg(Color::Yellow)),
                 Span::styled(
@@ -331,6 +349,7 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
                         Style::default().fg(Color::Gray)
                     },
                 ),
+                gate_badge,
             ]);
 
             let style = if is_selected {
@@ -505,12 +524,13 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     // Shortcuts
     let shortcuts = Line::from(vec![
         Span::styled(" [Enter/l Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
+        Span::styled("[b Sandbox] ", Style::default().fg(Color::Cyan)),
+        Span::styled("[g Gate Tool] ", Style::default().fg(Color::Yellow)),
         Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
-        Span::styled("[F1 Help] ", Style::default().fg(Color::Yellow)),
-        Span::styled("[F2 Save & Validate] ", Style::default().fg(Color::Green)),
-        Span::styled("[F4 Rollback] ", Style::default().fg(Color::Red)),
-        Span::styled("[Tab Switch View] ", Style::default().fg(Color::Cyan)),
-        Span::styled("[j/k Navigate] ", Style::default().fg(Color::DarkGray)),
+        Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
+        Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
+        Span::styled("[Tab View] ", Style::default().fg(Color::DarkGray)),
         Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
     ]);
     frame.render_widget(Paragraph::new(shortcuts), footer_chunks[0]);

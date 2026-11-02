@@ -51,6 +51,7 @@ pub(crate) struct App {
     pub(crate) validation_modal: Option<(bool, String)>,
     pub(crate) status_message: Option<(String, bool)>,
     pub(crate) pending_launch: Option<String>,
+    pub(crate) sandbox_enabled: bool,
     pub(crate) should_quit: bool,
 }
 
@@ -90,10 +91,42 @@ impl App {
             directives_scroll: 0,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter/l] to Launch agy, [F1] for help, [F2] Save".to_owned(), false)),
+            status_message: Some(("Press [Enter/l] Launch agy, [p] Policy, [s] Sandbox, [F2] Save".to_owned(), false)),
             pending_launch: None,
+            sandbox_enabled: false,
             should_quit: false,
         })
+    }
+
+    /// Toggles outer-loop Bubblewrap sandbox execution on or off for launched `agy` sessions.
+    pub(crate) fn toggle_sandbox(&mut self) {
+        self.sandbox_enabled = !self.sandbox_enabled;
+        let mode = if self.sandbox_enabled { "ENABLED (bwrap jail)" } else { "DISABLED (direct host)" };
+        self.status_message = Some((format!("Terminal Sandbox {mode}"), false));
+    }
+
+    /// Cycles the selected agent's permission policy mode between Autonomous, Supervised, and Planning.
+    pub(crate) fn cycle_selected_agent_policy(&mut self) {
+        if let Some(agent) = self.selected_agent_mut() {
+            let desc = agent.cycle_permission_policy();
+            let name = agent.name.clone();
+            self.status_message = Some((format!("Agent '{name}' policy set to: {desc}"), false));
+        }
+    }
+
+    /// Toggles whether the highlighted tool requires an interactive permission prompt (ASK vs ALLOW).
+    pub(crate) fn toggle_tool_permission_gate(&mut self) {
+        let is_tool_tab = matches!(self.active_tab, ActiveTab::ToolCatalog);
+        let is_fleet_tool = matches!(self.active_tab, ActiveTab::FleetOverview) && self.fleet_focus == FleetFocus::ToolList;
+
+        if (is_tool_tab || is_fleet_tool)
+            && let Some(tool) = self.current_highlighted_tool_mut()
+        {
+            tool.require_permission_gate = !tool.require_permission_gate;
+            let state = if tool.require_permission_gate { "ASK (Interactive confirmation)" } else { "ALLOW (Autonomous execution)" };
+            let name = tool.name.clone();
+            self.status_message = Some((format!("Tool '{name}' permission gate: {state}"), false));
+        }
     }
 
     /// Requests launching an interactive `agy` session for the currently selected agent.
@@ -185,6 +218,22 @@ impl App {
                 || self.tools.get(self.selected_tool_idx),
                 |cat| self.tools.iter().filter(|t| t.category == cat).nth(self.selected_tool_idx),
             ),
+            ActiveTab::DirectivesEditor => None,
+        }
+    }
+
+    /// Returns a mutable reference to the currently highlighted tool item based on active filtering.
+    pub(crate) fn current_highlighted_tool_mut(&mut self) -> Option<&mut ToolItem> {
+        let idx = self.selected_tool_idx;
+        match self.active_tab {
+            ActiveTab::FleetOverview => self.tools.get_mut(idx),
+            ActiveTab::ToolCatalog => {
+                if let Some(cat) = self.selected_category {
+                    self.tools.iter_mut().filter(|t| t.category == cat).nth(idx)
+                } else {
+                    self.tools.get_mut(idx)
+                }
+            }
             ActiveTab::DirectivesEditor => None,
         }
     }

@@ -56,14 +56,16 @@ fn main() -> ExitCode {
         }
         Some("--launch" | "launch") => {
             let agent_arg = args.get(2).map(String::as_str);
-            handle_cli_launch(&workspace_root, agent_arg)
+            let has_sandbox = args.iter().any(|a| a == "--sandbox");
+            handle_cli_launch(&workspace_root, agent_arg, has_sandbox)
         }
         Some("--help" | "-h" | "help") => {
             print_cli_usage();
             ExitCode::SUCCESS
         }
         Some(agent_name) if !agent_name.starts_with('-') => {
-            handle_cli_launch(&workspace_root, Some(agent_name))
+            let has_sandbox = args.iter().any(|a| a == "--sandbox");
+            handle_cli_launch(&workspace_root, Some(agent_name), has_sandbox)
         }
         _ => {
             // Interactive Ratatui TUI Mode
@@ -77,9 +79,9 @@ fn main() -> ExitCode {
     }
 }
 
-fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>) -> ExitCode {
+fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bool) -> ExitCode {
     let Some(agent_name) = agent_arg else {
-        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT>");
+        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT> [--sandbox]");
         return ExitCode::FAILURE;
     };
 
@@ -89,7 +91,7 @@ fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>) -> ExitCode
         return ExitCode::FAILURE;
     };
 
-    match launcher::launch_agy_headless(workspace_root, &agent) {
+    match launcher::launch_agy_headless(workspace_root, &agent, sandbox) {
         Ok(status) => {
             if status.success() {
                 ExitCode::SUCCESS
@@ -110,17 +112,19 @@ fn print_cli_usage() {
          \n\
          USAGE:\n\
            agy-ctrl [OPTIONS]\n\
-           agy-ctrl launch <AGENT>  (or agy-ctrl <AGENT>)\n\
+           agy-ctrl launch <AGENT> [--sandbox]  (or agy-ctrl <AGENT> [--sandbox])\n\
          \n\
          OPTIONS:\n\
            --status, status      Print ASCII agent fleet status & tool distribution matrix\n\
            --validate, validate  Run pre-flight validation on agy-suite plugin and tools\n\
            --launch, launch      Run pre-flight checks and launch interactive agy session with <AGENT>\n\
+           --sandbox             Launch agent session inside an isolated Bubblewrap OS container\n\
            --help, -h            Show this help reference\n\
          \n\
          INTERACTIVE TUI:\n\
            Run without arguments in an interactive terminal to launch the visual policy deck.\n\
-           In TUI mode, press [Enter] or [l] on any agent to launch agy directly.\n"
+           In TUI mode, press [Enter/l] on any agent to launch agy directly.\n\
+           Shortcuts: [p] Cycle Policy (Auto/Ask/Plan), [b] Toggle Sandbox, [g] Gate Tool (Ask/Allow)\n"
     );
 }
 
@@ -163,7 +167,7 @@ fn event_loop(
         // Handle pending launch request if one was triggered
         if let Some(agent_name) = app.pending_launch.take() {
             if let Some(agent) = app.agents.iter().find(|a| a.name == agent_name).cloned() {
-                match launcher::launch_agy_interactive(terminal, &app.workspace_root, &agent) {
+                match launcher::launch_agy_interactive(terminal, &app.workspace_root, &agent, app.sandbox_enabled) {
                     Ok(status) => {
                         // Reload agents from disk in case tools were modified
                         app.agents = model::discover_agents(&app.workspace_root);
@@ -238,8 +242,20 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             app.show_help = true;
             return;
         }
-        KeyCode::F(2) | KeyCode::Char('s') => {
+        KeyCode::F(2) | KeyCode::Char('S') => {
             app.save_and_validate();
+            return;
+        }
+        KeyCode::F(8) | KeyCode::Char('b') => {
+            app.toggle_sandbox();
+            return;
+        }
+        KeyCode::Char('p') => {
+            app.cycle_selected_agent_policy();
+            return;
+        }
+        KeyCode::Char('g') => {
+            app.toggle_tool_permission_gate();
             return;
         }
         KeyCode::F(4) | KeyCode::Char('r') => {

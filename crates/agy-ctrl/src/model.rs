@@ -57,6 +57,7 @@ pub(crate) struct ToolItem {
     pub(crate) require_clippy_clean: bool,
     pub(crate) require_tests_passed: bool,
     pub(crate) require_git_clean: bool,
+    pub(crate) require_permission_gate: bool,
 }
 
 impl ToolItem {
@@ -150,6 +151,7 @@ struct RawToolToml {
     require_clippy_clean: Option<bool>,
     require_tests_passed: Option<bool>,
     require_git_clean: Option<bool>,
+    require_permission_gate: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -229,6 +231,10 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             let b = base?;
             b.require_git_clean
         }).unwrap_or(false);
+        let require_permission_gate = raw_tool.require_permission_gate.or_else(|| {
+            let b = base?;
+            b.require_permission_gate
+        }).unwrap_or(false);
 
         items.push(ToolItem {
             name,
@@ -245,6 +251,7 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             require_clippy_clean,
             require_tests_passed,
             require_git_clean,
+            require_permission_gate,
         });
     }
 
@@ -288,6 +295,30 @@ impl AgentManifest {
             self.mcp_tools.sort();
         }
         self.modified = true;
+    }
+
+    /// Cycles the agent's permission mode and command execution policy:
+    /// Autonomous (acceptEdits / off) -> Supervised (acceptEdits / ask) -> Planning (plan / off).
+    pub(crate) fn cycle_permission_policy(&mut self) -> &'static str {
+        let desc = match (self.permission_mode.as_str(), self.command_execution_policy.as_str()) {
+            ("acceptEdits", "off") => {
+                "acceptEdits".clone_into(&mut self.permission_mode);
+                "ask".clone_into(&mut self.command_execution_policy);
+                "Supervised (ASK before commands)"
+            }
+            ("acceptEdits", "ask" | "prompt") => {
+                "plan".clone_into(&mut self.permission_mode);
+                "off".clone_into(&mut self.command_execution_policy);
+                "Planning (Read-only PLAN mode)"
+            }
+            _ => {
+                "acceptEdits".clone_into(&mut self.permission_mode);
+                "off".clone_into(&mut self.command_execution_policy);
+                "Autonomous (ALLOW all commands)"
+            }
+        };
+        self.modified = true;
+        desc
     }
 
     /// Serializes this agent manifest to YAML frontmatter + Markdown directives.

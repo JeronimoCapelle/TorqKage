@@ -8,6 +8,7 @@
 mod conflicts;
 mod finisher_gate;
 mod handoff;
+mod policy_gate;
 mod state;
 mod stdin;
 mod wip;
@@ -29,6 +30,10 @@ fn main() -> ExitCode {
         }
         "check-finisher" => {
             finisher_gate::execute();
+            ExitCode::SUCCESS
+        }
+        "enforce-tool-policy" => {
+            policy_gate::execute();
             ExitCode::SUCCESS
         }
         "record-handoff" => {
@@ -66,6 +71,7 @@ fn print_usage() {
            detect-wip      PreInvocation ephemeral notification on working tree modification\n\
            check-conflicts PreToolUse hook blocking builds/tests when unresolved conflicts exist\n\
            check-finisher  PreToolUse hook blocking finisher dispatch when compilation or conflicts fail\n\
+           enforce-tool-policy PreToolUse hook enforcing granular ASK vs ALLOW decision per tool\n\
            record-handoff  Stop hook recording session metadata to .pipeline/last_handoff.md\n\
            inject-wake     SessionStart hook injecting last handoff state into conversation\n\
            inspect-state   Concise Markdown repository state summary for tools.toml\n"
