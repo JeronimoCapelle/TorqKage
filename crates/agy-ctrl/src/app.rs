@@ -50,6 +50,7 @@ pub(crate) struct App {
     pub(crate) show_help: bool,
     pub(crate) validation_modal: Option<(bool, String)>,
     pub(crate) status_message: Option<(String, bool)>,
+    pub(crate) pending_launch: Option<String>,
     pub(crate) should_quit: bool,
 }
 
@@ -89,9 +90,17 @@ impl App {
             directives_scroll: 0,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press F1 for help, F2 to Save & Validate, Tab to switch views".to_owned(), false)),
+            status_message: Some(("Press [Enter/l] to Launch agy, [F1] for help, [F2] Save".to_owned(), false)),
+            pending_launch: None,
             should_quit: false,
         })
+    }
+
+    /// Requests launching an interactive `agy` session for the currently selected agent.
+    pub(crate) fn request_launch(&mut self) {
+        if let Some(agent) = self.selected_agent() {
+            self.pending_launch = Some(agent.name.clone());
+        }
     }
 
     /// Returns a reference to the currently selected agent, if any.

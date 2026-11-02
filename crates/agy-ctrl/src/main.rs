@@ -10,13 +10,14 @@
 #![allow(clippy::struct_excessive_bools, reason = "Mirrors declarative tools.toml and manifest schemas")]
 
 mod app;
+mod launcher;
 mod model;
 mod summary;
 mod ui;
 mod vcs;
 
 use std::io::{self, stdout};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 use agy_common::WorkspaceResolver;
@@ -53,9 +54,16 @@ fn main() -> ExitCode {
                 ExitCode::SUCCESS
             }
         }
+        Some("--launch" | "launch") => {
+            let agent_arg = args.get(2).map(String::as_str);
+            handle_cli_launch(&workspace_root, agent_arg)
+        }
         Some("--help" | "-h" | "help") => {
             print_cli_usage();
             ExitCode::SUCCESS
+        }
+        Some(agent_name) if !agent_name.starts_with('-') => {
+            handle_cli_launch(&workspace_root, Some(agent_name))
         }
         _ => {
             // Interactive Ratatui TUI Mode
@@ -69,20 +77,50 @@ fn main() -> ExitCode {
     }
 }
 
+fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>) -> ExitCode {
+    let Some(agent_name) = agent_arg else {
+        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT>");
+        return ExitCode::FAILURE;
+    };
+
+    let agents = model::discover_agents(workspace_root);
+    let Some(agent) = agents.into_iter().find(|a| a.name == agent_name) else {
+        eprintln!("🛑 [agy-ctrl] Unknown agent '{agent_name}'. Run 'agy-ctrl --status' to list agents.");
+        return ExitCode::FAILURE;
+    };
+
+    match launcher::launch_agy_headless(workspace_root, &agent) {
+        Ok(status) => {
+            if status.success() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
+        Err(err) => {
+            eprintln!("🛑 [agy-ctrl] Launch failed:\n{err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn print_cli_usage() {
     println!(
-        "agy-ctrl: Offline Ratatui terminal configuration deck for agy-suite\n\
+        "agy-ctrl: Offline Ratatui terminal configuration deck & agent launcher for agy-suite\n\
          \n\
          USAGE:\n\
            agy-ctrl [OPTIONS]\n\
+           agy-ctrl launch <AGENT>  (or agy-ctrl <AGENT>)\n\
          \n\
          OPTIONS:\n\
            --status, status      Print ASCII agent fleet status & tool distribution matrix\n\
            --validate, validate  Run pre-flight validation on agy-suite plugin and tools\n\
+           --launch, launch      Run pre-flight checks and launch interactive agy session with <AGENT>\n\
            --help, -h            Show this help reference\n\
          \n\
          INTERACTIVE TUI:\n\
-           Run without arguments in an interactive terminal to launch the visual policy deck.\n"
+           Run without arguments in an interactive terminal to launch the visual policy deck.\n\
+           In TUI mode, press [Enter] or [l] on any agent to launch agy directly.\n"
     );
 }
 
@@ -122,6 +160,27 @@ fn event_loop(
     app: &mut App,
 ) -> Result<(), String> {
     while !app.should_quit {
+        // Handle pending launch request if one was triggered
+        if let Some(agent_name) = app.pending_launch.take() {
+            if let Some(agent) = app.agents.iter().find(|a| a.name == agent_name).cloned() {
+                match launcher::launch_agy_interactive(terminal, &app.workspace_root, &agent) {
+                    Ok(status) => {
+                        // Reload agents from disk in case tools were modified
+                        app.agents = model::discover_agents(&app.workspace_root);
+                        app.status_message = Some((
+                            format!("✔ Returned from agy session with agent '{agent_name}' ({status})"),
+                            false,
+                        ));
+                    }
+                    Err(err) => {
+                        app.validation_modal = Some((false, err));
+                        app.status_message = Some(("❌ Pre-launch check failed! View diagnostic modal.".to_owned(), true));
+                    }
+                }
+            }
+            continue;
+        }
+
         terminal
             .draw(|f| ui::draw(f, app))
             .map_err(|e| format!("Draw error: {e}"))?;
@@ -171,6 +230,10 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             app.should_quit = true;
             return;
         }
+        KeyCode::Char('l') => {
+            app.request_launch();
+            return;
+        }
         KeyCode::F(1) | KeyCode::Char('?') => {
             app.show_help = true;
             return;
@@ -216,7 +279,7 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
 
 fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
     match code {
-        KeyCode::Left | KeyCode::Right | KeyCode::Char('h' | 'l') => {
+        KeyCode::Left | KeyCode::Right | KeyCode::Char('h') => {
             app.toggle_fleet_focus();
         }
         KeyCode::Up | KeyCode::Char('k') => match app.fleet_focus {
@@ -227,9 +290,14 @@ fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
             FleetFocus::AgentList => app.next_agent(),
             FleetFocus::ToolList => app.next_tool(),
         },
-        KeyCode::Char(' ') | KeyCode::Enter => {
-            app.toggle_current_tool();
-        }
+        KeyCode::Enter => match app.fleet_focus {
+            FleetFocus::AgentList => app.request_launch(),
+            FleetFocus::ToolList => app.toggle_current_tool(),
+        },
+        KeyCode::Char(' ') => match app.fleet_focus {
+            FleetFocus::AgentList => app.toggle_fleet_focus(),
+            FleetFocus::ToolList => app.toggle_current_tool(),
+        },
         _ => {}
     }
 }

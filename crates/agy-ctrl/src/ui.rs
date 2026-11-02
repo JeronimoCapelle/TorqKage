@@ -146,7 +146,7 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     let agents_list = List::new(agent_items).block(
         Block::default()
-            .title(" [Active Agents] ")
+            .title(" [Active Agents (Enter/l to Launch in agy)] ")
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(agent_border_style),
@@ -493,11 +493,12 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     // Shortcuts
     let shortcuts = Line::from(vec![
-        Span::styled(" [F1 Help] ", Style::default().fg(Color::Yellow)),
-        Span::styled("[F2 Save & Validate] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(" [Enter/l Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
+        Span::styled("[F1 Help] ", Style::default().fg(Color::Yellow)),
+        Span::styled("[F2 Save & Validate] ", Style::default().fg(Color::Green)),
         Span::styled("[F4 Rollback] ", Style::default().fg(Color::Red)),
         Span::styled("[Tab Switch View] ", Style::default().fg(Color::Cyan)),
-        Span::styled("[Space Toggle Tool] ", Style::default().fg(Color::White)),
         Span::styled("[j/k Navigate] ", Style::default().fg(Color::DarkGray)),
         Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
     ]);
@@ -522,6 +523,10 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
         Line::from(Span::styled("AGY-CTRL KEYBOARD SHORTCUTS & NAVIGATION", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(vec![
+            Span::styled("  Enter / l       ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled("Run pre-flight checks & launch interactive agy session with selected agent", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
             Span::styled("  Tab / BackTab   ", Style::default().fg(Color::Cyan)),
             Span::styled("Switch between Fleet Matrix, Tool Catalog, and Directives", Style::default().fg(Color::White)),
         ]),
@@ -530,7 +535,7 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
             Span::styled("Navigate agents or tools in the active list", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
-            Span::styled("  Space / Enter   ", Style::default().fg(Color::Cyan)),
+            Span::styled("  Space           ", Style::default().fg(Color::Cyan)),
             Span::styled("Toggle tool authorization on/off for selected agent", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
