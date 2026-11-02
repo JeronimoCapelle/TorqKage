@@ -28,6 +28,7 @@ struct RawTool {
     attach_rustc_explain: Option<bool>,
     timeout_seconds: Option<u64>,
     require_permission_gate: Option<bool>,
+    enforce_sandbox: Option<bool>,
     require_git_clean: Option<bool>,
     require_clippy_clean: Option<bool>,
     require_tests_passed: Option<bool>,
@@ -171,6 +172,10 @@ fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDefini
         require_permission_gate: raw
             .require_permission_gate
             .or_else(|| base?.require_permission_gate)
+            .unwrap_or(false),
+        enforce_sandbox: raw
+            .enforce_sandbox
+            .or_else(|| base?.enforce_sandbox)
             .unwrap_or(false),
         require_git_clean: raw
             .require_git_clean

@@ -58,9 +58,26 @@ impl JujutsuWorkspace {
         false
     }
 
+    /// Checks if an isolated workspace has zero uncommitted changes.
+    #[must_use]
+    pub fn is_workspace_clean(ws_path: &Path) -> bool {
+        let Ok(out) = Command::new("jj")
+            .args(["--color=never", "diff", "--summary"])
+            .current_dir(ws_path)
+            .output()
+        else {
+            return false;
+        };
+
+        out.status.success() && out.stdout.is_empty()
+    }
+
     /// Ensures an isolated Jujutsu workspace exists for the specified agent.
     ///
     /// Creates `.workspaces/<agent>` if it does not already exist.
+    /// If it already exists and is clean, automatically synchronizes it by branching
+    /// a new working copy commit off the latest `default@` revision.
+    /// Links `.workspaces/<agent>/target` to `<workspace_root>/target` to share build artifacts.
     /// Returns the canonical path to the isolated workspace.
     ///
     /// # Errors
@@ -83,6 +100,22 @@ impl JujutsuWorkspace {
                     "Command 'jj workspace add --name {agent} {}' exited with non-zero status",
                     agent_ws_path.display()
                 )));
+            }
+        } else if Self::is_workspace_clean(&agent_ws_path) {
+            // Rebase clean workspace onto latest default@ commit to eliminate split-brain drift
+            drop(Command::new("jj")
+                .args(["--color=never", "new", "default@", "--no-edit"])
+                .current_dir(&agent_ws_path)
+                .status());
+        }
+
+        // Share root target cache to avoid cold-start compilation overhead
+        let root_target = workspace_root.join("target");
+        let ws_target = agent_ws_path.join("target");
+        if !ws_target.exists() && root_target.is_dir() {
+            #[cfg(unix)]
+            {
+                drop(std::os::unix::fs::symlink(&root_target, &ws_target));
             }
         }
 
@@ -134,6 +167,7 @@ mod tests {
             .unwrap()
             .to_path_buf();
         assert!(JujutsuWorkspace::is_jj_repo(&root));
+        let _clean = JujutsuWorkspace::is_workspace_clean(&root);
     }
 
     #[test]

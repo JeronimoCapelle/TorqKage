@@ -92,6 +92,8 @@ pub(crate) struct ToolDefinition {
     #[serde(default)]
     pub(crate) require_permission_gate: bool,
     #[serde(default)]
+    pub(crate) enforce_sandbox: bool,
+    #[serde(default)]
     pub(crate) require_git_clean: bool,
     #[serde(default)]
     pub(crate) require_clippy_clean: bool,

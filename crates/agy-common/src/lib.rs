@@ -9,6 +9,7 @@ pub mod gatekeeper;
 pub mod jujutsu;
 pub mod models;
 pub mod resolver;
+pub mod sandbox;
 pub mod supervisor;
 
 pub use diagnostics::{CompactErrorReport, DiagnosticSpan};
@@ -26,4 +27,5 @@ pub use models::{
     extract_rustc_error_code,
 };
 pub use resolver::WorkspaceResolver;
+pub use sandbox::{build_bubblewrap_command, is_inside_outer_sandbox};
 pub use supervisor::{ChildGuard, SubprocessSupervisor};

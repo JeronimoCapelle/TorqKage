@@ -180,8 +180,10 @@ pub(crate) fn launch_agy_interactive(
 
     // 3. Spawn agy with inherited stdio
     let mut cmd = Command::new("agy");
+    cmd.env("CARGO_TARGET_DIR", workspace_root.join("target"));
     if sandbox {
         cmd.arg("--sandbox");
+        cmd.env("AGY_OUTER_SANDBOX", "1");
     }
     if let Some(conv_id) = resume_conversation {
         cmd.arg("--conversation").arg(conv_id);
@@ -258,8 +260,10 @@ pub(crate) fn launch_agy_headless(
     }
 
     let mut cmd = Command::new("agy");
+    cmd.env("CARGO_TARGET_DIR", workspace_root.join("target"));
     if sandbox {
         cmd.arg("--sandbox");
+        cmd.env("AGY_OUTER_SANDBOX", "1");
     }
     if let Some(conv_id) = resume_conversation {
         cmd.arg("--conversation").arg(conv_id);

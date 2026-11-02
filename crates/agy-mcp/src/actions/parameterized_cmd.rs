@@ -100,42 +100,87 @@ pub(crate) fn execute(
         return Err(format!("Tool '{}' has no command configured", tool.name));
     }
 
-    let dynamic_args = validate_and_build_args(tool, arguments)?;
+    let mut dynamic_args = validate_and_build_args(tool, arguments)?;
 
     let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
     let base_args = tool.command.get(1..).unwrap_or(&[]);
 
-    let mut cmd = Command::new(binary);
-    cmd.args(base_args);
-    cmd.args(&dynamic_args);
     if binary == "rg" {
-        cmd.arg(".");
+        dynamic_args.push(".".to_owned());
     }
-    cmd.current_dir(workspace_root);
 
-    let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
-    let output = if binary == "bwrap" && !out.status.success() {
-        let stderr_snippet = String::from_utf8_lossy(&out.stderr);
-        if stderr_snippet.contains("uid map")
-            || stderr_snippet.contains("Read-only file system")
-            || stderr_snippet.contains("Creating new namespace failed")
-            || stderr_snippet.contains("Permission denied")
-        {
-            // Nested Bubblewrap detected inside outer sandbox; fallback to inner binary directly
-            if let Some((inner_bin, inner_args)) = extract_inner_bwrap_command(&tool.command) {
-                let mut fallback_cmd = Command::new(inner_bin);
-                fallback_cmd.args(&inner_args);
-                fallback_cmd.args(&dynamic_args);
-                fallback_cmd.current_dir(workspace_root);
-                SubprocessSupervisor::run_supervised(fallback_cmd, tool.timeout_seconds)?
+    let output = if tool.enforce_sandbox {
+        if agy_common::sandbox::is_inside_outer_sandbox() {
+            let mut cmd = Command::new(binary);
+            cmd.args(base_args);
+            cmd.args(&dynamic_args);
+            cmd.current_dir(workspace_root);
+            SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
+        } else {
+            if which::which("bwrap").is_err() {
+                return Err(format!(
+                    "Security enforcement error: Tool '{}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active.",
+                    tool.name
+                ));
+            }
+            let cmd = agy_common::sandbox::build_bubblewrap_command(
+                binary,
+                base_args,
+                &dynamic_args,
+                workspace_root,
+            );
+            let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+            if !out.status.success() {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("Creating new namespace failed")
+                    || stderr.contains("No permissions to create new namespace")
+                    || stderr.contains("Setting up mount namespace failed")
+                {
+                    return Err(format!(
+                        "Security enforcement error: Sandbox execution failed for tool '{}': {stderr}",
+                        tool.name
+                    ));
+                }
+            }
+            out
+        }
+    } else {
+        let mut cmd = Command::new(binary);
+        cmd.args(base_args);
+        cmd.args(&dynamic_args);
+        cmd.current_dir(workspace_root);
+
+        let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+        if binary == "bwrap" && !out.status.success() {
+            let stderr_snippet = String::from_utf8_lossy(&out.stderr);
+            if stderr_snippet.contains("uid map")
+                || stderr_snippet.contains("Read-only file system")
+                || stderr_snippet.contains("Creating new namespace failed")
+                || stderr_snippet.contains("Permission denied")
+            {
+                // Fallback to inner command ONLY if already running inside an outer sandbox
+                if agy_common::sandbox::is_inside_outer_sandbox() {
+                    if let Some((inner_bin, inner_args)) = extract_inner_bwrap_command(&tool.command) {
+                        let mut fallback_cmd = Command::new(inner_bin);
+                        fallback_cmd.args(&inner_args);
+                        fallback_cmd.args(&dynamic_args);
+                        fallback_cmd.current_dir(workspace_root);
+                        SubprocessSupervisor::run_supervised(fallback_cmd, tool.timeout_seconds)?
+                    } else {
+                        out
+                    }
+                } else {
+                    return Err(format!(
+                        "Security enforcement error: Bubblewrap sandbox execution failed for tool '{}' outside container: {stderr_snippet}",
+                        tool.name
+                    ));
+                }
             } else {
                 out
             }
         } else {
             out
         }
-    } else {
-        out
     };
 
     let is_error = if (binary == "rg" || binary == "ast-grep")
@@ -390,5 +435,69 @@ mod tests {
         let (out, is_err) = execute(&tool, &temp, &args).unwrap();
         assert!(!is_err);
         assert_eq!(out, "No matching AST patterns found to rewrite.");
+    }
+
+    #[test]
+    fn test_enforce_sandbox_in_outer_sandbox() {
+        let temp = create_test_dir("sandbox_outer");
+        // SAFETY: Setting test environment variable for isolated unit test.
+        unsafe {
+            std::env::set_var("AGY_OUTER_SANDBOX", "1");
+        }
+        let tool = ToolDefinition {
+            name: "test_sandboxed_echo".to_owned(),
+            command: vec!["echo".to_owned()],
+            enforce_sandbox: true,
+            args: vec![ToolArg {
+                name: "msg".to_owned(),
+                required: true,
+                regex: Some("^[a-zA-Z0-9_]+$".to_owned()),
+                ..Default::default()
+            }],
+            output_capture: OutputCapture::Stdout,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "msg": "sandboxed_payload"
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        // SAFETY: Cleaning up test environment variable after isolated unit test.
+        unsafe {
+            std::env::remove_var("AGY_OUTER_SANDBOX");
+        }
+        assert!(!is_err);
+        assert!(out.contains("sandboxed_payload"));
+    }
+
+    #[test]
+    fn test_enforce_sandbox_via_bwrap() {
+        if which::which("bwrap").is_err() || which::which("python3").is_err() {
+            return;
+        }
+        let temp = create_test_dir("sandbox_bwrap");
+        let tool = ToolDefinition {
+            name: "eval_test".to_owned(),
+            command: vec!["python3".to_owned(), "-c".to_owned()],
+            enforce_sandbox: true,
+            args: vec![ToolArg {
+                name: "code".to_owned(),
+                required: true,
+                flag: None,
+                regex: Some("^[^\\x00]+$".to_owned()),
+                description: "python code".to_owned(),
+            }],
+            output_capture: OutputCapture::Stdout,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "code": "print('bwrap_isolation_passed')"
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("bwrap_isolation_passed"));
     }
 }

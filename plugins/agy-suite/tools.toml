@@ -481,17 +481,8 @@ timeout_seconds = 30
 description = "Executes exact symbolic mathematics (ODEs, Jacobians, Taylor series, simplifications) via SymPy inside an isolated, network-less Bubblewrap jail"
 action = "parameterized_command"
 category = "other"
-command = [
-    "bwrap",
-    "--unshare-all",
-    "--tmpfs", "/",
-    "--ro-bind", "/usr", "/usr",
-    "--ro-bind", "/lib", "/lib",
-    "--ro-bind", "/lib64", "/lib64",
-    "--proc", "/proc",
-    "--dev", "/dev",
-    "python3", "-c"
-]
+enforce_sandbox = true
+command = ["python3", "-c"]
 args = [
     { name = "code", required = true, regex = "^[^\\x00]+$", description = "Python expression or multi-line snippet importing sympy to evaluate" }
 ]

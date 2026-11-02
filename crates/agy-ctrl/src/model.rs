@@ -80,6 +80,7 @@ pub(crate) struct ToolItem {
     pub(crate) require_tests_passed: bool,
     pub(crate) require_git_clean: bool,
     pub(crate) require_permission_gate: bool,
+    pub(crate) enforce_sandbox: bool,
 }
 
 impl ToolItem {
@@ -174,6 +175,7 @@ struct RawToolToml {
     require_tests_passed: Option<bool>,
     require_git_clean: Option<bool>,
     require_permission_gate: Option<bool>,
+    enforce_sandbox: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -281,6 +283,11 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             b.require_permission_gate
         }).unwrap_or(false);
 
+        let enforce_sandbox = raw_tool.enforce_sandbox.or_else(|| {
+            let b = base?;
+            b.enforce_sandbox
+        }).unwrap_or(false);
+
         items.push(ToolItem {
             name,
             description,
@@ -299,6 +306,7 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             require_tests_passed,
             require_git_clean,
             require_permission_gate,
+            enforce_sandbox,
         });
     }
 

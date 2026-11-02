@@ -395,6 +395,12 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let is_selected = idx == app.selected_tool_idx;
             let marker = if is_selected { "▶ " } else { "  " };
 
+            let sandbox_badge = if tool.enforce_sandbox {
+                Span::styled(" [SANDBOX]", Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+            } else {
+                Span::raw("")
+            };
+
             let gate_badge = if tool.require_permission_gate {
                 Span::styled(" [ASK]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             } else {
@@ -411,6 +417,7 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
                         Style::default().fg(Color::Gray)
                     },
                 ),
+                sandbox_badge,
                 gate_badge,
             ]);
 
@@ -522,6 +529,11 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Span::styled("mutating (modifies disk) ", Style::default().fg(Color::White)),
             guard_check(tool.tracks_circuit_breaker),
             Span::styled("tracks_circuit_breaker  ", Style::default().fg(Color::White)),
+        ]));
+
+        detail_lines.push(Line::from(vec![
+            guard_check(tool.enforce_sandbox),
+            Span::styled("enforce_sandbox (bwrap)  ", Style::default().fg(Color::LightCyan)),
         ]));
 
         // List agents currently authorized for this tool

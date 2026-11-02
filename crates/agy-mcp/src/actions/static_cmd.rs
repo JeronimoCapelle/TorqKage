@@ -23,11 +23,46 @@ pub(crate) fn execute(
     let program = tool.command.first().map_or("", String::as_str);
     let args = tool.command.get(1..).unwrap_or(&[]);
 
-    let mut cmd = Command::new(program);
-    cmd.args(args);
-    cmd.current_dir(workspace_root);
-
-    let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+    let output = if tool.enforce_sandbox {
+        if agy_common::sandbox::is_inside_outer_sandbox() {
+            let mut cmd = Command::new(program);
+            cmd.args(args);
+            cmd.current_dir(workspace_root);
+            SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
+        } else {
+            if which::which("bwrap").is_err() {
+                return Err(format!(
+                    "Security enforcement error: Tool '{}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active.",
+                    tool.name
+                ));
+            }
+            let cmd = agy_common::sandbox::build_bubblewrap_command(
+                program,
+                args,
+                &[],
+                workspace_root,
+            );
+            let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
+            if !out.status.success() {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("Creating new namespace failed")
+                    || stderr.contains("No permissions to create new namespace")
+                    || stderr.contains("Setting up mount namespace failed")
+                {
+                    return Err(format!(
+                        "Security enforcement error: Sandbox execution failed for tool '{}': {stderr}",
+                        tool.name
+                    ));
+                }
+            }
+            out
+        }
+    } else {
+        let mut cmd = Command::new(program);
+        cmd.args(args);
+        cmd.current_dir(workspace_root);
+        SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
+    };
 
     let is_error = !output.status.success();
 
