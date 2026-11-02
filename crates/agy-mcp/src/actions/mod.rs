@@ -144,16 +144,8 @@ fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> R
 
 fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
     if agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
-        let jj_out = std::process::Command::new("jj")
-            .args(["diff", "--summary", "--color=never"])
-            .current_dir(workspace_root)
-            .output();
-
-        if let Ok(out) = jj_out
-            && out.status.success()
-            && !out.stdout.is_empty()
-        {
-            return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+        if !agy_common::JujutsuWorkspace::is_workspace_clean(workspace_root) {
+            return Err("Pre-flight gate failed: 'require_workspace_clean' is enabled, but workspace has uncommitted modifications.".to_owned());
         }
         return Ok(());
     }
@@ -168,7 +160,7 @@ fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
             && gout.status.success()
             && !gout.stdout.is_empty()
         {
-            return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+            return Err("Pre-flight gate failed: 'require_workspace_clean' is enabled, but workspace has uncommitted modifications.".to_owned());
         }
     }
 

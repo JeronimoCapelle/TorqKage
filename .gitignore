@@ -1,5 +1,6 @@
 # Build Artifacts
-/target/
+target
+target/
 Cargo.lock.tmp
 **/*.rs.bk
 .cargo-ok

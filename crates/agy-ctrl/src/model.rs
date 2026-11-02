@@ -174,8 +174,10 @@ struct RawToolToml {
     require_clippy_clean: Option<bool>,
     require_tests_passed: Option<bool>,
     require_git_clean: Option<bool>,
+    require_workspace_clean: Option<bool>,
     require_permission_gate: Option<bool>,
     enforce_sandbox: Option<bool>,
+    sandbox: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -274,19 +276,27 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             let b = base?;
             b.require_tests_passed
         }).unwrap_or(false);
-        let require_git_clean = raw_tool.require_git_clean.or_else(|| {
-            let b = base?;
-            b.require_git_clean
-        }).unwrap_or(false);
+        let require_git_clean = raw_tool
+            .require_workspace_clean
+            .or(raw_tool.require_git_clean)
+            .or_else(|| {
+                let b = base?;
+                b.require_workspace_clean.or(b.require_git_clean)
+            })
+            .unwrap_or(false);
         let require_permission_gate = raw_tool.require_permission_gate.or_else(|| {
             let b = base?;
             b.require_permission_gate
         }).unwrap_or(false);
 
-        let enforce_sandbox = raw_tool.enforce_sandbox.or_else(|| {
-            let b = base?;
-            b.enforce_sandbox
-        }).unwrap_or(false);
+        let enforce_sandbox = raw_tool
+            .enforce_sandbox
+            .or(raw_tool.sandbox)
+            .or_else(|| {
+                let b = base?;
+                b.enforce_sandbox.or(b.sandbox)
+            })
+            .unwrap_or(false);
 
         items.push(ToolItem {
             name,

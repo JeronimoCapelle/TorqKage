@@ -29,7 +29,9 @@ struct RawTool {
     timeout_seconds: Option<u64>,
     require_permission_gate: Option<bool>,
     enforce_sandbox: Option<bool>,
+    sandbox: Option<bool>,
     require_git_clean: Option<bool>,
+    require_workspace_clean: Option<bool>,
     require_clippy_clean: Option<bool>,
     require_tests_passed: Option<bool>,
     error_fallback: Option<String>,
@@ -175,11 +177,13 @@ fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDefini
             .unwrap_or(false),
         enforce_sandbox: raw
             .enforce_sandbox
-            .or_else(|| base?.enforce_sandbox)
+            .or(raw.sandbox)
+            .or_else(|| base?.enforce_sandbox.or(base?.sandbox))
             .unwrap_or(false),
         require_git_clean: raw
-            .require_git_clean
-            .or_else(|| base?.require_git_clean)
+            .require_workspace_clean
+            .or(raw.require_git_clean)
+            .or_else(|| base?.require_workspace_clean.or(base?.require_git_clean))
             .unwrap_or(false),
         require_clippy_clean: raw
             .require_clippy_clean

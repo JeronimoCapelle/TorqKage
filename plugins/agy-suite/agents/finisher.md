@@ -35,6 +35,7 @@ mcp_tools:
   - run_git_cliff
   - jj_absorb_working_copy
   - jj_describe_revision
+  - inspect_workspace_clean
   - query_tool_help
 ---
 

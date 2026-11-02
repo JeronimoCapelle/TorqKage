@@ -519,7 +519,7 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
         detail_lines.push(Line::from(vec![
             guard_check(tool.require_git_clean),
-            Span::styled("require_git_clean        ", Style::default().fg(Color::White)),
+            Span::styled("require_workspace_clean  ", Style::default().fg(Color::White)),
             guard_check(tool.attach_rustc_explain),
             Span::styled("attach_rustc_explain    ", Style::default().fg(Color::White)),
         ]));

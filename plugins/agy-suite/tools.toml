@@ -187,7 +187,7 @@ timeout_seconds = 45
 description = "Inspects and diffs the exposed public API surface of the crate against git revisions"
 action = "static_command"
 category = "release"
-require_git_clean = true
+require_workspace_clean = true
 command = ["cargo", "public-api", "diff"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -197,7 +197,7 @@ timeout_seconds = 60
 description = "Verifies semantic versioning contract rules against the published API baseline"
 action = "static_command"
 category = "release"
-require_git_clean = true
+require_workspace_clean = true
 require_clippy_clean = true
 require_tests_passed = true
 command = ["cargo", "semver-checks", "check-release"]
@@ -469,7 +469,7 @@ timeout_seconds = 30
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
 category = "release"
-require_git_clean = true
+require_workspace_clean = true
 require_clippy_clean = true
 require_tests_passed = true
 command = ["git-cliff", "--unreleased", "--strip", "header"]
@@ -575,6 +575,30 @@ args = [
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 15
+
+[tools.ensure_agent_workspace]
+description = "Ensures an isolated Jujutsu workspace exists for a subagent (.workspaces/<agent>), automatically rebasing clean workspaces onto default@ and symlinking the shared build target cache"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["agy-hooks", "ensure-workspace"]
+args = [
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name (e.g. 'coder', 'test-author', 'mini', 'perf-analyst')" }
+]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 15
+
+[tools.inspect_workspace_clean]
+description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["agy-hooks", "check-clean"]
+args = [
+    { name = "workspace_path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Optional workspace path to inspect (defaults to current workspace)" }
+]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
 
 [tools.run_cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"

@@ -41,6 +41,8 @@ mcp_tools:
   - query_rustc_explain
   - jj_absorb_working_copy
   - jj_describe_revision
+  - ensure_agent_workspace
+  - inspect_workspace_clean
   - query_tool_help
 ---
 

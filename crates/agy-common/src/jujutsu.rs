@@ -69,7 +69,15 @@ impl JujutsuWorkspace {
             return false;
         };
 
-        out.status.success() && out.stdout.is_empty()
+        if !out.status.success() {
+            return false;
+        }
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        !stdout.lines().any(|l| {
+            let trimmed = l.trim();
+            !trimmed.is_empty() && trimmed != "A target" && trimmed != "M target"
+        })
     }
 
     /// Ensures an isolated Jujutsu workspace exists for the specified agent.
@@ -83,15 +91,17 @@ impl JujutsuWorkspace {
     /// # Errors
     /// Returns `AgyError` if the filesystem or `jj workspace add` fails.
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
-        let workspaces_dir = workspace_root.join(".workspaces");
+        let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
+            .unwrap_or_else(|_| workspace_root.to_path_buf());
+        let workspaces_dir = repo_root.join(".workspaces");
         std::fs::create_dir_all(&workspaces_dir)?;
         let agent_ws_path = workspaces_dir.join(agent);
 
-        if !Self::workspace_exists(workspace_root, agent) {
+        if !Self::workspace_exists(&repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
             let status = Command::new("jj")
                 .args(["--color=never", "workspace", "add", "--name", agent, dest_str])
-                .current_dir(workspace_root)
+                .current_dir(&repo_root)
                 .status()
                 .map_err(|e| AgyError::Process(format!("Failed to execute 'jj workspace add': {e}")))?;
 
@@ -110,7 +120,7 @@ impl JujutsuWorkspace {
         }
 
         // Share root target cache to avoid cold-start compilation overhead
-        let root_target = workspace_root.join("target");
+        let root_target = repo_root.join("target");
         let ws_target = agent_ws_path.join("target");
         if !ws_target.exists() && root_target.is_dir() {
             #[cfg(unix)]
