@@ -110,10 +110,15 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let agent_viewport = usize::from(main_chunks[0].height.saturating_sub(2));
+    let (agent_offset, agent_visible) = compute_scroll_window(app.selected_agent_idx, app.agents.len(), agent_viewport);
+
     let agent_items: Vec<ListItem<'_>> = app
         .agents
         .iter()
         .enumerate()
+        .skip(agent_offset)
+        .take(agent_visible)
         .map(|(idx, agent)| {
             let is_selected = idx == app.selected_agent_idx;
             let marker = if is_selected { "▶ " } else { "  " };
@@ -144,9 +149,11 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         })
         .collect();
 
+    let agent_pos = app.selected_agent_idx.saturating_add(1);
+    let total_agents = app.agents.len();
     let agents_list = List::new(agent_items).block(
         Block::default()
-            .title(" [Active Agents (Enter/l to Launch in agy)] ")
+            .title(format!(" [Active Agents: {agent_pos}/{total_agents} (Enter/l to Launch in agy)] "))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(agent_border_style),
@@ -206,19 +213,15 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
         // Scroll window for tools
         let height = right_chunks.get(1).map_or(0, |c| c.height);
-        let visible_tool_count = usize::from(height.saturating_sub(2));
-        let scroll_offset = if app.selected_tool_idx >= visible_tool_count {
-            app.selected_tool_idx.saturating_sub(visible_tool_count >> 1)
-        } else {
-            0
-        };
+        let viewport_height = usize::from(height.saturating_sub(2));
+        let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
 
         let tool_items: Vec<ListItem<'_>> = app
             .tools
             .iter()
             .enumerate()
             .skip(scroll_offset)
-            .take(visible_tool_count)
+            .take(visible_count)
             .map(|(idx, tool)| {
                 let is_highlighted = idx == app.selected_tool_idx;
                 let is_allowed = agent.allows_mcp_tool(&tool.name);
@@ -256,12 +259,13 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
             })
             .collect();
 
+        let tool_pos = app.selected_tool_idx.saturating_add(1);
+        let total_tools = app.tools.len();
         let tool_list_widget = List::new(tool_items).block(
             Block::default()
                 .title(format!(
-                    " [Authorized MCP Tools ({} / {} active) — Space to Toggle] ",
-                    agent.mcp_tools.len(),
-                    app.tools.len()
+                    " [Authorized MCP Tools: {tool_pos}/{total_tools} ({} active) — Space to Toggle] ",
+                    agent.mcp_tools.len()
                 ))
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
@@ -304,10 +308,15 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .split(area);
 
     // Left: Tool List
+    let viewport_height = usize::from(chunks[0].height.saturating_sub(2));
+    let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
+
     let list_items: Vec<ListItem<'_>> = app
         .tools
         .iter()
         .enumerate()
+        .skip(scroll_offset)
+        .take(visible_count)
         .map(|(idx, tool)| {
             let is_selected = idx == app.selected_tool_idx;
             let marker = if is_selected { "▶ " } else { "  " };
@@ -334,9 +343,11 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
         })
         .collect();
 
+    let current_pos = app.selected_tool_idx.saturating_add(1);
+    let total = app.tools.len();
     let list_widget = List::new(list_items).block(
         Block::default()
-            .title(format!(" [MCP Tool Catalog ({} Tools)] ", app.tools.len()))
+            .title(format!(" [MCP Tool Catalog: {current_pos}/{total} (↑/↓ to scroll)] "))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Cyan)),
@@ -606,6 +617,32 @@ fn draw_validation_modal(frame: &mut Frame<'_>, area: Rect, is_success: bool, me
     frame.render_widget(modal, modal_area);
 }
 
+/// Calculates the window slice `(scroll_offset, visible_count)` to keep `selected_idx`
+/// centered and fully visible within a viewport of height `viewport_height`.
+const fn compute_scroll_window(selected_idx: usize, total_items: usize, viewport_height: usize) -> (usize, usize) {
+    if viewport_height == 0 || total_items == 0 {
+        return (0, 0);
+    }
+    let visible_count = if viewport_height < total_items {
+        viewport_height
+    } else {
+        total_items
+    };
+
+    let scroll_offset = if selected_idx >= visible_count {
+        let half = visible_count >> 1;
+        let offset = selected_idx.saturating_sub(half);
+        if offset.saturating_add(visible_count) > total_items {
+            total_items.saturating_sub(visible_count)
+        } else {
+            offset
+        }
+    } else {
+        0
+    };
+    (scroll_offset, visible_count)
+}
+
 /// Helper function to create a centered rectangular area for modals.
 #[allow(clippy::arithmetic_side_effects, reason = "Modal centered rectangle percentage layout")]
 #[allow(clippy::indexing_slicing, reason = "Layout split returns array matching constraints length")]
@@ -629,4 +666,34 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage(pad_x),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_scroll_window() {
+        // Empty
+        assert_eq!(compute_scroll_window(0, 0, 10), (0, 0));
+        assert_eq!(compute_scroll_window(0, 50, 0), (0, 0));
+
+        // Total items smaller than viewport
+        assert_eq!(compute_scroll_window(3, 9, 20), (0, 9));
+
+        // Start of list
+        let (start_offset, start_count) = compute_scroll_window(0, 64, 20);
+        assert_eq!((start_offset, start_count), (0, 20));
+
+        // Middle of list (cursor centered)
+        let (mid_offset, mid_count) = compute_scroll_window(25, 64, 20);
+        assert_eq!((mid_offset, mid_count), (15, 20));
+        assert!(25 >= mid_offset && 25 < mid_offset.saturating_add(mid_count));
+
+        // End of list (cursor clamped to end)
+        let (end_offset, end_count) = compute_scroll_window(63, 64, 20);
+        assert_eq!((end_offset, end_count), (44, 20));
+        assert_eq!(end_offset.saturating_add(end_count), 64);
+        assert!(63 >= end_offset && 63 < end_offset.saturating_add(end_count));
+    }
 }
