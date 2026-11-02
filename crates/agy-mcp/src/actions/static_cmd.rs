@@ -28,7 +28,7 @@ pub(crate) fn execute(
         &[],
         workspace_root,
         tool.timeout_seconds,
-        tool.enforce_sandbox,
+        tool.enforce_sandbox(),
         &tool.name,
     )?;
 
@@ -79,7 +79,7 @@ pub(crate) fn execute(
         &text_content,
         tool.truncate_lines,
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     Ok((truncated, is_error))

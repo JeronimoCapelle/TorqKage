@@ -124,6 +124,9 @@ fn build_parameterized_schema(args: &[crate::models::ToolArg]) -> serde_json::Va
         if !arg.description.is_empty() {
             prop.insert("description".to_owned(), json!(arg.description));
         }
+        if let Some(ref def) = arg.default {
+            prop.insert("default".to_owned(), json!(def));
+        }
         properties.insert(arg.name.clone(), serde_json::Value::Object(prop));
 
         if arg.required {

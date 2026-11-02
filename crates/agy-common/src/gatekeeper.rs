@@ -222,47 +222,7 @@ pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Opti
 /// Parses the list of `pre_launch_checks` from an agent's Markdown frontmatter.
 #[must_use]
 pub fn parse_pre_launch_checks(content: &str) -> Vec<String> {
-    let trimmed = content.trim_start();
-    let Some(rest) = trimmed.strip_prefix("---") else {
-        return Vec::new();
-    };
-
-    let Some(end_idx) = rest.find("\n---") else {
-        return Vec::new();
-    };
-
-    let Some(frontmatter) = rest.get(..end_idx) else {
-        return Vec::new();
-    };
-    let mut checks = Vec::new();
-    let mut in_checks_block = false;
-
-    for line in frontmatter.lines() {
-        let trimmed_line = line.trim();
-        if trimmed_line.starts_with("pre_launch_checks:")
-            || trimmed_line.starts_with("preLaunchChecks:")
-            || trimmed_line.starts_with("gatekeeper_checks:")
-        {
-            if trimmed_line.ends_with("[]") {
-                return Vec::new();
-            }
-            in_checks_block = true;
-            continue;
-        }
-
-        if in_checks_block {
-            if let Some(item) = trimmed_line.strip_prefix('-') {
-                let name = item.trim().trim_matches(['"', '\'']);
-                if !name.is_empty() {
-                    checks.push(name.to_owned());
-                }
-            } else if !trimmed_line.is_empty() && !trimmed_line.starts_with('#') {
-                break;
-            }
-        }
-    }
-
-    checks
+    crate::frontmatter::AgentFrontmatter::extract_pre_launch_checks(content)
 }
 
 #[cfg(test)]

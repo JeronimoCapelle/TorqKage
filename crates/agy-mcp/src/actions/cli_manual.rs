@@ -35,7 +35,7 @@ pub(crate) fn execute(
         &content,
         tool.truncate_lines.or(Some(80)),
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     (truncated, false)

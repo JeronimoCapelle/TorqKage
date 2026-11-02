@@ -1,4 +1,9 @@
 //! Project-specific conversation session reader and discovery engine for Antigravity.
+//!
+//! # Runtime Requirements
+//! This module queries session metadata from `~/.gemini/antigravity-cli/conversation_summaries.db`.
+//! It requires the external `sqlite3` CLI utility installed in `$PATH` to execute JSON queries.
+//! If `sqlite3` is absent, session discovery gracefully returns `None`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -29,11 +34,17 @@ impl SessionSummary {
 }
 
 /// Discovers the latest resumable session for a given agent in the given workspace.
+///
+/// Returns `None` if `sqlite3` is not found in PATH or if the session database does not exist.
 #[must_use]
 pub(crate) fn find_agent_session_for_workspace(
     agent_name: &str,
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
+    if which::which("sqlite3").is_err() {
+        return None;
+    }
+
     let home = std::env::var("HOME").ok()?;
     let db_path = PathBuf::from(home).join(".gemini/antigravity-cli/conversation_summaries.db");
     if !db_path.is_file() {

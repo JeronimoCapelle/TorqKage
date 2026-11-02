@@ -54,8 +54,11 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["rg", "--max-count", "30", "--max-columns", "200", "--"]
 args = [
-    { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" }
+    { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" },
+    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory or file to search (defaults to project root)" }
 ]
+empty_fallback = "No occurrences found in codebase for the specified search query."
+success_exit_codes = [0, 1]
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 15
@@ -258,6 +261,8 @@ args = [
     { name = "lang", required = false, flag = "-l", regex = "^[a-zA-Z0-9]+$", description = "Target language (e.g. 'rust', 'toml', 'json', 'yaml')" },
     { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path (defaults to whole repository)" }
 ]
+empty_fallback = "No matching AST patterns found to rewrite."
+success_exit_codes = [0, 1]
 output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 30

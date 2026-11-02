@@ -90,6 +90,7 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if the filesystem or `jj workspace add` fails.
+    #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess and symlink errors")]
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
@@ -113,10 +114,25 @@ impl JujutsuWorkspace {
             }
         } else if Self::is_workspace_clean(&agent_ws_path) {
             // Rebase clean workspace onto latest default@ commit to eliminate split-brain drift
-            drop(Command::new("jj")
+            match Command::new("jj")
                 .args(["--color=never", "new", "default@", "--no-edit"])
                 .current_dir(&agent_ws_path)
-                .status());
+                .status()
+            {
+                Ok(status) if !status.success() => {
+                    eprintln!(
+                        "[agy-common] warning: 'jj new default@' in {} exited with non-zero status: {status}",
+                        agent_ws_path.display()
+                    );
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[agy-common] warning: failed to execute 'jj new default@' in {}: {e}",
+                        agent_ws_path.display()
+                    );
+                }
+                _ => {}
+            }
         }
 
         // Share root target cache to avoid cold-start compilation overhead
@@ -125,7 +141,15 @@ impl JujutsuWorkspace {
         if !ws_target.exists() && root_target.is_dir() {
             #[cfg(unix)]
             {
-                drop(std::os::unix::fs::symlink(&root_target, &ws_target));
+                if let Err(e) = std::os::unix::fs::symlink(&root_target, &ws_target)
+                    && e.kind() != std::io::ErrorKind::AlreadyExists
+                {
+                    eprintln!(
+                        "[agy-common] warning: failed to symlink target directory from {} to {}: {e}",
+                        root_target.display(),
+                        ws_target.display()
+                    );
+                }
             }
         }
 
@@ -143,16 +167,23 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if workspace forget fails.
+    #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess errors")]
     pub fn forget_agent_workspace(workspace_root: &Path, agent: &str) -> Result<()> {
         let agent_ws_path = workspace_root.join(".workspaces").join(agent);
         if Self::workspace_exists(workspace_root, agent) {
-            drop(Command::new("jj")
+            let status = Command::new("jj")
                 .args(["--color=never", "workspace", "forget", agent])
                 .current_dir(workspace_root)
-                .status());
+                .status()
+                .map_err(|e| AgyError::Process(format!("Failed to execute 'jj workspace forget {agent}': {e}")))?;
+            if !status.success() {
+                eprintln!(
+                    "[agy-common] warning: 'jj workspace forget {agent}' exited with non-zero status: {status}"
+                );
+            }
         }
         if agent_ws_path.exists() {
-            drop(std::fs::remove_dir_all(&agent_ws_path));
+            std::fs::remove_dir_all(&agent_ws_path).map_err(AgyError::Io)?;
         }
         Ok(())
     }

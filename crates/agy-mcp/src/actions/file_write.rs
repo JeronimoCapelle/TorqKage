@@ -26,7 +26,7 @@ pub(crate) fn execute(
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'content'".to_owned())?;
 
-    if tool.ban_dangerous_files {
+    if tool.ban_dangerous_files() {
         check_dangerous_files(Path::new(path_str))?;
     }
 
@@ -34,7 +34,7 @@ pub(crate) fn execute(
         workspace_root,
         path_str,
         &tool.allowed_directories,
-        tool.enforce_workspace_bounds,
+        tool.enforce_workspace_bounds(),
     )?;
 
     check_enforce_boundaries(
@@ -95,8 +95,11 @@ mod tests {
         let tool = ToolDefinition {
             name: "write_file".to_owned(),
             allowed_directories: vec!["src".to_owned()],
-            enforce_workspace_bounds: true,
-            ban_dangerous_files: true,
+            sandbox: crate::models::ToolSandboxPolicy {
+                enforce_workspace_bounds: true,
+                ban_dangerous_files: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -118,7 +121,10 @@ mod tests {
         let temp = create_test_dir("danger");
         let tool = ToolDefinition {
             name: "write_file".to_owned(),
-            ban_dangerous_files: true,
+            sandbox: crate::models::ToolSandboxPolicy {
+                ban_dangerous_files: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -181,7 +187,10 @@ mod tests {
         let temp = create_test_dir("agent-guard");
         let tool = ToolDefinition {
             name: "write_file".to_owned(),
-            enforce_workspace_bounds: true,
+            sandbox: crate::models::ToolSandboxPolicy {
+                enforce_workspace_bounds: true,
+                ..Default::default()
+            },
             ..Default::default()
         };
 

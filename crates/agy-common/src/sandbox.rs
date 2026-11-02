@@ -25,10 +25,51 @@ pub fn is_inside_outer_sandbox() -> bool {
         return true;
     }
 
-    // 3. Isolated PID namespace: inside bwrap (--unshare-pid), PID 1 is not systemd or init
+    // 3. Container signatures in /proc/1/cgroup or /proc/self/cgroup
+    for cgroup_path in &["/proc/1/cgroup", "/proc/self/cgroup"] {
+        if let Ok(cgroup) = std::fs::read_to_string(cgroup_path) {
+            let lower = cgroup.to_ascii_lowercase();
+            if lower.contains("docker")
+                || lower.contains("containerd")
+                || lower.contains("kubepods")
+                || lower.contains("podman")
+                || lower.contains("lxc")
+                || lower.contains("libpod")
+                || lower.contains("sandbox")
+            {
+                return true;
+            }
+        }
+    }
+
+    // 4. Nested PID namespace: if NSpid has > 1 entries, process is in an unshared PID namespace (e.g. bwrap --unshare-pid)
+    if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+        for line in status.lines() {
+            if let Some(rest) = line.strip_prefix("NSpid:")
+                && rest.split_whitespace().count() > 1
+            {
+                return true;
+            }
+        }
+    }
+
+    // 5. Container-specific init processes (e.g. tini, dumb-init) or non-standard init in isolated environments
     if let Ok(comm) = std::fs::read_to_string("/proc/1/comm") {
         let comm_trimmed = comm.trim();
-        if !comm_trimmed.is_empty() && comm_trimmed != "systemd" && comm_trimmed != "init" {
+        let known_host_inits = [
+            "systemd",
+            "init",
+            "openrc-init",
+            "runit",
+            "dinit",
+            "s6-svscan",
+            "shepherd",
+            "busybox",
+        ];
+        if !comm_trimmed.is_empty()
+            && !known_host_inits.contains(&comm_trimmed)
+            && (comm_trimmed == "tini" || comm_trimmed == "dumb-init" || comm_trimmed.contains("bwrap"))
+        {
             return true;
         }
     }

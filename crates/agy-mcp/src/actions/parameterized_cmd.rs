@@ -17,11 +17,14 @@ fn validate_and_build_args(
             .and_then(serde_json::Value::as_str)
             .map(str::trim);
 
-        if let Some(val) = val_opt
-            && !val.is_empty()
-        {
+        let effective_val = match val_opt {
+            Some(v) if !v.is_empty() => Some(v.to_owned()),
+            _ => arg.default.clone(),
+        };
+
+        if let Some(val) = effective_val {
             if let Some(pattern) = &arg.regex
-                && !matches_pattern(val, pattern)
+                && !matches_pattern(&val, pattern)
             {
                 return Err(format!(
                     "Security validation error: Argument '{}' with value '{val}' violates pattern '{pattern}'",
@@ -32,7 +35,7 @@ fn validate_and_build_args(
             if let Some(flag) = &arg.flag {
                 dynamic_args.push(flag.clone());
             }
-            dynamic_args.push(val.to_owned());
+            dynamic_args.push(val);
         } else if arg.required {
             return Err(format!(
                 "Missing required argument '{}' for tool '{}'",
@@ -47,7 +50,6 @@ fn validate_and_build_args(
 fn format_captured_output(
     output: &std::process::Output,
     tool: &ToolDefinition,
-    binary: &str,
 ) -> String {
     match tool.output_capture {
         OutputCapture::ExitCodeOnly => {
@@ -55,14 +57,25 @@ fn format_captured_output(
             format!("Process exited with status code {code}.")
         }
 
-        OutputCapture::Stderr => String::from_utf8_lossy(&output.stderr).into_owned(),
+        OutputCapture::Stderr => {
+            let stderr_str = String::from_utf8_lossy(&output.stderr);
+            if stderr_str.trim().is_empty()
+                && let Some(fallback) = &tool.empty_fallback
+            {
+                return fallback.clone();
+            }
+            stderr_str.into_owned()
+        }
 
         OutputCapture::Both => {
             let stdout_str = String::from_utf8_lossy(&output.stdout);
             let stderr_str = String::from_utf8_lossy(&output.stderr);
-            if binary == "ast-grep" && stdout_str.trim().is_empty() && stderr_str.trim().is_empty() {
-                "No matching AST patterns found to rewrite.".to_owned()
-            } else if stderr_str.trim().is_empty() {
+            if stdout_str.trim().is_empty() && stderr_str.trim().is_empty()
+                && let Some(fallback) = &tool.empty_fallback
+            {
+                return fallback.clone();
+            }
+            if stderr_str.trim().is_empty() {
                 stdout_str.into_owned()
             } else if stdout_str.trim().is_empty() {
                 stderr_str.into_owned()
@@ -73,13 +86,12 @@ fn format_captured_output(
 
         OutputCapture::Stdout | OutputCapture::JsonSpans => {
             let text = String::from_utf8_lossy(&output.stdout);
-            if binary == "rg" && text.trim().is_empty() {
-                "No occurrences found in codebase for the specified search query.".to_owned()
-            } else if binary == "ast-grep" && text.trim().is_empty() {
-                "No matching AST patterns found to rewrite.".to_owned()
-            } else {
-                text.into_owned()
+            if text.trim().is_empty()
+                && let Some(fallback) = &tool.empty_fallback
+            {
+                return fallback.clone();
             }
+            text.into_owned()
         }
     }
 }
@@ -99,14 +111,10 @@ pub(crate) fn execute(
         return Err(format!("Tool '{}' has no command configured", tool.name));
     }
 
-    let mut dynamic_args = validate_and_build_args(tool, arguments)?;
+    let dynamic_args = validate_and_build_args(tool, arguments)?;
 
     let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
     let base_args = tool.command.get(1..).unwrap_or(&[]);
-
-    if binary == "rg" {
-        dynamic_args.push(".".to_owned());
-    }
 
     let output = execute_supervised_command(
         binary,
@@ -114,20 +122,21 @@ pub(crate) fn execute(
         &dynamic_args,
         workspace_root,
         tool.timeout_seconds,
-        tool.enforce_sandbox,
+        tool.enforce_sandbox(),
         &tool.name,
     )?;
 
-    let is_error = if (binary == "rg" || binary == "ast-grep")
-        && output.status.code() == Some(1)
-        && output.stdout.is_empty()
-    {
-        false
+    let is_error = if let Some(code) = output.status.code() {
+        if tool.success_exit_codes.contains(&code) {
+            false
+        } else {
+            !output.status.success()
+        }
     } else {
         !output.status.success()
     };
 
-    let raw_text = format_captured_output(&output, tool, binary);
+    let raw_text = format_captured_output(&output, tool);
 
     // Apply error fallback if configured and process failed
     let final_text = if is_error && tool.error_fallback.as_deref() == Some("token_smart_not_found") {
@@ -146,7 +155,7 @@ pub(crate) fn execute(
         &final_text,
         tool.truncate_lines,
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     Ok((truncated, is_error))
@@ -165,18 +174,28 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
         return !val.contains('\0');
     }
 
+    // Pattern matching for fixed Rustc error codes (e.g. "^E[0-9]{4}$")
+    if pattern == "^E[0-9]{4}$" {
+        return val.len() == 5
+            && val.starts_with('E')
+            && val.get(1..).is_some_and(|digits| digits.chars().all(|c| c.is_ascii_digit()));
+    }
+
     if let Some(inner) = pattern.strip_prefix("^[").and_then(|p| p.strip_suffix("]+$")) {
-        let has_alnum = inner.contains("a-zA-Z0-9")
-            || (inner.contains("a-z") && inner.contains("A-Z") && inner.contains("0-9"));
-        let has_colon = inner.contains(':');
-        let has_underscore = inner.contains('_');
-        let has_dash = inner.contains('-');
+        let allow_lower = inner.contains("a-z");
+        let allow_upper = inner.contains("A-Z");
+        let allow_digit = inner.contains("0-9");
+        let literals = inner
+            .replace("a-zA-Z0-9", "")
+            .replace("a-z", "")
+            .replace("A-Z", "")
+            .replace("0-9", "");
 
         return val.chars().all(|c| {
-            (has_alnum && c.is_ascii_alphanumeric())
-                || (has_underscore && c == '_')
-                || (has_colon && c == ':')
-                || (has_dash && c == '-')
+            (allow_lower && c.is_ascii_lowercase())
+                || (allow_upper && c.is_ascii_uppercase())
+                || (allow_digit && c.is_ascii_digit())
+                || literals.contains(c)
         });
     }
 
@@ -210,6 +229,14 @@ mod tests {
         assert!(!matches_pattern("bad\0code", "^[^\\x00]+$"));
         assert!(!matches_pattern("foo; rm -rf /", "^[a-zA-Z0-9_:]+$"));
         assert!(!matches_pattern("foo bar", "^[a-zA-Z0-9_:]+$"));
+        // Enhanced pattern tests: file paths, VCS revisions, rustc error codes
+        assert!(matches_pattern("crates/agy-mcp/src/lib.rs", "^[a-zA-Z0-9_./-]+$"));
+        assert!(matches_pattern("HEAD~1", "^[a-zA-Z0-9_@~^.:-]+$"));
+        assert!(matches_pattern("default@", "^[a-zA-Z0-9_@~^.:-]+$"));
+        assert!(matches_pattern("E0308", "^E[0-9]{4}$"));
+        assert!(!matches_pattern("E308", "^E[0-9]{4}$"));
+        assert!(!matches_pattern("E03088", "^E[0-9]{4}$"));
+        assert!(!matches_pattern("F0308", "^E[0-9]{4}$"));
     }
 
     fn create_test_dir(tag: &str) -> std::path::PathBuf {
@@ -237,6 +264,7 @@ mod tests {
                     regex: Some("^[a-zA-Z0-9_-]+$".to_owned()),
                     flag: None,
                     description: "Message".to_owned(),
+                    default: None,
                 },
                 ToolArg {
                     name: "prefix".to_owned(),
@@ -244,6 +272,7 @@ mod tests {
                     regex: Some("^[a-zA-Z0-9_-]+$".to_owned()),
                     flag: Some("-n".to_owned()),
                     description: "No newline".to_owned(),
+                    default: None,
                 },
             ],
             output_capture: OutputCapture::Stdout,
@@ -299,6 +328,7 @@ mod tests {
                     flag: Some("-p".to_owned()),
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "pattern".to_owned(),
+                    default: None,
                 },
                 ToolArg {
                     name: "rewrite".to_owned(),
@@ -306,9 +336,12 @@ mod tests {
                     flag: Some("-r".to_owned()),
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "rewrite".to_owned(),
+                    default: None,
                 },
             ],
             output_capture: OutputCapture::Both,
+            empty_fallback: Some("No matching AST patterns found to rewrite.".to_owned()),
+            success_exit_codes: vec![0, 1],
             ..Default::default()
         };
 
@@ -323,6 +356,43 @@ mod tests {
     }
 
     #[test]
+    fn test_parameterized_cmd_default_arg_used() {
+        let temp = create_test_dir("default_arg");
+        let tool = ToolDefinition {
+            name: "test_default".to_owned(),
+            command: vec!["echo".to_owned()],
+            args: vec![
+                ToolArg {
+                    name: "msg".to_owned(),
+                    required: true,
+                    regex: Some("^[a-zA-Z0-9_-]+$".to_owned()),
+                    flag: None,
+                    description: "Message".to_owned(),
+                    default: None,
+                },
+                ToolArg {
+                    name: "path".to_owned(),
+                    required: false,
+                    regex: Some("^[a-zA-Z0-9_./-]+$".to_owned()),
+                    flag: None,
+                    description: "Path".to_owned(),
+                    default: Some(".".to_owned()),
+                },
+            ],
+            output_capture: OutputCapture::Stdout,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "msg": "hello"
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("hello ."));
+    }
+
+    #[test]
     fn test_enforce_sandbox_in_outer_sandbox() {
         let temp = create_test_dir("sandbox_outer");
         // SAFETY: Setting test environment variable for isolated unit test.
@@ -332,7 +402,10 @@ mod tests {
         let tool = ToolDefinition {
             name: "test_sandboxed_echo".to_owned(),
             command: vec!["echo".to_owned()],
-            enforce_sandbox: true,
+            sandbox: agy_common::tools::ToolSandboxPolicy {
+                enforce_sandbox: true,
+                ..Default::default()
+            },
             args: vec![ToolArg {
                 name: "msg".to_owned(),
                 required: true,
@@ -365,13 +438,17 @@ mod tests {
         let tool = ToolDefinition {
             name: "eval_test".to_owned(),
             command: vec!["python3".to_owned(), "-c".to_owned()],
-            enforce_sandbox: true,
+            sandbox: agy_common::tools::ToolSandboxPolicy {
+                enforce_sandbox: true,
+                ..Default::default()
+            },
             args: vec![ToolArg {
                 name: "code".to_owned(),
                 required: true,
                 flag: None,
                 regex: Some("^[^\\x00]+$".to_owned()),
                 description: "python code".to_owned(),
+                default: None,
             }],
             output_capture: OutputCapture::Stdout,
             ..Default::default()

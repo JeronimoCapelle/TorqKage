@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap};
 use crate::app::{ActiveTab, App, FleetFocus};
+use crate::model::AgentManifest;
 
 /// Main draw dispatcher called on every terminal frame.
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
@@ -87,13 +88,13 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::styled(" [✔ CLEAN] ", Style::default().fg(Color::Green))
     };
 
-    let sandbox_span = if app.sandbox_enabled {
+    let sandbox_span = if app.sandbox_enabled() {
         Span::styled(" [SANDBOX: ON] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
     } else {
         Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
     };
 
-    let iso_span = if app.isolated_workspace {
+    let iso_span = if app.isolated_workspace() {
         Span::styled(" [ISO: ON] ", Style::default().fg(Color::Black).bg(Color::LightCyan).add_modifier(Modifier::BOLD))
     } else {
         Span::styled(" [ISO: OFF] ", Style::default().fg(Color::DarkGray))
@@ -114,7 +115,11 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ])
         .split(area);
 
-    // Left: Agent List
+    draw_fleet_agent_list(frame, app, main_chunks[0]);
+    draw_fleet_agent_details(frame, app, main_chunks[1]);
+}
+
+fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let is_agent_focused = app.fleet_focus == FleetFocus::AgentList;
     let agent_border_style = if is_agent_focused {
         Style::default().fg(Color::Cyan)
@@ -122,7 +127,7 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray)
     };
 
-    let agent_viewport = usize::from(main_chunks[0].height.saturating_sub(2));
+    let agent_viewport = usize::from(area.height.saturating_sub(2));
     let (agent_offset, agent_visible) = compute_scroll_window(app.selected_agent_idx, app.agents.len(), agent_viewport);
 
     let agent_items: Vec<ListItem<'_>> = app
@@ -176,200 +181,208 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
             .border_type(BorderType::Rounded)
             .border_style(agent_border_style),
     );
-    frame.render_widget(agents_list, main_chunks[0]);
+    frame.render_widget(agents_list, area);
+}
 
-    // Right: Selected Agent Capability Matrix
-    if let Some(agent) = app.selected_agent() {
-        let right_chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(6), // Metadata banner with session resumption & circuit breaker
-                Constraint::Min(8),    // MCP Tools checklist
-                Constraint::Length(4), // Tool description preview
-            ])
-            .split(main_chunks[1]);
+fn draw_fleet_agent_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let Some(agent) = app.selected_agent() else {
+        return;
+    };
 
-        // Top Metadata & Session Resumption
-        let (session_span, action_span) = app.active_agent_session.as_ref().map_or_else(
-            || {
-                (
-                    Span::styled(
-                        "None (no prior session found for workspace)",
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                    Span::styled(
-                        "[Enter/n: Start Fresh Session]",
-                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                    ),
-                )
-            },
-            |sess| {
-                (
-                    Span::styled(
-                        format!("Resumable (conv: {}, {} steps)", sess.short_id(), sess.step_count),
-                        Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(
-                        "[Enter/r: Resume]  [n: New Session]",
-                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                    ),
-                )
-            },
-        );
+    let right_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(6), // Metadata banner with session resumption & circuit breaker
+            Constraint::Min(8),    // MCP Tools checklist
+            Constraint::Length(4), // Tool description preview
+        ])
+        .split(area);
 
-        let cb_span = match app.circuit_breaker_status.as_ref() {
-            Some(cb) if cb.tripped => Span::styled(
-                format!("🛑 TRIPPED ({}/{} strikes - {})", cb.consecutive_failures, cb.max_strikes, cb.last_error_signature.as_deref().unwrap_or("fail")),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            ),
-            Some(cb) if cb.consecutive_failures > 0 => Span::styled(
-                format!("⚠ {}/{} strikes", cb.consecutive_failures, cb.max_strikes),
-                Style::default().fg(Color::Yellow),
-            ),
-            _ => Span::styled("✔ OK (0/2 strikes)", Style::default().fg(Color::Green)),
-        };
+    draw_agent_metadata_panel(frame, app, agent, right_chunks[0]);
+    draw_agent_tool_checklist(frame, app, agent, right_chunks[1]);
+    draw_agent_tool_preview(frame, app, right_chunks[2]);
+}
 
-        let meta_lines = vec![
-            Line::from(vec![
-                Span::styled("Role: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&agent.description, Style::default().fg(Color::White)),
-            ]),
-            Line::from(vec![
-                Span::styled("Effort: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&agent.effort, Style::default().fg(Color::Cyan)),
-                Span::styled(" | Mode: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&agent.permission_mode, Style::default().fg(Color::Yellow)),
-                Span::styled(" | Policy: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&agent.command_execution_policy, Style::default().fg(Color::Magenta)),
-                Span::styled(" | Native Tools: ", Style::default().fg(Color::DarkGray)),
+fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentManifest, area: Rect) {
+    let (session_span, action_span) = app.active_agent_session.as_ref().map_or_else(
+        || {
+            (
                 Span::styled(
-                    if agent.native_tools.is_empty() {
-                        "[] (Air-gapped)".to_owned()
-                    } else {
-                        agent.native_tools.join(", ")
-                    },
-                    Style::default().fg(Color::Green),
+                    "None (no prior session found for workspace)",
+                    Style::default().fg(Color::DarkGray),
                 ),
-            ]),
-            Line::from(vec![
-                Span::styled("Session: ", Style::default().fg(Color::DarkGray)),
-                session_span,
-                Span::styled(" | Launch: ", Style::default().fg(Color::DarkGray)),
-                action_span,
-            ]),
-            Line::from(vec![
-                Span::styled("Workspace: ", Style::default().fg(Color::DarkGray)),
-                if app.isolated_workspace {
-                    Span::styled(format!("Isolated (.workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    "[Enter/n: Start Fresh Session]",
+                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                ),
+            )
+        },
+        |sess| {
+            (
+                Span::styled(
+                    format!("Resumable (conv: {}, {} steps)", sess.short_id(), sess.step_count),
+                    Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    "[Enter/r: Resume]  [n: New Session]",
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                ),
+            )
+        },
+    );
+
+    let cb_span = match app.circuit_breaker_status.as_ref() {
+        Some(cb) if cb.tripped => Span::styled(
+            format!("🛑 TRIPPED ({}/{} strikes - {})", cb.consecutive_failures, cb.max_strikes, cb.last_error_signature.as_deref().unwrap_or("fail")),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+        Some(cb) if cb.consecutive_failures > 0 => Span::styled(
+            format!("⚠ {}/{} strikes", cb.consecutive_failures, cb.max_strikes),
+            Style::default().fg(Color::Yellow),
+        ),
+        _ => Span::styled("✔ OK (0/2 strikes)", Style::default().fg(Color::Green)),
+    };
+
+    let meta_lines = vec![
+        Line::from(vec![
+            Span::styled("Role: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&agent.description, Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("Effort: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&agent.effort, Style::default().fg(Color::Cyan)),
+            Span::styled(" | Mode: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&agent.permission_mode, Style::default().fg(Color::Yellow)),
+            Span::styled(" | Policy: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&agent.command_execution_policy, Style::default().fg(Color::Magenta)),
+            Span::styled(" | Native Tools: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                if agent.native_tools.is_empty() {
+                    "[] (Air-gapped)".to_owned()
                 } else {
-                    Span::styled("Direct (@)", Style::default().fg(Color::DarkGray))
+                    agent.native_tools.join(", ")
                 },
-                Span::styled(" [w: toggle] | Circuit Breaker: ", Style::default().fg(Color::DarkGray)),
-                cb_span,
-                Span::styled(" [k: reset]", Style::default().fg(Color::DarkGray)),
+                Style::default().fg(Color::Green),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Session: ", Style::default().fg(Color::DarkGray)),
+            session_span,
+            Span::styled(" | Launch: ", Style::default().fg(Color::DarkGray)),
+            action_span,
+        ]),
+        Line::from(vec![
+            Span::styled("Workspace: ", Style::default().fg(Color::DarkGray)),
+            if app.isolated_workspace() {
+                Span::styled(format!("Isolated (.workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+            } else {
+                Span::styled("Direct (@)", Style::default().fg(Color::DarkGray))
+            },
+            Span::styled(" [w: toggle] | Circuit Breaker: ", Style::default().fg(Color::DarkGray)),
+            cb_span,
+            Span::styled(" [k: reset]", Style::default().fg(Color::DarkGray)),
+        ]),
+    ];
+    let meta_para = Paragraph::new(meta_lines).block(
+        Block::default()
+            .title(format!(" [Profile: {}] ", agent.name))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded),
+    );
+    frame.render_widget(meta_para, area);
+}
+
+fn draw_agent_tool_checklist(frame: &mut Frame<'_>, app: &App, agent: &AgentManifest, area: Rect) {
+    let is_tool_focused = app.fleet_focus == FleetFocus::ToolList;
+    let tool_border_style = if is_tool_focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
+    let viewport_height = usize::from(area.height.saturating_sub(2));
+    let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
+
+    let tool_items: Vec<ListItem<'_>> = app
+        .tools
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_count)
+        .map(|(idx, tool)| {
+            let is_highlighted = idx == app.selected_tool_idx;
+            let is_allowed = agent.allows_mcp_tool(&tool.name);
+
+            let check_box = if is_allowed { "[X] " } else { "[ ] " };
+            let check_style = if is_allowed {
+                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+
+            let marker = if is_highlighted { "▶ " } else { "  " };
+
+            let line = Line::from(vec![
+                Span::styled(marker, Style::default().fg(Color::Yellow)),
+                Span::styled(check_box, check_style),
+                Span::styled(
+                    format!("{:<26}", tool.name),
+                    if is_allowed {
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::DarkGray)
+                    },
+                ),
+                Span::styled(format!(" ({})", tool.action), Style::default().fg(Color::DarkGray)),
+            ]);
+
+            let row_style = if is_highlighted {
+                Style::default().bg(Color::Rgb(30, 40, 56))
+            } else {
+                Style::default()
+            };
+
+            ListItem::new(line).style(row_style)
+        })
+        .collect();
+
+    let tool_pos = app.selected_tool_idx.saturating_add(1);
+    let total_tools = app.tools.len();
+    let tool_list_widget = List::new(tool_items).block(
+        Block::default()
+            .title(format!(
+                " [Authorized MCP Tools: {tool_pos}/{total_tools} ({} active) — Space to Toggle] ",
+                agent.mcp_tools.len()
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(tool_border_style),
+    );
+    frame.render_widget(tool_list_widget, area);
+}
+
+fn draw_agent_tool_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let preview_content = app.tools.get(app.selected_tool_idx).map_or_else(
+        || vec![Line::from(Span::styled("Select a tool above to view details", Style::default().fg(Color::DarkGray)))],
+        |tool| vec![
+            Line::from(vec![
+                Span::styled("Tool: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("  [Category: {}]", tool.category.label()), Style::default().fg(Color::Yellow)),
             ]),
-        ];
-        let meta_para = Paragraph::new(meta_lines).block(
-            Block::default()
-                .title(format!(" [Profile: {}] ", agent.name))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded),
-        );
-        frame.render_widget(meta_para, right_chunks[0]);
+            Line::from(vec![
+                Span::styled(&tool.description, Style::default().fg(Color::Gray)),
+            ]),
+        ],
+    );
 
-        // Center: MCP Tool Checklist
-        let is_tool_focused = app.fleet_focus == FleetFocus::ToolList;
-        let tool_border_style = if is_tool_focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        // Scroll window for tools
-        let height = right_chunks.get(1).map_or(0, |c| c.height);
-        let viewport_height = usize::from(height.saturating_sub(2));
-        let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
-
-        let tool_items: Vec<ListItem<'_>> = app
-            .tools
-            .iter()
-            .enumerate()
-            .skip(scroll_offset)
-            .take(visible_count)
-            .map(|(idx, tool)| {
-                let is_highlighted = idx == app.selected_tool_idx;
-                let is_allowed = agent.allows_mcp_tool(&tool.name);
-
-                let check_box = if is_allowed { "[X] " } else { "[ ] " };
-                let check_style = if is_allowed {
-                    Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                };
-
-                let marker = if is_highlighted { "▶ " } else { "  " };
-
-                let line = Line::from(vec![
-                    Span::styled(marker, Style::default().fg(Color::Yellow)),
-                    Span::styled(check_box, check_style),
-                    Span::styled(
-                        format!("{:<26}", tool.name),
-                        if is_allowed {
-                            Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(Color::DarkGray)
-                        },
-                    ),
-                    Span::styled(format!(" ({})", tool.action), Style::default().fg(Color::DarkGray)),
-                ]);
-
-                let row_style = if is_highlighted {
-                    Style::default().bg(Color::Rgb(30, 40, 56))
-                } else {
-                    Style::default()
-                };
-
-                ListItem::new(line).style(row_style)
-            })
-            .collect();
-
-        let tool_pos = app.selected_tool_idx.saturating_add(1);
-        let total_tools = app.tools.len();
-        let tool_list_widget = List::new(tool_items).block(
-            Block::default()
-                .title(format!(
-                    " [Authorized MCP Tools: {tool_pos}/{total_tools} ({} active) — Space to Toggle] ",
-                    agent.mcp_tools.len()
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(tool_border_style),
-        );
-        frame.render_widget(tool_list_widget, right_chunks[1]);
-
-        // Bottom: Tool Description Preview
-        let preview_content = app.tools.get(app.selected_tool_idx).map_or_else(
-            || vec![Line::from(Span::styled("Select a tool above to view details", Style::default().fg(Color::DarkGray)))],
-            |tool| vec![
-                Line::from(vec![
-                    Span::styled("Tool: ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!("  [Category: {}]", tool.category.label()), Style::default().fg(Color::Yellow)),
-                ]),
-                Line::from(vec![
-                    Span::styled(&tool.description, Style::default().fg(Color::Gray)),
-                ]),
-            ],
-        );
-
-        let preview_para = Paragraph::new(preview_content).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
-        frame.render_widget(preview_para, right_chunks[2]);
-    }
+    let preview_para = Paragraph::new(preview_content).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    frame.render_widget(preview_para, area);
 }
 
 fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -381,8 +394,12 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ])
         .split(area);
 
-    // Left: Tool List
-    let viewport_height = usize::from(chunks[0].height.saturating_sub(2));
+    draw_tool_catalog_list(frame, app, chunks[0]);
+    draw_tool_catalog_details(frame, app, chunks[1]);
+}
+
+fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let viewport_height = usize::from(area.height.saturating_sub(2));
     let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
 
     let list_items: Vec<ListItem<'_>> = app
@@ -395,13 +412,13 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let is_selected = idx == app.selected_tool_idx;
             let marker = if is_selected { "▶ " } else { "  " };
 
-            let sandbox_badge = if tool.enforce_sandbox {
+            let sandbox_badge = if tool.enforce_sandbox() {
                 Span::styled(" [SANDBOX]", Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
             } else {
                 Span::raw("")
             };
 
-            let gate_badge = if tool.require_permission_gate {
+            let gate_badge = if tool.require_permission_gate() {
                 Span::styled(" [ASK]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
             } else {
                 Span::styled(" [ALLOW]", Style::default().fg(Color::DarkGray))
@@ -440,133 +457,137 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Cyan)),
     );
-    frame.render_widget(list_widget, chunks[0]);
+    frame.render_widget(list_widget, area);
+}
 
-    // Right: Tool Details & Policy Inspector
-    if let Some(tool) = app.tools.get(app.selected_tool_idx) {
-        let mut detail_lines = vec![
-            Line::from(vec![
-                Span::styled("Tool Identifier: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ]),
-            Line::from(vec![
-                Span::styled("Description:     ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&tool.description, Style::default().fg(Color::White)),
-            ]),
-            Line::from(vec![
-                Span::styled("Action Engine:   ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&tool.action, Style::default().fg(Color::Yellow)),
-                Span::styled("  [Category: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(tool.category.label(), Style::default().fg(Color::Magenta)),
-                Span::styled("]", Style::default().fg(Color::DarkGray)),
-            ]),
-            Line::from(""),
-            Line::from(Span::styled("─── Execution Parameters ───────────────────────────────", Style::default().fg(Color::DarkGray))),
-        ];
-
-        if let Some(ref cmd) = tool.command {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Command Argv:    ", Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("{cmd:?}"), Style::default().fg(Color::Green)),
-            ]));
-        }
-
-        if let Some(ref dirs) = tool.allowed_directories {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Allowed Dirs:    ", Style::default().fg(Color::DarkGray)),
-                Span::styled(dirs.join(", "), Style::default().fg(Color::Yellow)),
-            ]));
-        }
-
-        if let Some(ref cap) = tool.output_capture {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Output Capture:  ", Style::default().fg(Color::DarkGray)),
-                Span::styled(cap, Style::default().fg(Color::White)),
-            ]));
-        }
-
-        if let Some(timeout) = tool.timeout_seconds {
-            detail_lines.push(Line::from(vec![
-                Span::styled("Timeout:         ", Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("{timeout}s"), Style::default().fg(Color::White)),
-            ]));
-        }
-
-        detail_lines.push(Line::from(""));
-        detail_lines.push(Line::from(Span::styled("─── Composable Security Guards (tools.toml) ────────────", Style::default().fg(Color::DarkGray))));
-
-        let guard_check = |enabled: bool| {
-            if enabled {
-                Span::styled("[X] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
-            } else {
-                Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
-            }
-        };
-
-        detail_lines.push(Line::from(vec![
-            guard_check(tool.ban_dangerous_files),
-            Span::styled("ban_dangerous_files      ", Style::default().fg(Color::White)),
-            guard_check(tool.enforce_workspace_bounds),
-            Span::styled("enforce_workspace_bounds", Style::default().fg(Color::White)),
-        ]));
-
-        detail_lines.push(Line::from(vec![
-            guard_check(tool.require_clippy_clean),
-            Span::styled("require_clippy_clean     ", Style::default().fg(Color::White)),
-            guard_check(tool.require_tests_passed),
-            Span::styled("require_tests_passed    ", Style::default().fg(Color::White)),
-        ]));
-
-        detail_lines.push(Line::from(vec![
-            guard_check(tool.require_git_clean),
-            Span::styled("require_workspace_clean  ", Style::default().fg(Color::White)),
-            guard_check(tool.attach_rustc_explain),
-            Span::styled("attach_rustc_explain    ", Style::default().fg(Color::White)),
-        ]));
-
-        detail_lines.push(Line::from(vec![
-            guard_check(tool.mutating),
-            Span::styled("mutating (modifies disk) ", Style::default().fg(Color::White)),
-            guard_check(tool.tracks_circuit_breaker),
-            Span::styled("tracks_circuit_breaker  ", Style::default().fg(Color::White)),
-        ]));
-
-        detail_lines.push(Line::from(vec![
-            guard_check(tool.enforce_sandbox),
-            Span::styled("enforce_sandbox (bwrap)  ", Style::default().fg(Color::LightCyan)),
-        ]));
-
-        // List agents currently authorized for this tool
-        detail_lines.push(Line::from(""));
-        detail_lines.push(Line::from(Span::styled("─── Authorized Agent Roles ─────────────────────────────", Style::default().fg(Color::DarkGray))));
-
-        let mut authorized_agents = Vec::new();
-        for agent in &app.agents {
-            if agent.allows_mcp_tool(&tool.name) {
-                authorized_agents.push(agent.name.as_str());
-            }
-        }
-
-        if authorized_agents.is_empty() {
-            detail_lines.push(Line::from(Span::styled("  (None — Tool is currently inactive across all agents)", Style::default().fg(Color::Red))));
+fn build_tool_guard_lines(tool: &crate::model::ToolItem) -> Vec<Line<'static>> {
+    let guard_check = |enabled: bool| {
+        if enabled {
+            Span::styled("[X] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
         } else {
-            detail_lines.push(Line::from(vec![
-                Span::styled("  Granted to: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(authorized_agents.join(", "), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            ]));
+            Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
         }
+    };
 
-        let detail_para = Paragraph::new(detail_lines)
-            .block(
-                Block::default()
-                    .title(" [Tool Inspection & Policy Matrix] ")
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded),
-            )
-            .wrap(Wrap { trim: true });
+    vec![
+        Line::from(vec![
+            guard_check(tool.ban_dangerous_files()),
+            Span::styled("ban_dangerous_files      ", Style::default().fg(Color::White)),
+            guard_check(tool.enforce_workspace_bounds()),
+            Span::styled("enforce_workspace_bounds", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            guard_check(tool.require_clippy_clean()),
+            Span::styled("require_clippy_clean     ", Style::default().fg(Color::White)),
+            guard_check(tool.require_tests_passed()),
+            Span::styled("require_tests_passed    ", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            guard_check(tool.require_git_clean()),
+            Span::styled("require_workspace_clean  ", Style::default().fg(Color::White)),
+            guard_check(tool.attach_rustc_explain()),
+            Span::styled("attach_rustc_explain    ", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            guard_check(tool.mutating()),
+            Span::styled("mutating (modifies disk) ", Style::default().fg(Color::White)),
+            guard_check(tool.tracks_circuit_breaker()),
+            Span::styled("tracks_circuit_breaker  ", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            guard_check(tool.enforce_sandbox()),
+            Span::styled("enforce_sandbox (bwrap)  ", Style::default().fg(Color::LightCyan)),
+        ]),
+    ]
+}
 
-        frame.render_widget(detail_para, chunks[1]);
+fn draw_tool_catalog_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let Some(tool) = app.tools.get(app.selected_tool_idx) else {
+        return;
+    };
+
+    let mut detail_lines = vec![
+        Line::from(vec![
+            Span::styled("Tool Identifier: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("Description:     ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&tool.description, Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("Action Engine:   ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&tool.action, Style::default().fg(Color::Yellow)),
+            Span::styled("  [Category: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(tool.category.label(), Style::default().fg(Color::Magenta)),
+            Span::styled("]", Style::default().fg(Color::DarkGray)),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled("─── Execution Parameters ───────────────────────────────", Style::default().fg(Color::DarkGray))),
+    ];
+
+    if let Some(ref cmd) = tool.command {
+        detail_lines.push(Line::from(vec![
+            Span::styled("Command Argv:    ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{cmd:?}"), Style::default().fg(Color::Green)),
+        ]));
     }
+
+    if let Some(ref dirs) = tool.allowed_directories {
+        detail_lines.push(Line::from(vec![
+            Span::styled("Allowed Dirs:    ", Style::default().fg(Color::DarkGray)),
+            Span::styled(dirs.join(", "), Style::default().fg(Color::Yellow)),
+        ]));
+    }
+
+    if let Some(ref cap) = tool.output_capture {
+        detail_lines.push(Line::from(vec![
+            Span::styled("Output Capture:  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(cap, Style::default().fg(Color::White)),
+        ]));
+    }
+
+    if let Some(timeout) = tool.timeout_seconds {
+        detail_lines.push(Line::from(vec![
+            Span::styled("Timeout:         ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{timeout}s"), Style::default().fg(Color::White)),
+        ]));
+    }
+
+    detail_lines.push(Line::from(""));
+    detail_lines.push(Line::from(Span::styled("─── Composable Security Guards (tools.toml) ────────────", Style::default().fg(Color::DarkGray))));
+    detail_lines.extend(build_tool_guard_lines(tool));
+
+    // List agents currently authorized for this tool
+    detail_lines.push(Line::from(""));
+    detail_lines.push(Line::from(Span::styled("─── Authorized Agent Roles ─────────────────────────────", Style::default().fg(Color::DarkGray))));
+
+    let mut authorized_agents = Vec::new();
+    for agent in &app.agents {
+        if agent.allows_mcp_tool(&tool.name) {
+            authorized_agents.push(agent.name.as_str());
+        }
+    }
+
+    if authorized_agents.is_empty() {
+        detail_lines.push(Line::from(Span::styled("  (None — Tool is currently inactive across all agents)", Style::default().fg(Color::Red))));
+    } else {
+        detail_lines.push(Line::from(vec![
+            Span::styled("  Granted to: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(authorized_agents.join(", "), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        ]));
+    }
+
+    let detail_para = Paragraph::new(detail_lines)
+        .block(
+            Block::default()
+                .title(" [Tool Inspection & Policy Matrix] ")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
+        .wrap(Wrap { trim: true });
+
+    frame.render_widget(detail_para, area);
 }
 
 fn draw_directives_editor(frame: &mut Frame<'_>, app: &App, area: Rect) {

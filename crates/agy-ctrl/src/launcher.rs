@@ -294,6 +294,7 @@ pub(crate) fn launch_agy_headless(
 )]
 mod tests {
     use super::*;
+    use crate::model::AgentRoleFlags;
     use std::path::PathBuf;
 
     #[test]
@@ -318,8 +319,10 @@ mod tests {
             effort: "low".to_owned(),
             permission_mode: "acceptEdits".to_owned(),
             command_execution_policy: "off".to_owned(),
-            main_agent: false,
-            subagent: true,
+            role_flags: AgentRoleFlags {
+                main_agent: false,
+                subagent: true,
+            },
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
             pre_launch_checks: Vec::new(),
@@ -343,8 +346,10 @@ mod tests {
             effort: "high".to_owned(),
             permission_mode: "acceptEdits".to_owned(),
             command_execution_policy: "prompt".to_owned(),
-            main_agent: false,
-            subagent: true,
+            role_flags: AgentRoleFlags {
+                main_agent: false,
+                subagent: true,
+            },
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
             pre_launch_checks: vec![
@@ -375,8 +380,10 @@ mod tests {
             effort: "low".to_owned(),
             permission_mode: "acceptEdits".to_owned(),
             command_execution_policy: "off".to_owned(),
-            main_agent: false,
-            subagent: true,
+            role_flags: AgentRoleFlags {
+                main_agent: false,
+                subagent: true,
+            },
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
             pre_launch_checks: Vec::new(),

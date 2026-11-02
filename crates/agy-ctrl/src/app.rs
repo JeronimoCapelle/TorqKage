@@ -38,11 +38,14 @@ pub(crate) enum FleetFocus {
     ToolList,
 }
 
+/// Execution configuration flags governing sandbox and workspace isolation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct LaunchConfig {
+    pub(crate) sandbox_enabled: bool,
+    pub(crate) isolated_workspace: bool,
+}
+
 /// The core application state for `agy-ctrl`.
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "Terminal UI application state contains multiple toggle flags"
-)]
 #[derive(Debug)]
 pub(crate) struct App {
     pub(crate) workspace_root: PathBuf,
@@ -59,13 +62,22 @@ pub(crate) struct App {
     pub(crate) status_message: Option<(String, bool)>,
     pub(crate) pending_launch: Option<(String, Option<String>)>,
     pub(crate) active_agent_session: Option<crate::session::SessionSummary>,
-    pub(crate) sandbox_enabled: bool,
-    pub(crate) isolated_workspace: bool,
+    pub(crate) launch_config: LaunchConfig,
     pub(crate) circuit_breaker_status: Option<agy_common::CircuitBreakerLedger>,
     pub(crate) should_quit: bool,
 }
 
 impl App {
+    #[must_use]
+    pub(crate) const fn sandbox_enabled(&self) -> bool {
+        self.launch_config.sandbox_enabled
+    }
+
+    #[must_use]
+    pub(crate) const fn isolated_workspace(&self) -> bool {
+        self.launch_config.isolated_workspace
+    }
+
     /// Constructs a new `App` state by discovering agents and tools in `workspace_root`.
     pub(crate) fn new(workspace_root: PathBuf) -> Result<Self, String> {
         let tools_path = workspace_root.join("tools.toml");
@@ -106,8 +118,7 @@ impl App {
             status_message: Some(("Press [Enter/r] Resume, [n] New Session, [p] Policy, [b] Sandbox, [w] Workspace, [k] Reset CB".to_owned(), false)),
             pending_launch: None,
             active_agent_session: None,
-            sandbox_enabled: false,
-            isolated_workspace: false,
+            launch_config: LaunchConfig::default(),
             circuit_breaker_status,
             should_quit: false,
         };
@@ -122,8 +133,8 @@ impl App {
 
     /// Toggles Jujutsu workspace isolation (.workspaces/<agent>) for launched sessions.
     pub(crate) fn toggle_isolated_workspace(&mut self) {
-        self.isolated_workspace = !self.isolated_workspace;
-        let mode = if self.isolated_workspace {
+        self.launch_config.isolated_workspace = !self.launch_config.isolated_workspace;
+        let mode = if self.launch_config.isolated_workspace {
             "ENABLED (.workspaces/<agent>)"
         } else {
             "DISABLED (direct repo root)"
@@ -154,8 +165,8 @@ impl App {
 
     /// Toggles outer-loop Bubblewrap sandbox execution on or off for launched `agy` sessions.
     pub(crate) fn toggle_sandbox(&mut self) {
-        self.sandbox_enabled = !self.sandbox_enabled;
-        let mode = if self.sandbox_enabled { "ENABLED (bwrap jail)" } else { "DISABLED (direct host)" };
+        self.launch_config.sandbox_enabled = !self.launch_config.sandbox_enabled;
+        let mode = if self.launch_config.sandbox_enabled { "ENABLED (bwrap jail)" } else { "DISABLED (direct host)" };
         self.status_message = Some((format!("Terminal Sandbox {mode}"), false));
     }
 
@@ -176,9 +187,9 @@ impl App {
         if (is_tool_tab || is_fleet_tool)
             && let Some(tool) = self.current_highlighted_tool_mut()
         {
-            tool.require_permission_gate = !tool.require_permission_gate;
+            tool.safety.require_permission_gate = !tool.safety.require_permission_gate;
             tool.modified = true;
-            let state = if tool.require_permission_gate { "ASK (Interactive confirmation)" } else { "ALLOW (Autonomous execution)" };
+            let state = if tool.require_permission_gate() { "ASK (Interactive confirmation)" } else { "ALLOW (Autonomous execution)" };
             let name = tool.name.clone();
             self.status_message = Some((format!("Tool '{name}' permission gate: {state}"), false));
         }
@@ -373,8 +384,8 @@ impl App {
             if !tool.modified {
                 continue;
             }
-            drop(update_tool_permission_gate_in_file(&tools_path, &tool.name, tool.require_permission_gate));
-            drop(update_tool_permission_gate_in_file(&plugin_tools_path, &tool.name, tool.require_permission_gate));
+            drop(update_tool_permission_gate_in_file(&tools_path, &tool.name, tool.require_permission_gate()));
+            drop(update_tool_permission_gate_in_file(&plugin_tools_path, &tool.name, tool.require_permission_gate()));
             tool.modified = false;
         }
 

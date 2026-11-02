@@ -58,7 +58,7 @@ pub(crate) fn execute(
     result_parts.push(rendered_diagnostics.join("\n\n"));
 
     // Attach rustc explanation for failing error codes (E0xxx) if enabled
-    if tool.attach_rustc_explain && !error_codes.is_empty() {
+    if tool.attach_rustc_explain() && !error_codes.is_empty() {
         let mut explanations = Vec::new();
         for code in &error_codes {
             if code.starts_with('E') && code.len() == 5
@@ -79,7 +79,7 @@ pub(crate) fn execute(
         &joined,
         tool.truncate_lines.or(Some(120)),
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     Ok((truncated, has_errors || !output.status.success()))

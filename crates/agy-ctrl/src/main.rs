@@ -178,8 +178,8 @@ fn event_loop(
                     terminal,
                     &app.workspace_root,
                     &agent,
-                    app.sandbox_enabled,
-                    app.isolated_workspace,
+                    app.sandbox_enabled(),
+                    app.isolated_workspace(),
                     resume_conv.as_deref(),
                 ) {
                     Ok(status) => {

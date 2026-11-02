@@ -87,41 +87,7 @@ fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Opti
 /// Extracts tools listed under `mcp_tools:` or `mcpTools:` in the YAML frontmatter.
 #[must_use]
 pub(crate) fn extract_mcp_tools_from_markdown(content: &str) -> Option<HashSet<String>> {
-    let trimmed = content.trim_start();
-    let rest = trimmed.strip_prefix("---")?;
-
-    // Find the end of frontmatter
-    let end_idx = rest.find("\n---")?;
-    let frontmatter = rest.get(..end_idx)?;
-
-    let mut in_mcp_tools_block = false;
-    let mut tools = HashSet::new();
-
-    for line in frontmatter.lines() {
-        let trimmed_line = line.trim();
-        if trimmed_line.starts_with("mcp_tools:") || trimmed_line.starts_with("mcpTools:") {
-            in_mcp_tools_block = true;
-            continue;
-        }
-
-        if in_mcp_tools_block {
-            if let Some(tool_part) = trimmed_line.strip_prefix('-') {
-                let tool_name = tool_part.trim().trim_matches(['"', '\'']);
-                if !tool_name.is_empty() {
-                    tools.insert(tool_name.to_owned());
-                }
-            } else if !trimmed_line.is_empty() && !trimmed_line.starts_with('#') {
-                // Encountered another key
-                break;
-            }
-        }
-    }
-
-    if tools.is_empty() {
-        None
-    } else {
-        Some(tools)
-    }
+    agy_common::frontmatter::AgentFrontmatter::extract_mcp_tools(content)
 }
 
 #[cfg(test)]

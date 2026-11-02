@@ -126,7 +126,7 @@ pub(crate) fn dispatch_action(
 }
 
 fn is_compiler_verification_tool(tool: &ToolDefinition) -> bool {
-    tool.tracks_circuit_breaker || tool.action == ToolAction::CargoJsonDiagnostics
+    tool.tracks_circuit_breaker() || tool.action == ToolAction::CargoJsonDiagnostics
 }
 
 fn update_circuit_breaker(
@@ -186,13 +186,13 @@ fn update_circuit_breaker(
 }
 
 fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> Result<(), String> {
-    if tool.require_git_clean {
+    if tool.require_git_clean() {
         check_git_clean(workspace_root)?;
     }
-    if tool.require_clippy_clean {
+    if tool.require_clippy_clean() {
         check_clippy_clean(workspace_root)?;
     }
-    if tool.require_tests_passed {
+    if tool.require_tests_passed() {
         check_tests_passed(workspace_root)?;
     }
     Ok(())
@@ -274,7 +274,10 @@ mod tests {
 
         let tool = ToolDefinition {
             name: "run_quick_check".to_owned(),
-            tracks_circuit_breaker: true,
+            safety: agy_common::tools::ToolSafetyPolicy {
+                tracks_circuit_breaker: true,
+                ..Default::default()
+            },
             action: ToolAction::StaticCommand,
             ..Default::default()
         };
@@ -322,9 +325,11 @@ mod tests {
 
         let tool = ToolDefinition {
             name: "test_guarded_tool".to_owned(),
-            require_git_clean: true,
-            require_clippy_clean: true,
-            require_tests_passed: true,
+            preconditions: agy_common::tools::ToolPreconditions {
+                require_git_clean: true,
+                require_clippy_clean: true,
+                require_tests_passed: true,
+            },
             ..Default::default()
         };
 

@@ -4,14 +4,17 @@
 //! and `ProtoJSON` models for the `agy-suite` workspace.
 
 pub mod error;
+pub mod frontmatter;
 pub mod gatekeeper;
 pub mod jujutsu;
 pub mod models;
 pub mod resolver;
 pub mod sandbox;
 pub mod supervisor;
+pub mod tools;
 
 pub use error::{AgyError, Result};
+pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
     CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, VcsConflictCheck,
     evaluate_finisher_readiness, evaluate_pre_flight_checks, find_agent_manifest_path,

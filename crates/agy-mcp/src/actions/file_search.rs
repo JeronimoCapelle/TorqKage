@@ -53,7 +53,7 @@ pub(crate) fn execute(
         &joined,
         tool.truncate_lines.or(Some(150)),
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     Ok(truncated)

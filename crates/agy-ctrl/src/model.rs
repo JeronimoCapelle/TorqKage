@@ -1,9 +1,12 @@
 //! Data models, YAML frontmatter parser/serializer, and tool catalog definitions.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::Deserialize;
+use agy_common::tools::{
+    RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
+    ToolSafetyPolicy, ToolSandboxPolicy, resolve_tools,
+};
 
 /// Category of an MCP tool for filtering and visual grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -57,34 +60,109 @@ impl std::str::FromStr for ToolCategory {
 }
 
 /// In-memory representation of an MCP tool loaded from `tools.toml`.
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "Tool configuration holds multiple boolean policy flags"
-)]
 #[derive(Debug, Clone)]
 pub(crate) struct ToolItem {
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) action: String,
     pub(crate) category: ToolCategory,
-    pub(crate) mutating: bool,
-    pub(crate) tracks_circuit_breaker: bool,
+    pub(crate) safety: ToolSafetyPolicy,
+    pub(crate) sandbox: ToolSandboxPolicy,
+    pub(crate) preconditions: ToolPreconditions,
+    pub(crate) formatting: ToolFormatting,
     pub(crate) command: Option<Vec<String>>,
     pub(crate) allowed_directories: Option<Vec<String>>,
     pub(crate) timeout_seconds: Option<u64>,
     pub(crate) output_capture: Option<String>,
-    pub(crate) ban_dangerous_files: bool,
-    pub(crate) enforce_workspace_bounds: bool,
-    pub(crate) attach_rustc_explain: bool,
-    pub(crate) require_clippy_clean: bool,
-    pub(crate) require_tests_passed: bool,
-    pub(crate) require_git_clean: bool,
-    pub(crate) require_permission_gate: bool,
-    pub(crate) enforce_sandbox: bool,
     pub(crate) modified: bool,
 }
 
 impl ToolItem {
+    #[must_use]
+    pub(crate) fn from_definition(def: ToolDefinition) -> Self {
+        let category = def
+            .category
+            .as_deref()
+            .and_then(|c| c.parse().ok())
+            .unwrap_or_else(|| Self::infer_category(&def.name));
+
+        Self {
+            name: def.name,
+            description: def.description,
+            action: match def.action {
+                ToolAction::StaticCommand => "static_command".to_owned(),
+                ToolAction::ParameterizedCommand => "parameterized_command".to_owned(),
+                ToolAction::FileRead => "file_read".to_owned(),
+                ToolAction::FileWrite => "file_write".to_owned(),
+                ToolAction::MpatchEdit => "mpatch_edit".to_owned(),
+                ToolAction::FileSearch => "file_search".to_owned(),
+                ToolAction::CargoJsonDiagnostics => "cargo_json_diagnostics".to_owned(),
+                ToolAction::CliManual => "cli_manual".to_owned(),
+                ToolAction::Unknown(s) => s,
+            },
+            category,
+            safety: def.safety,
+            sandbox: def.sandbox,
+            preconditions: def.preconditions,
+            formatting: def.formatting,
+            command: if def.command.is_empty() { None } else { Some(def.command) },
+            allowed_directories: if def.allowed_directories.is_empty() { None } else { Some(def.allowed_directories) },
+            timeout_seconds: Some(def.timeout_seconds),
+            output_capture: Some(format!("{:?}", def.output_capture).to_lowercase()),
+            modified: false,
+        }
+    }
+
+    #[must_use]
+    pub(crate) const fn mutating(&self) -> bool {
+        self.safety.mutating
+    }
+
+    #[must_use]
+    pub(crate) const fn tracks_circuit_breaker(&self) -> bool {
+        self.safety.tracks_circuit_breaker
+    }
+
+    #[must_use]
+    pub(crate) const fn require_permission_gate(&self) -> bool {
+        self.safety.require_permission_gate
+    }
+
+    #[must_use]
+    pub(crate) const fn enforce_sandbox(&self) -> bool {
+        self.sandbox.enforce_sandbox
+    }
+
+    #[must_use]
+    pub(crate) const fn enforce_workspace_bounds(&self) -> bool {
+        self.sandbox.enforce_workspace_bounds
+    }
+
+    #[must_use]
+    pub(crate) const fn ban_dangerous_files(&self) -> bool {
+        self.sandbox.ban_dangerous_files
+    }
+
+    #[must_use]
+    pub(crate) const fn require_git_clean(&self) -> bool {
+        self.preconditions.require_git_clean
+    }
+
+    #[must_use]
+    pub(crate) const fn require_clippy_clean(&self) -> bool {
+        self.preconditions.require_clippy_clean
+    }
+
+    #[must_use]
+    pub(crate) const fn require_tests_passed(&self) -> bool {
+        self.preconditions.require_tests_passed
+    }
+
+    #[must_use]
+    pub(crate) const fn attach_rustc_explain(&self) -> bool {
+        self.formatting.attach_rustc_explain
+    }
+
     /// Infers the logical category based on the tool name and action.
     #[must_use]
     pub(crate) fn infer_category(name: &str) -> ToolCategory {
@@ -146,173 +224,15 @@ impl ToolItem {
     }
 }
 
-/// Raw representation used for parsing `tools.toml`.
-#[derive(Debug, Clone, Deserialize, Default)]
-struct RawToolToml {
-    inherit: Option<String>,
-    description: Option<String>,
-    action: Option<String>,
-    category: Option<String>,
-    mutating: Option<bool>,
-    tracks_circuit_breaker: Option<bool>,
-    command: Option<Vec<String>>,
-    allowed_directories: Option<Vec<String>>,
-    timeout_seconds: Option<u64>,
-    output_capture: Option<String>,
-    ban_dangerous_files: Option<bool>,
-    enforce_workspace_bounds: Option<bool>,
-    attach_rustc_explain: Option<bool>,
-    require_clippy_clean: Option<bool>,
-    require_tests_passed: Option<bool>,
-    require_git_clean: Option<bool>,
-    require_workspace_clean: Option<bool>,
-    require_permission_gate: Option<bool>,
-    enforce_sandbox: Option<bool>,
-    sandbox: Option<bool>,
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-struct RawToolsFile {
-    #[serde(default)]
-    base_tools: BTreeMap<String, RawToolToml>,
-    #[serde(default)]
-    tools: BTreeMap<String, RawToolToml>,
-}
-
 /// Loads all tools from a `tools.toml` file path.
+///
+/// # Errors
+/// Returns an error if reading or parsing the file fails.
 pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String> {
     let content = fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-    let raw: RawToolsFile = toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
-
-    let mut items = Vec::with_capacity(raw.tools.len());
-
-    for (name, raw_tool) in raw.tools {
-        let base = raw_tool.inherit.as_deref().and_then(|key| {
-            let clean = key.strip_prefix("base_tools.").unwrap_or(key);
-            raw.base_tools.get(clean)
-        });
-
-        let description = raw_tool
-            .description
-            .or_else(|| {
-                let b = base?;
-                b.description.clone()
-            })
-            .unwrap_or_default();
-        let action = raw_tool
-            .action
-            .or_else(|| {
-                let b = base?;
-                b.action.clone()
-            })
-            .unwrap_or_else(|| "static_command".to_owned());
-        let category = raw_tool
-            .category
-            .as_deref()
-            .or_else(|| {
-                let b = base?;
-                b.category.as_deref()
-            })
-            .and_then(|c| c.parse().ok())
-            .unwrap_or_else(|| ToolItem::infer_category(&name));
-
-        let mutating = raw_tool
-            .mutating
-            .or_else(|| {
-                let b = base?;
-                b.mutating
-            })
-            .unwrap_or(false);
-        let tracks_circuit_breaker = raw_tool
-            .tracks_circuit_breaker
-            .or_else(|| {
-                let b = base?;
-                b.tracks_circuit_breaker
-            })
-            .unwrap_or(false);
-
-        let command = raw_tool.command.or_else(|| {
-            let b = base?;
-            b.command.clone()
-        });
-        let allowed_directories = raw_tool.allowed_directories.or_else(|| {
-            let b = base?;
-            b.allowed_directories.clone()
-        });
-        let timeout_seconds = raw_tool.timeout_seconds.or_else(|| {
-            let b = base?;
-            b.timeout_seconds
-        });
-        let output_capture = raw_tool.output_capture.or_else(|| {
-            let b = base?;
-            b.output_capture.clone()
-        });
-        let ban_dangerous_files = raw_tool.ban_dangerous_files.or_else(|| {
-            let b = base?;
-            b.ban_dangerous_files
-        }).unwrap_or(false);
-        let enforce_workspace_bounds = raw_tool.enforce_workspace_bounds.or_else(|| {
-            let b = base?;
-            b.enforce_workspace_bounds
-        }).unwrap_or(false);
-        let attach_rustc_explain = raw_tool.attach_rustc_explain.or_else(|| {
-            let b = base?;
-            b.attach_rustc_explain
-        }).unwrap_or(false);
-        let require_clippy_clean = raw_tool.require_clippy_clean.or_else(|| {
-            let b = base?;
-            b.require_clippy_clean
-        }).unwrap_or(false);
-        let require_tests_passed = raw_tool.require_tests_passed.or_else(|| {
-            let b = base?;
-            b.require_tests_passed
-        }).unwrap_or(false);
-        let require_git_clean = raw_tool
-            .require_workspace_clean
-            .or(raw_tool.require_git_clean)
-            .or_else(|| {
-                let b = base?;
-                b.require_workspace_clean.or(b.require_git_clean)
-            })
-            .unwrap_or(false);
-        let require_permission_gate = raw_tool.require_permission_gate.or_else(|| {
-            let b = base?;
-            b.require_permission_gate
-        }).unwrap_or(false);
-
-        let enforce_sandbox = raw_tool
-            .enforce_sandbox
-            .or(raw_tool.sandbox)
-            .or_else(|| {
-                let b = base?;
-                b.enforce_sandbox.or(b.sandbox)
-            })
-            .unwrap_or(false);
-
-        items.push(ToolItem {
-            name,
-            description,
-            action,
-            category,
-            mutating,
-            tracks_circuit_breaker,
-            command,
-            allowed_directories,
-            timeout_seconds,
-            output_capture,
-            ban_dangerous_files,
-            enforce_workspace_bounds,
-            attach_rustc_explain,
-            require_clippy_clean,
-            require_tests_passed,
-            require_git_clean,
-            require_permission_gate,
-            enforce_sandbox,
-            modified: false,
-        });
-    }
-
-    // Sort alphabetically by name
+    let raw: RawToolsConfig = toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
+    let defs = resolve_tools(&raw);
+    let mut items: Vec<ToolItem> = defs.into_iter().map(ToolItem::from_definition).collect();
     items.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(items)
 }
@@ -379,11 +299,14 @@ pub(crate) fn update_tool_permission_gate_in_file(
     Ok(())
 }
 
+/// Classification flags defining whether an agent is a root agent or a subagent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct AgentRoleFlags {
+    pub(crate) main_agent: bool,
+    pub(crate) subagent: bool,
+}
+
 /// Agent manifest parsed from an agent Markdown file with YAML frontmatter.
-#[allow(
-    clippy::struct_excessive_bools,
-    reason = "Agent manifest reflects multi-flag YAML frontmatter"
-)]
 #[derive(Debug, Clone)]
 pub(crate) struct AgentManifest {
     pub(crate) file_path: PathBuf,
@@ -392,8 +315,7 @@ pub(crate) struct AgentManifest {
     pub(crate) effort: String,
     pub(crate) permission_mode: String,
     pub(crate) command_execution_policy: String,
-    pub(crate) main_agent: bool,
-    pub(crate) subagent: bool,
+    pub(crate) role_flags: AgentRoleFlags,
     pub(crate) inherit_mcp: bool,
     pub(crate) native_tools: Vec<String>,
     pub(crate) mcp_tools: Vec<String>,
@@ -459,10 +381,10 @@ impl AgentManifest {
         if !self.command_execution_policy.is_empty() {
             out.push_str(&format!("commandExecutionPolicy: {}\n", self.command_execution_policy));
         }
-        if self.main_agent {
+        if self.role_flags.main_agent {
             out.push_str("mainAgent: true\n");
         }
-        if self.subagent {
+        if self.role_flags.subagent {
             out.push_str("subagent: true\n");
         }
         if !self.allowed_subagents.is_empty() {
@@ -519,93 +441,8 @@ pub(crate) fn parse_agent_file(path: &Path) -> Result<AgentManifest, String> {
 
 /// Parses an agent Markdown content string.
 pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<AgentManifest, String> {
-    let trimmed = content.trim_start();
-    let rest = trimmed.strip_prefix("---").ok_or_else(|| "Missing leading '---'".to_owned())?;
-    let end_idx = rest.find("\n---").ok_or_else(|| "Missing closing '---'".to_owned())?;
-
-    let frontmatter = rest.get(..end_idx).unwrap_or("");
-    let directives_start = end_idx.saturating_add(4);
-    let directives = rest.get(directives_start..).unwrap_or("").trim_start().to_owned();
-
-    let mut name = String::new();
-    let mut description = String::new();
-    let mut effort = "medium".to_owned();
-    let mut permission_mode = "acceptEdits".to_owned();
-    let mut command_execution_policy = "off".to_owned();
-    let mut main_agent = false;
-    let mut subagent = false;
-    let mut inherit_mcp = true;
-    let mut allowed_subagents = Vec::new();
-    let mut pre_launch_checks = Vec::new();
-    let mut native_tools = Vec::new();
-    let mut mcp_tools = Vec::new();
-
-    let mut current_list: Option<&mut Vec<String>> = None;
-
-    for line in frontmatter.lines() {
-        let trimmed_line = line.trim();
-        if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
-            continue;
-        }
-
-        // List item handling
-        if let Some(item) = trimmed_line.strip_prefix('-') {
-            let val = item.trim().trim_matches(['"', '\'']);
-            if let Some(ref mut list) = current_list
-                && !val.is_empty()
-                && !val.starts_with("name:")
-                && !val.starts_with("command:")
-            {
-                list.push(val.to_owned());
-            }
-            continue;
-        }
-
-        // Reset current list if on a new key
-        current_list = None;
-
-        if let Some(val) = trimmed_line.strip_prefix("name:") {
-            val.trim().trim_matches(['"', '\'']).clone_into(&mut name);
-        } else if let Some(val) = trimmed_line.strip_prefix("description:") {
-            val.trim().trim_matches(['"', '\'']).clone_into(&mut description);
-        } else if let Some(val) = trimmed_line.strip_prefix("effort:") {
-            val.trim().trim_matches(['"', '\'']).clone_into(&mut effort);
-        } else if let Some(val) = trimmed_line.strip_prefix("permissionMode:") {
-            val.trim().trim_matches(['"', '\'']).clone_into(&mut permission_mode);
-        } else if let Some(val) = trimmed_line.strip_prefix("commandExecutionPolicy:") {
-            val.trim().trim_matches(['"', '\'']).clone_into(&mut command_execution_policy);
-        } else if let Some(val) = trimmed_line.strip_prefix("mainAgent:") {
-            main_agent = val.trim().parse::<bool>().unwrap_or(false);
-        } else if let Some(val) = trimmed_line.strip_prefix("subagent:") {
-            subagent = val.trim().parse::<bool>().unwrap_or(false);
-        } else if let Some(val) = trimmed_line.strip_prefix("inheritMcp:") {
-            inherit_mcp = val.trim().parse::<bool>().unwrap_or(true);
-        } else if trimmed_line.starts_with("allowed_subagents:") {
-            current_list = Some(&mut allowed_subagents);
-        } else if trimmed_line.starts_with("pre_launch_checks:")
-            || trimmed_line.starts_with("preLaunchChecks:")
-            || trimmed_line.starts_with("gatekeeper_checks:")
-        {
-            if trimmed_line.ends_with("[]") {
-                pre_launch_checks.clear();
-            } else {
-                current_list = Some(&mut pre_launch_checks);
-            }
-        } else if trimmed_line.starts_with("tools:") {
-            if trimmed_line.ends_with("[]") {
-                native_tools.clear();
-            } else {
-                current_list = Some(&mut native_tools);
-            }
-        } else if trimmed_line.starts_with("mcp_tools:") || trimmed_line.starts_with("mcpTools:") {
-            if trimmed_line.ends_with("[]") {
-                mcp_tools.clear();
-            } else {
-                current_list = Some(&mut mcp_tools);
-            }
-        }
-    }
-
+    let parsed = agy_common::frontmatter::AgentFrontmatter::parse(content)?;
+    let mut name = parsed.name;
     if name.is_empty()
         && let Some(stem) = file_path.file_stem().and_then(std::ffi::OsStr::to_str)
     {
@@ -615,18 +452,20 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
     Ok(AgentManifest {
         file_path,
         name,
-        description,
-        effort,
-        permission_mode,
-        command_execution_policy,
-        main_agent,
-        subagent,
-        inherit_mcp,
-        native_tools,
-        mcp_tools,
-        allowed_subagents,
-        pre_launch_checks,
-        directives,
+        description: parsed.description,
+        effort: parsed.effort,
+        permission_mode: parsed.permission_mode,
+        command_execution_policy: parsed.command_execution_policy,
+        role_flags: AgentRoleFlags {
+            main_agent: parsed.main_agent,
+            subagent: parsed.subagent,
+        },
+        inherit_mcp: parsed.inherit_mcp,
+        native_tools: parsed.native_tools,
+        mcp_tools: parsed.mcp_tools,
+        allowed_subagents: parsed.allowed_subagents,
+        pre_launch_checks: parsed.pre_launch_checks,
+        directives: parsed.directives,
         modified: false,
     })
 }

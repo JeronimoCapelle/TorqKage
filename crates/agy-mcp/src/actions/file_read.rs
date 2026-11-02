@@ -18,7 +18,7 @@ pub(crate) fn execute(
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'path'".to_owned())?;
 
-    if tool.ban_dangerous_files {
+    if tool.ban_dangerous_files() {
         check_dangerous_files(Path::new(path_str))?;
     }
 
@@ -26,7 +26,7 @@ pub(crate) fn execute(
         workspace_root,
         path_str,
         &tool.allowed_directories,
-        tool.enforce_workspace_bounds,
+        tool.enforce_workspace_bounds(),
     )?;
 
     check_enforce_boundaries(
@@ -52,7 +52,7 @@ pub(crate) fn execute(
         &content_to_process,
         tool.truncate_lines,
         tool.truncate_bytes,
-        tool.emit_truncation_notice,
+        tool.emit_truncation_notice(),
     );
 
     Ok(result)
