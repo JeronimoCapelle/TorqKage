@@ -88,27 +88,48 @@ fn check_tool_attribute_in_config(tool_name: &str, root: &Path, attribute: &str)
         candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml"));
     }
 
-    let needle = format!("{attribute} = true");
     for path in candidates {
-        if path.is_file() && let Ok(content) = std::fs::read_to_string(&path) {
-            let header = format!("[tools.{tool_name}]");
-            let mut in_section = false;
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed == header {
-                    in_section = true;
-                    continue;
+        if path.is_file()
+            && let Ok(content) = std::fs::read_to_string(&path)
+            && check_section_attribute(&content, &format!("[tools.{tool_name}]"), attribute)
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn check_section_attribute(content: &str, section_header: &str, attribute: &str) -> bool {
+    let mut in_section = false;
+    let mut inherit_target = None;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == section_header {
+            in_section = true;
+            continue;
+        }
+        if in_section {
+            if trimmed.starts_with('[') {
+                break;
+            }
+            if let Some((key, val)) = trimmed.split_once('=') {
+                let k = key.trim();
+                let v = val.trim().trim_matches(['"', '\'']);
+                if k == attribute && v == "true" {
+                    return true;
                 }
-                if in_section {
-                    if trimmed.starts_with('[') {
-                        break;
-                    }
-                    if trimmed.contains(&needle) {
-                        return true;
-                    }
+                if k == "inherit" {
+                    let clean_target = v.strip_prefix("base_tools.").unwrap_or(v);
+                    inherit_target = Some(clean_target.to_owned());
                 }
             }
         }
+    }
+
+    if let Some(base_name) = inherit_target {
+        return check_section_attribute(content, &format!("[base_tools.{base_name}]"), attribute);
     }
 
     false
@@ -211,5 +232,19 @@ mod tests {
         assert!(res.reason.unwrap().contains("applies automated filesystem or code modifications"));
 
         drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_inherited_mutating_tool_triggers_ask() {
+        let sample = r#"
+[base_tools.base_mutator]
+mutating = true
+
+[tools.child_tool]
+inherit = "base_tools.base_mutator"
+action = "static_command"
+"#;
+        assert!(check_section_attribute(sample, "[tools.child_tool]", "mutating"));
+        assert!(!check_section_attribute(sample, "[tools.child_tool]", "require_permission_gate"));
     }
 }

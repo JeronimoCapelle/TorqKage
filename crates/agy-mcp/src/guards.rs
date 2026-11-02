@@ -7,36 +7,85 @@ use crate::models::AgentGuard;
 /// Inspects a target path against dangerous files, secrets, and repository internals.
 ///
 /// # Errors
-/// Returns an error if the path attempts to access sensitive files or `.git/`.
+/// Returns an error if the path attempts to access sensitive files, credentials, or VCS internals (`.git/`, `.jj/`).
 pub(crate) fn check_dangerous_files(path: &Path) -> Result<(), String> {
     let lossy = path.to_string_lossy().to_lowercase();
 
     // Check for sensitive filenames and patterns
-    let dangerous_tokens = [
-        ".env",
+    let dangerous_patterns = [
         "id_rsa",
         "id_ed25519",
         "id_ecdsa",
-        ".git/",
-        ".git\\",
-        "secret",
-        "token",
-        "credential",
-        "password",
         ".bashrc",
         ".zshrc",
         ".profile",
     ];
 
-    for token in dangerous_tokens {
-        if lossy.contains(token) {
+    for pat in dangerous_patterns {
+        if lossy.contains(pat) {
             return Err(format!(
-                "Security policy violation: Access to sensitive file pattern '{token}' is blocked."
+                "Security policy violation: Access to sensitive file pattern '{pat}' is blocked."
+            ));
+        }
+    }
+
+    // Inspect individual path components and file names for credentials and VCS internal directories
+    for comp in path.components() {
+        let name = comp.as_os_str().to_string_lossy().to_lowercase();
+        let p = Path::new(&name);
+        let has_sensitive_ext = p
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("key") || ext.eq_ignore_ascii_case("pem"));
+
+        if name == ".git"
+            || name == ".jj"
+            || name == ".env"
+            || name.starts_with(".env.")
+            || name == "secret"
+            || name == "secrets"
+            || name == "credential"
+            || name == "credentials"
+            || name == "password"
+            || name == "passwords"
+            || has_sensitive_ext
+        {
+            return Err(format!(
+                "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
             ));
         }
     }
 
     Ok(())
+}
+
+/// Helper verifying if a relative path is scoped within a directory name at root or crate level.
+fn matches_directory_scope(rel_path: &str, target_dir: &str) -> bool {
+    let clean = target_dir.trim_matches(['/', '\\']);
+    if clean == "*" {
+        return true;
+    }
+
+    // 1. Root-level match: e.g. "src/lib.rs" matches "src"
+    if rel_path == clean
+        || rel_path.starts_with(&format!("{clean}/"))
+        || rel_path.starts_with(&format!("{clean}\\"))
+    {
+        return true;
+    }
+
+    // 2. Cargo workspace crate-level match: e.g. "crates/agy-mcp/src/main.rs" matches "src"
+    for prefix in &["crates/", "packages/", "crates\\", "packages\\"] {
+        if let Some(sub) = rel_path.strip_prefix(prefix)
+            && let Some((_crate_name, crate_rel)) = sub.split_once(['/', '\\'])
+            && (crate_rel == clean
+                || crate_rel.starts_with(&format!("{clean}/"))
+                || crate_rel.starts_with(&format!("{clean}\\")))
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 /// Resolves and confines a relative path within the canonical workspace bounds.
@@ -116,11 +165,7 @@ pub(crate) fn resolve_safe_path(
 
         let rel_lossy = relative.to_string_lossy();
         let allowed = allowed_directories.iter().any(|dir| {
-            rel_lossy == *dir
-                || rel_lossy.starts_with(&format!("{dir}/"))
-                || rel_lossy.starts_with(&format!("{dir}\\"))
-                || rel_lossy.contains(&format!("/{dir}/"))
-                || rel_lossy.contains(&format!("\\{dir}\\"))
+            matches_directory_scope(&rel_lossy, dir)
         });
 
         if !allowed {
@@ -163,19 +208,12 @@ pub(crate) fn check_enforce_boundaries(
     }
 
     // 2. Enforce single-directory confinement
-    if let Some(dir) = enforce_dir {
-        let clean_dir = dir.trim_matches(['/', '\\']);
-        let allowed = rel_lossy == clean_dir
-            || rel_lossy.starts_with(&format!("{clean_dir}/"))
-            || rel_lossy.starts_with(&format!("{clean_dir}\\"))
-            || rel_lossy.contains(&format!("/{clean_dir}/"))
-            || rel_lossy.contains(&format!("\\{clean_dir}\\"));
-
-        if !allowed {
-            return Err(format!(
-                "Security policy violation: Path '{rel_lossy}' is outside enforced directory '{clean_dir}'"
-            ));
-        }
+    if let Some(dir) = enforce_dir
+        && !matches_directory_scope(&rel_lossy, dir)
+    {
+        return Err(format!(
+            "Security policy violation: Path '{rel_lossy}' is outside enforced directory '{dir}'"
+        ));
     }
 
     Ok(())
@@ -215,15 +253,9 @@ pub(crate) fn check_agent_guard(
 
     // 2. Check disallowed directories
     for disallowed_dir in &guard.disallowed_dirs {
-        let clean = disallowed_dir.trim_matches(['/', '\\']);
-        let is_disallowed = rel_lossy == clean
-            || rel_lossy.starts_with(&format!("{clean}/"))
-            || rel_lossy.starts_with(&format!("{clean}\\"))
-            || rel_lossy.contains(&format!("/{clean}/"))
-            || rel_lossy.contains(&format!("\\{clean}\\"));
-        if is_disallowed {
+        if matches_directory_scope(&rel_lossy, disallowed_dir) {
             return Err(format!(
-                "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{clean}/'."
+                "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{disallowed_dir}/'."
             ));
         }
     }
@@ -241,12 +273,7 @@ pub(crate) fn check_agent_guard(
         }
 
         let is_allowed = guard.allowed_dirs.iter().any(|dir| {
-            let clean = dir.trim_matches(['/', '\\']);
-            rel_lossy == clean
-                || rel_lossy.starts_with(&format!("{clean}/"))
-                || rel_lossy.starts_with(&format!("{clean}\\"))
-                || rel_lossy.contains(&format!("/{clean}/"))
-                || rel_lossy.contains(&format!("\\{clean}\\"))
+            matches_directory_scope(&rel_lossy, dir)
         });
 
         if !is_allowed {
@@ -331,7 +358,11 @@ mod tests {
         assert!(check_dangerous_files(Path::new("config/.env.local")).is_err());
         assert!(check_dangerous_files(Path::new("keys/id_rsa")).is_err());
         assert!(check_dangerous_files(Path::new(".git/HEAD")).is_err());
+        assert!(check_dangerous_files(Path::new(".jj/working_copy")).is_err());
+        assert!(check_dangerous_files(Path::new("secrets/private.pem")).is_err());
         assert!(check_dangerous_files(Path::new("src/lib.rs")).is_ok());
+        assert!(check_dangerous_files(Path::new("src/tokenizer.rs")).is_ok());
+        assert!(check_dangerous_files(Path::new("src/tokens.rs")).is_ok());
     }
 
     #[test]
@@ -349,6 +380,7 @@ mod tests {
         assert!(resolve_safe_path(&root, "tests/unit_test.rs", &allowed, false).is_ok());
         assert!(resolve_safe_path(&root, "crates/core/tests/test.rs", &allowed, false).is_ok());
         assert!(resolve_safe_path(&root, "src/main.rs", &allowed, false).is_err());
+        assert!(resolve_safe_path(&root, "docs/fixtures/tests/sample.rs", &allowed, false).is_err());
     }
 
     #[test]

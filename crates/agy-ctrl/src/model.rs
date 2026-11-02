@@ -81,6 +81,7 @@ pub(crate) struct ToolItem {
     pub(crate) require_git_clean: bool,
     pub(crate) require_permission_gate: bool,
     pub(crate) enforce_sandbox: bool,
+    pub(crate) modified: bool,
 }
 
 impl ToolItem {
@@ -93,7 +94,6 @@ impl ToolItem {
             || name == "run_cargo_fmt"
             || name == "run_cargo_check_targets"
             || name == "run_cargo_expand"
-            || name == "run_cargo_zigbuild"
         {
             ToolCategory::Compilation
         } else if name.starts_with("run_cargo_test")
@@ -102,23 +102,14 @@ impl ToolItem {
             || name.starts_with("run_mutation")
             || name.starts_with("run_cargo_insta")
             || name.starts_with("run_cargo_fuzz")
-            || name.starts_with("run_property")
-            || name.starts_with("run_concurrency")
-            || name == "run_qemu_kernel_test"
         {
             ToolCategory::Testing
         } else if name.starts_with("run_cargo_bench")
-            || name.starts_with("run_gungraun")
-            || name.starts_with("run_criterion")
-            || name.starts_with("run_divan")
             || name.starts_with("run_cargo_asm")
             || name.starts_with("run_flamegraph")
-            || name.starts_with("run_samply")
             || name.starts_with("run_cargo_perf")
             || name.starts_with("run_cargo_bloat")
             || name.starts_with("run_hyperfine")
-            || name.starts_with("run_valgrind")
-            || name.starts_with("run_strace")
             || name.starts_with("analyze_llvm")
             || name.starts_with("inspect_binary")
             || name.starts_with("inspect_symbol")
@@ -317,12 +308,75 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             require_git_clean,
             require_permission_gate,
             enforce_sandbox,
+            modified: false,
         });
     }
 
     // Sort alphabetically by name
     items.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(items)
+}
+
+/// Updates or removes `require_permission_gate = true` for the specified tool in a `tools.toml` file.
+///
+/// # Errors
+/// Returns an error if reading or writing the file fails.
+pub(crate) fn update_tool_permission_gate_in_file(
+    file_path: &Path,
+    tool_name: &str,
+    require_gate: bool,
+) -> Result<(), String> {
+    if !file_path.is_file() {
+        return Ok(());
+    }
+    let content = fs::read_to_string(file_path)
+        .map_err(|e| format!("Failed to read {}: {e}", file_path.display()))?;
+
+    let header = format!("[tools.{tool_name}]");
+    let mut lines: Vec<String> = content.lines().map(ToOwned::to_owned).collect();
+    let mut in_section = false;
+    let mut found_gate_line = None;
+    let mut section_start_idx = None;
+
+    for (idx, line) in lines.iter().enumerate() {
+        let trimmed = line.trim();
+        if trimmed == header {
+            in_section = true;
+            section_start_idx = Some(idx);
+            continue;
+        }
+        if in_section {
+            if trimmed.starts_with('[') {
+                break;
+            }
+            if trimmed.starts_with("require_permission_gate") {
+                found_gate_line = Some(idx);
+                break;
+            }
+        }
+    }
+
+    if let Some(gate_idx) = found_gate_line {
+        if require_gate {
+            "require_permission_gate = true".clone_into(&mut lines[gate_idx]);
+        } else {
+            lines.remove(gate_idx);
+        }
+    } else if require_gate
+        && let Some(start_idx) = section_start_idx
+    {
+        lines.insert(start_idx.saturating_add(1), "require_permission_gate = true".to_owned());
+    }
+
+    let mut new_content = lines.join("\n");
+    if !new_content.ends_with('\n') {
+        new_content.push('\n');
+    }
+
+    fs::write(file_path, new_content)
+        .map_err(|e| format!("Failed to write {}: {e}", file_path.display()))?;
+
+    Ok(())
 }
 
 /// Agent manifest parsed from an agent Markdown file with YAML frontmatter.
@@ -428,7 +482,7 @@ impl AgentManifest {
         }
         out.push_str("mcpServers:\n");
         out.push_str("  - name: agy-tools\n");
-        out.push_str("    command: /home/infinite/.cargo/bin/agy-mcp\n");
+        out.push_str("    command: agy-mcp\n");
         out.push_str(&format!("    args: [\"--agent\", \"{}\"]\n", self.name));
 
         if self.native_tools.is_empty() {

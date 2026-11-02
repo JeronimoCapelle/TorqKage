@@ -14,7 +14,7 @@ tools:
 inheritMcp: false
 mcpServers:
   - name: agy-tools
-    command: /home/infinite/.cargo/bin/agy-mcp
+    command: agy-mcp
     args: ["--agent", "finisher"]
 mcp_tools:
   - read_project_file

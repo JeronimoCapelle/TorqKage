@@ -112,18 +112,28 @@ fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
 }
 
 fn collect_modified_files(root: &Path) -> Vec<String> {
-    let output = Command::new("git")
-        .args(["status", "-s"])
-        .current_dir(root)
-        .output();
+    let raw_output = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
+        Command::new("jj")
+            .args(["--color=never", "diff", "--summary"])
+            .current_dir(root)
+            .output()
+    } else {
+        Command::new("git")
+            .args(["status", "-s"])
+            .current_dir(root)
+            .output()
+    };
 
     let mut files = Vec::new();
-    if let Ok(out) = output
+    if let Ok(out) = raw_output
         && out.status.success()
     {
         let s = String::from_utf8_lossy(&out.stdout);
         for line in s.lines().take(10) {
             let trimmed = line.trim();
+            if trimmed == "A target" || trimmed == "M target" {
+                continue;
+            }
             if let Some((_, path)) = trimmed.split_once(' ') {
                 files.push(path.trim().to_owned());
             } else if !trimmed.is_empty() {

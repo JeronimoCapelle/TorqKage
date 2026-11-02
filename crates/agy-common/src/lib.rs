@@ -3,7 +3,6 @@
 //! Shared types, process hygiene supervisor, dynamic workspace root resolver,
 //! and `ProtoJSON` models for the `agy-suite` workspace.
 
-pub mod diagnostics;
 pub mod error;
 pub mod gatekeeper;
 pub mod jujutsu;
@@ -12,11 +11,11 @@ pub mod resolver;
 pub mod sandbox;
 pub mod supervisor;
 
-pub use diagnostics::{CompactErrorReport, DiagnosticSpan};
 pub use error::{AgyError, Result};
 pub use gatekeeper::{
-    GateCheck, GateCheckStatus, evaluate_finisher_readiness, evaluate_pre_flight_checks,
-    find_agent_manifest_path, parse_pre_launch_checks,
+    CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, VcsConflictCheck,
+    evaluate_finisher_readiness, evaluate_pre_flight_checks, find_agent_manifest_path,
+    parse_pre_launch_checks,
 };
 pub use jujutsu::JujutsuWorkspace;
 pub use models::{

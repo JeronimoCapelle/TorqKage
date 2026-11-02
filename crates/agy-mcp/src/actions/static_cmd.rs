@@ -1,8 +1,7 @@
 //! `static_command` action handler executing pre-configured argv vectors with zero shell injection.
 
 use std::path::Path;
-use std::process::Command;
-use agy_common::SubprocessSupervisor;
+use crate::actions::execute_supervised_command;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
@@ -23,46 +22,15 @@ pub(crate) fn execute(
     let program = tool.command.first().map_or("", String::as_str);
     let args = tool.command.get(1..).unwrap_or(&[]);
 
-    let output = if tool.enforce_sandbox {
-        if agy_common::sandbox::is_inside_outer_sandbox() {
-            let mut cmd = Command::new(program);
-            cmd.args(args);
-            cmd.current_dir(workspace_root);
-            SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
-        } else {
-            if which::which("bwrap").is_err() {
-                return Err(format!(
-                    "Security enforcement error: Tool '{}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active.",
-                    tool.name
-                ));
-            }
-            let cmd = agy_common::sandbox::build_bubblewrap_command(
-                program,
-                args,
-                &[],
-                workspace_root,
-            );
-            let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
-            if !out.status.success() {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                if stderr.contains("Creating new namespace failed")
-                    || stderr.contains("No permissions to create new namespace")
-                    || stderr.contains("Setting up mount namespace failed")
-                {
-                    return Err(format!(
-                        "Security enforcement error: Sandbox execution failed for tool '{}': {stderr}",
-                        tool.name
-                    ));
-                }
-            }
-            out
-        }
-    } else {
-        let mut cmd = Command::new(program);
-        cmd.args(args);
-        cmd.current_dir(workspace_root);
-        SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
-    };
+    let output = execute_supervised_command(
+        program,
+        args,
+        &[],
+        workspace_root,
+        tool.timeout_seconds,
+        tool.enforce_sandbox,
+        &tool.name,
+    )?;
 
     let is_error = !output.status.success();
 

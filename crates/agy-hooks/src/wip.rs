@@ -34,17 +34,38 @@ fn resolve_workspace_root(input: &PreInvocationInput) -> PathBuf {
 }
 
 fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocationResponse {
-    let git_status = Command::new("git")
-        .args(["status", "-s"])
-        .current_dir(root)
-        .output();
+    let status_str = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
+        let jj_status = Command::new("jj")
+            .args(["--color=never", "diff", "--summary"])
+            .current_dir(root)
+            .output();
 
-    let output_bytes = match git_status {
-        Ok(output) if output.status.success() => output.stdout,
-        _ => return PreInvocationResponse::empty(),
+        match jj_status {
+            Ok(output) if output.status.success() => {
+                let s = String::from_utf8_lossy(&output.stdout);
+                let filtered: Vec<&str> = s
+                    .lines()
+                    .filter(|l| {
+                        let t = l.trim();
+                        !t.is_empty() && t != "A target" && t != "M target"
+                    })
+                    .collect();
+                filtered.join("\n")
+            }
+            _ => String::new(),
+        }
+    } else {
+        let git_status = Command::new("git")
+            .args(["status", "-s"])
+            .current_dir(root)
+            .output();
+
+        match git_status {
+            Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout).into_owned(),
+            _ => String::new(),
+        }
     };
 
-    let status_str = String::from_utf8_lossy(&output_bytes);
     let trimmed = status_str.trim();
     if trimmed.is_empty() {
         return PreInvocationResponse::empty();

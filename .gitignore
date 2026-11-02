@@ -1,4 +1,6 @@
 # Build Artifacts
+# Note: In isolated agent workspaces (.workspaces/<agent>), `target` is a symlink to repo root target.
+# Jujutsu processes gitignore rules differently for symlinks; agy_common::is_workspace_clean explicitly filters `target`.
 target
 target/
 Cargo.lock.tmp

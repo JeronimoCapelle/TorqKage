@@ -13,7 +13,7 @@ tools:
 inheritMcp: false
 mcpServers:
   - name: agy-tools
-    command: /home/infinite/.cargo/bin/agy-mcp
+    command: agy-mcp
     args: ["--agent", "sysadmin"]
 mcp_tools:
   - query_tool_help

@@ -140,7 +140,10 @@ impl SubprocessSupervisor {
                         libc::kill(raw_pid, libc::SIGKILL);
                     }
                 }
-                drop(worker.join());
+                // Allow up to 50ms for worker to unblock post-kill; avoid indefinite deadlock
+                if rx.recv_timeout(std::time::Duration::from_millis(50)).is_ok() {
+                    drop(worker.join());
+                }
                 Err(format!(
                     "Execution timed out after {timeout_seconds}s and was terminated."
                 ))

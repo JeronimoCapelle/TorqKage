@@ -7,7 +7,7 @@ subagent: true
 inheritMcp: false
 mcpServers:
   - name: agy-tools
-    command: /home/infinite/.cargo/bin/agy-mcp
+    command: agy-mcp
     args: ["--agent", "mini"]
 tools: []
 mcp_tools:

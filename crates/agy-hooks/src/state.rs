@@ -24,6 +24,28 @@ pub(crate) fn execute() {
 }
 
 fn query_current_branch(root: &Path) -> String {
+    if agy_common::JujutsuWorkspace::is_jj_repo(root) {
+        let bookmark_output = Command::new("jj")
+            .args(["--color=never", "log", "-r", "@", "--no-graph", "-T", "bookmarks"])
+            .current_dir(root)
+            .output();
+
+        if let Ok(out) = bookmark_output
+            && out.status.success()
+        {
+            let bm = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+            if !bm.is_empty() {
+                return bm;
+            }
+        }
+
+        if let Some(ws_name) = agy_common::JujutsuWorkspace::current_workspace_name(root) {
+            return format!("jj workspace: {ws_name}");
+        }
+
+        return "@ (working copy)".to_owned();
+    }
+
     let output = Command::new("git")
         .args(["rev-parse", "--abbrev-ref", "HEAD"])
         .current_dir(root)
@@ -43,6 +65,30 @@ fn query_current_branch(root: &Path) -> String {
 }
 
 fn query_git_status(root: &Path) -> String {
+    if agy_common::JujutsuWorkspace::is_jj_repo(root) {
+        if agy_common::JujutsuWorkspace::is_workspace_clean(root) {
+            return "Clean".to_owned();
+        }
+        let output = Command::new("jj")
+            .args(["--color=never", "diff", "--summary"])
+            .current_dir(root)
+            .output();
+        if let Ok(out) = output
+            && out.status.success()
+        {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let count = stdout
+                .lines()
+                .filter(|l| {
+                    let t = l.trim();
+                    !t.is_empty() && t != "A target" && t != "M target"
+                })
+                .count();
+            return format!("{count} modified file(s)");
+        }
+        return "Unavailable".to_owned();
+    }
+
     let output = Command::new("git")
         .args(["status", "-s"])
         .current_dir(root)

@@ -1,8 +1,7 @@
 //! `parameterized_cmd` action handler executing bounded host binaries with argument regex validation.
 
 use std::path::Path;
-use std::process::Command;
-use agy_common::SubprocessSupervisor;
+use crate::actions::execute_supervised_command;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
@@ -109,79 +108,15 @@ pub(crate) fn execute(
         dynamic_args.push(".".to_owned());
     }
 
-    let output = if tool.enforce_sandbox {
-        if agy_common::sandbox::is_inside_outer_sandbox() {
-            let mut cmd = Command::new(binary);
-            cmd.args(base_args);
-            cmd.args(&dynamic_args);
-            cmd.current_dir(workspace_root);
-            SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?
-        } else {
-            if which::which("bwrap").is_err() {
-                return Err(format!(
-                    "Security enforcement error: Tool '{}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active.",
-                    tool.name
-                ));
-            }
-            let cmd = agy_common::sandbox::build_bubblewrap_command(
-                binary,
-                base_args,
-                &dynamic_args,
-                workspace_root,
-            );
-            let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
-            if !out.status.success() {
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                if stderr.contains("Creating new namespace failed")
-                    || stderr.contains("No permissions to create new namespace")
-                    || stderr.contains("Setting up mount namespace failed")
-                {
-                    return Err(format!(
-                        "Security enforcement error: Sandbox execution failed for tool '{}': {stderr}",
-                        tool.name
-                    ));
-                }
-            }
-            out
-        }
-    } else {
-        let mut cmd = Command::new(binary);
-        cmd.args(base_args);
-        cmd.args(&dynamic_args);
-        cmd.current_dir(workspace_root);
-
-        let out = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
-        if binary == "bwrap" && !out.status.success() {
-            let stderr_snippet = String::from_utf8_lossy(&out.stderr);
-            if stderr_snippet.contains("uid map")
-                || stderr_snippet.contains("Read-only file system")
-                || stderr_snippet.contains("Creating new namespace failed")
-                || stderr_snippet.contains("Permission denied")
-            {
-                // Fallback to inner command ONLY if already running inside an outer sandbox
-                if agy_common::sandbox::is_inside_outer_sandbox() {
-                    if let Some((inner_bin, inner_args)) = extract_inner_bwrap_command(&tool.command) {
-                        let mut fallback_cmd = Command::new(inner_bin);
-                        fallback_cmd.args(&inner_args);
-                        fallback_cmd.args(&dynamic_args);
-                        fallback_cmd.current_dir(workspace_root);
-                        SubprocessSupervisor::run_supervised(fallback_cmd, tool.timeout_seconds)?
-                    } else {
-                        out
-                    }
-                } else {
-                    return Err(format!(
-                        "Security enforcement error: Bubblewrap sandbox execution failed for tool '{}' outside container: {stderr_snippet}",
-                        tool.name
-                    ));
-                }
-            } else {
-                out
-            }
-        } else {
-            out
-        }
-    };
+    let output = execute_supervised_command(
+        binary,
+        base_args,
+        &dynamic_args,
+        workspace_root,
+        tool.timeout_seconds,
+        tool.enforce_sandbox,
+        &tool.name,
+    )?;
 
     let is_error = if (binary == "rg" || binary == "ast-grep")
         && output.status.code() == Some(1)
@@ -248,39 +183,6 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
     // Strict fallback: letters, numbers, underscore, colon, hyphen
     val.chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == ':' || c == '-')
-}
-
-/// Extracts the underlying target command from a Bubblewrap invocation array.
-///
-/// Skips flags such as `--ro-bind <src> <dst>`, `--tmpfs <dir>`, and returns the first
-/// non-flag argument along with any subsequent arguments.
-fn extract_inner_bwrap_command(command: &[String]) -> Option<(&str, Vec<&str>)> {
-    let mut iter = command.iter().skip(1);
-    while let Some(arg) = iter.next() {
-        if arg == "--ro-bind"
-            || arg == "--bind"
-            || arg == "--dev-bind"
-            || arg == "--ro-bind-try"
-            || arg == "--bind-try"
-        {
-            let _ = iter.next();
-            let _ = iter.next();
-        } else if arg == "--tmpfs"
-            || arg == "--proc"
-            || arg == "--dev"
-            || arg == "--dir"
-            || arg == "--setenv"
-            || arg == "--unsetenv"
-            || arg == "--chdir"
-        {
-            let _ = iter.next();
-        } else if !arg.starts_with("--") {
-            let bin = arg.as_str();
-            let remaining: Vec<&str> = iter.map(String::as_str).collect();
-            return Some((bin, remaining));
-        }
-    }
-    None
 }
 
 #[cfg(test)]
@@ -379,23 +281,6 @@ mod tests {
         let res = execute(&tool, &temp, &args);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("violates pattern"));
-    }
-
-    #[test]
-    fn test_extract_inner_bwrap_command() {
-        let bwrap_cmd = vec![
-            "bwrap".to_owned(),
-            "--unshare-all".to_owned(),
-            "--tmpfs".to_owned(),
-            "/".to_owned(),
-            "--ro-bind".to_owned(),
-            "/usr".to_owned(),
-            "/usr".to_owned(),
-            "python3".to_owned(),
-            "-c".to_owned(),
-        ];
-        let extracted = extract_inner_bwrap_command(&bwrap_cmd);
-        assert_eq!(extracted, Some(("python3", vec!["-c"])));
     }
 
     #[test]

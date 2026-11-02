@@ -1,8 +1,7 @@
 //! Workspace conflict detection for `PreToolUse` safety gate (`check-conflicts`).
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use agy_common::{PreToolResponse, WorkspaceResolver};
+use agy_common::{GateCheck, GateCheckStatus, PreToolResponse, VcsConflictCheck, WorkspaceResolver};
 
 /// Executes the `check-conflicts` command.
 ///
@@ -26,43 +25,13 @@ pub(crate) fn execute() {
 
 /// Checks whether any conflicts exist in the repository.
 ///
-/// Queries `jj log -r 'conflicts() & @' --no-graph` first, falling back to `git diff --check`.
+/// Delegates to `agy_common::VcsConflictCheck` to inspect Jujutsu and Git conflict markers.
 pub(crate) fn detect_conflicts(root: &Path) -> Option<String> {
-    // 1. Check Jujutsu conflicts in working copy (@)
-    let jj_output = Command::new("jj")
-        .args(["log", "-r", "conflicts() & @", "--no-graph", "-T", "change_id"])
-        .current_dir(root)
-        .output();
-
-    if let Ok(out) = jj_output
-        && out.status.success()
-    {
-        let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-        if !stdout.is_empty() {
-            return Some(format!(
-                "Execution blocked by agy-hooks: unresolved Jujutsu conflict in active commit (@: {stdout}). Resolve conflict markers before running compilation or tests."
-            ));
-        }
+    match VcsConflictCheck.execute(root) {
+        GateCheckStatus::Passed => None,
+        GateCheckStatus::Failed(reason) => Some(format!("Execution blocked by agy-hooks: {reason}")),
+        GateCheckStatus::Warning(warn) => Some(format!("Execution blocked by agy-hooks: {warn}")),
     }
-
-    // 2. Check Git conflict markers in working tree
-    let git_output = Command::new("git")
-        .args(["diff", "--check"])
-        .current_dir(root)
-        .output();
-
-    if let Ok(out) = git_output {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let combined = format!("{stdout}\n{stderr}");
-        if combined.contains("leftover conflict marker") || combined.contains("conflict marker") {
-            return Some(
-                "Execution blocked by agy-hooks: unresolved conflict markers detected in working tree (git diff --check). Please resolve all '<<<<<<<' markers before proceeding.".to_owned(),
-            );
-        }
-    }
-
-    None
 }
 
 #[cfg(test)]

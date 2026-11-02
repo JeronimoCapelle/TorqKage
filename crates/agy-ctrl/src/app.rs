@@ -1,7 +1,10 @@
 //! Application state machine, navigation, tool toggling, and atomic operations.
 
 use std::path::PathBuf;
-use crate::model::{AgentManifest, ToolCategory, ToolItem, discover_agents, load_tools_from_file};
+use crate::model::{
+    AgentManifest, ToolCategory, ToolItem, discover_agents, load_tools_from_file,
+    update_tool_permission_gate_in_file,
+};
 use crate::vcs::{rollback_agent_file, run_plugin_install, run_plugin_validation, save_agent_to_disk, take_vcs_snapshot};
 
 /// Active view tab in the control deck.
@@ -174,6 +177,7 @@ impl App {
             && let Some(tool) = self.current_highlighted_tool_mut()
         {
             tool.require_permission_gate = !tool.require_permission_gate;
+            tool.modified = true;
             let state = if tool.require_permission_gate { "ASK (Interactive confirmation)" } else { "ALLOW (Autonomous execution)" };
             let name = tool.name.clone();
             self.status_message = Some((format!("Tool '{name}' permission gate: {state}"), false));
@@ -349,16 +353,32 @@ impl App {
 
     /// Executes the atomic "Save & Validate" pipeline (F2).
     pub(crate) fn save_and_validate(&mut self) {
-        let modified_count = self.agents.iter().filter(|a| a.modified).count();
-        if modified_count == 0 {
-            self.status_message = Some(("No changes to save - all agent configs are clean".to_owned(), false));
+        let modified_agents = self.agents.iter().filter(|a| a.modified).count();
+        let modified_tools = self.tools.iter().filter(|t| t.modified).count();
+        if modified_agents == 0 && modified_tools == 0 {
+            self.status_message = Some(("No changes to save - all agent and tool configs are clean".to_owned(), false));
             return;
         }
 
         // 1. Take VCS snapshot
-        drop(take_vcs_snapshot(&self.workspace_root, &format!("snapshot before saving {modified_count} agent configs")));
+        drop(take_vcs_snapshot(
+            &self.workspace_root,
+            &format!("snapshot before saving {modified_agents} agent configs and {modified_tools} tool modifications"),
+        ));
 
-        // 2. Save modified manifests to disk
+        // 2. Save modified tool permission gates to disk
+        let tools_path = self.workspace_root.join("tools.toml");
+        let plugin_tools_path = self.workspace_root.join("plugins/agy-suite/tools.toml");
+        for tool in &mut self.tools {
+            if !tool.modified {
+                continue;
+            }
+            drop(update_tool_permission_gate_in_file(&tools_path, &tool.name, tool.require_permission_gate));
+            drop(update_tool_permission_gate_in_file(&plugin_tools_path, &tool.name, tool.require_permission_gate));
+            tool.modified = false;
+        }
+
+        // 3. Save modified manifests to disk
         for agent in &mut self.agents {
             if !agent.modified {
                 continue;
@@ -369,10 +389,10 @@ impl App {
             }
         }
 
-        // 3. Run validation
+        // 4. Run validation
         match run_plugin_validation(&self.workspace_root) {
             Ok(report) => {
-                // 4. Install plugin on success
+                // 5. Install plugin on success
                 let install_out = run_plugin_install(&self.workspace_root).unwrap_or_default();
                 for agent in &mut self.agents {
                     agent.modified = false;
@@ -400,6 +420,14 @@ impl App {
             if agent.modified && rollback_agent_file(&self.workspace_root, &agent.file_path).is_ok() {
                 restored = restored.saturating_add(1);
             }
+        }
+
+        // Reload tools from disk if tools were modified
+        let tools_path = self.workspace_root.join("tools.toml");
+        if tools_path.is_file()
+            && let Ok(loaded) = load_tools_from_file(&tools_path)
+        {
+            self.tools = loaded;
         }
 
         // Reload agents from disk

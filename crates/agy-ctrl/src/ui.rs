@@ -77,7 +77,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(tabs, header_chunks[1]);
 
     // Modified tracker & Sandbox state
-    let modified_count = app.agents.iter().filter(|a| a.modified).count();
+    let modified_count = app.agents.iter().filter(|a| a.modified).count().saturating_add(app.tools.iter().filter(|t| t.modified).count());
     let mod_span = if modified_count > 0 {
         Span::styled(
             format!(" [● {modified_count} MODIFIED] "),

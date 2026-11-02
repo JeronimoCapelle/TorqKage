@@ -12,9 +12,25 @@ pub(crate) fn save_agent_to_disk(agent: &AgentManifest) -> Result<(), String> {
         .map_err(|e| format!("Failed to write {}: {e}", agent.file_path.display()))
 }
 
-/// Takes a quick VCS snapshot before applying edits to ensure atomic recovery.
+/// Takes a quick VCS snapshot before applying edits to ensure atomic recovery without clobbering user descriptions.
 pub(crate) fn take_vcs_snapshot(workspace_root: &Path, message: &str) -> String {
     if workspace_root.join(".jj").is_dir() {
+        // Query current description to avoid clobbering user's commit message
+        let desc_output = Command::new("jj")
+            .current_dir(workspace_root)
+            .args(["log", "-r", "@", "--no-graph", "-T", "description"])
+            .output();
+
+        let has_description = desc_output.is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty());
+        if has_description {
+            // Trigger working-copy snapshot without mutating existing description
+            drop(Command::new("jj")
+                .current_dir(workspace_root)
+                .arg("status")
+                .output());
+            return "Existing Jujutsu revision preserved at @".to_owned();
+        }
+
         let output = Command::new("jj")
             .current_dir(workspace_root)
             .args(["describe", "-m", &format!("chore(agy-ctrl): {message}")])

@@ -11,8 +11,64 @@ pub(crate) mod static_cmd;
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use agy_common::{CircuitBreakerLedger, extract_rustc_error_code};
+use std::process::Command;
+use agy_common::{CircuitBreakerLedger, SubprocessSupervisor, extract_rustc_error_code};
 use crate::models::{AgentGuard, ToolAction, ToolDefinition};
+
+/// Executes a command either sandboxed via Bubblewrap or directly with supervisor hygiene.
+///
+/// # Errors
+/// Returns an error message if sandbox setup fails or the supervised command fails to execute.
+pub(crate) fn execute_supervised_command(
+    program: &str,
+    base_args: &[String],
+    dynamic_args: &[String],
+    workspace_root: &Path,
+    timeout_seconds: u64,
+    enforce_sandbox: bool,
+    tool_name: &str,
+) -> Result<std::process::Output, String> {
+    if enforce_sandbox {
+        if agy_common::sandbox::is_inside_outer_sandbox() {
+            let mut cmd = Command::new(program);
+            cmd.args(base_args);
+            cmd.args(dynamic_args);
+            cmd.current_dir(workspace_root);
+            SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
+        } else {
+            if which::which("bwrap").is_err() {
+                return Err(format!(
+                    "Security enforcement error: Tool '{tool_name}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active."
+                ));
+            }
+            let cmd = agy_common::sandbox::build_bubblewrap_command(
+                program,
+                base_args,
+                dynamic_args,
+                workspace_root,
+            );
+            let out = SubprocessSupervisor::run_supervised(cmd, timeout_seconds)?;
+            if !out.status.success() {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                if stderr.contains("Creating new namespace failed")
+                    || stderr.contains("No permissions to create new namespace")
+                    || stderr.contains("Setting up mount namespace failed")
+                {
+                    return Err(format!(
+                        "Security enforcement error: Sandbox execution failed for tool '{tool_name}': {stderr}"
+                    ));
+                }
+            }
+            Ok(out)
+        }
+    } else {
+        let mut cmd = Command::new(program);
+        cmd.args(base_args);
+        cmd.args(dynamic_args);
+        cmd.current_dir(workspace_root);
+        SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
+    }
+}
 
 /// Dispatches tool execution to the appropriate action handler.
 ///
@@ -151,7 +207,7 @@ fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
     }
 
     if workspace_root.join(".git").exists() {
-        let git_out = std::process::Command::new("git")
+        let git_out = Command::new("git")
             .args(["status", "--porcelain"])
             .current_dir(workspace_root)
             .output();
@@ -172,7 +228,7 @@ fn check_clippy_clean(workspace_root: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let output = std::process::Command::new("cargo")
+    let output = Command::new("cargo")
         .args(["clippy", "--all-targets", "--", "-D", "warnings"])
         .current_dir(workspace_root)
         .output()
@@ -189,7 +245,7 @@ fn check_tests_passed(workspace_root: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let output = std::process::Command::new("cargo")
+    let output = Command::new("cargo")
         .args(["test", "--no-fail-fast"])
         .current_dir(workspace_root)
         .output()
