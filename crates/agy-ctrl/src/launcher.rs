@@ -102,9 +102,10 @@ pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest
         );
     }
 
-    // Check 6: Finisher specialized gatekeeper pre-flight checks
-    if agent.name == "finisher" {
-        match agy_common::evaluate_finisher_readiness(workspace_root) {
+    // Check 6: Pre-flight admission checks declared in agent frontmatter
+    if !agent.pre_launch_checks.is_empty() {
+        let check_refs: Vec<&str> = agent.pre_launch_checks.iter().map(String::as_str).collect();
+        match agy_common::evaluate_pre_flight_checks(workspace_root, &check_refs) {
             Ok(warns) => {
                 report.warnings.extend(warns);
             }
@@ -317,6 +318,7 @@ mod tests {
             subagent: true,
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
+            pre_launch_checks: Vec::new(),
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),
@@ -329,11 +331,11 @@ mod tests {
     }
 
     #[test]
-    fn test_run_pre_launch_checks_finisher() {
+    fn test_run_pre_launch_checks_declarative_gatekeeper() {
         let manifest = AgentManifest {
             file_path: PathBuf::from("nonexistent.md"),
-            name: "finisher".to_owned(),
-            description: "test finisher".to_owned(),
+            name: "declarative-sentinel".to_owned(),
+            description: "test sentinel".to_owned(),
             effort: "high".to_owned(),
             permission_mode: "acceptEdits".to_owned(),
             command_execution_policy: "prompt".to_owned(),
@@ -341,6 +343,11 @@ mod tests {
             subagent: true,
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
+            pre_launch_checks: vec![
+                "cargo_compilation".to_owned(),
+                "test_compilation".to_owned(),
+                "vcs_conflicts".to_owned(),
+            ],
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),
@@ -351,8 +358,8 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let report = run_pre_launch_checks(&temp_dir, &manifest);
         // The only errors should be missing manifest file and possibly agy CLI if PATH is weird,
-        // but no cargo check errors from finisher gatekeeper
-        assert!(!report.errors.iter().any(|e| e.contains("Finisher requires 100% clean compilation")));
+        // but no cargo check errors from gatekeeper
+        assert!(!report.errors.iter().any(|e| e.contains("requires 100% clean compilation")));
     }
 
     #[test]
@@ -368,6 +375,7 @@ mod tests {
             subagent: true,
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
+            pre_launch_checks: Vec::new(),
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),

@@ -517,6 +517,13 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Span::styled("attach_rustc_explain    ", Style::default().fg(Color::White)),
         ]));
 
+        detail_lines.push(Line::from(vec![
+            guard_check(tool.mutating),
+            Span::styled("mutating (modifies disk) ", Style::default().fg(Color::White)),
+            guard_check(tool.tracks_circuit_breaker),
+            Span::styled("tracks_circuit_breaker  ", Style::default().fg(Color::White)),
+        ]));
+
         // List agents currently authorized for this tool
         detail_lines.push(Line::from(""));
         detail_lines.push(Line::from(Span::styled("─── Authorized Agent Roles ─────────────────────────────", Style::default().fg(Color::DarkGray))));

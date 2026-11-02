@@ -156,16 +156,25 @@ impl GateCheck for VcsConflictCheck {
     }
 }
 
-/// Evaluates all mandatory and advisory pre-checks before allowing `finisher` execution.
+/// Evaluates pre-flight admission checks specified by name.
+///
+/// Recognized check names:
+/// - `"cargo_compilation"` | `"cargo_check"` -> `CargoCompilationCheck`
+/// - `"test_compilation"` | `"cargo_test_compilation"` -> `CargoTestCompilationCheck`
+/// - `"vcs_conflicts"` | `"conflicts"` -> `VcsConflictCheck`
 ///
 /// # Errors
 /// Returns a list of blocking failure diagnostics if any mandatory check fails.
-pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>, Vec<String>> {
-    let checks: Vec<Box<dyn GateCheck>> = vec![
-        Box::new(CargoCompilationCheck),
-        Box::new(CargoTestCompilationCheck),
-        Box::new(VcsConflictCheck),
-    ];
+pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -> Result<Vec<String>, Vec<String>> {
+    let mut checks: Vec<Box<dyn GateCheck>> = Vec::new();
+    for name in check_names {
+        match *name {
+            "cargo_compilation" | "cargo_check" => checks.push(Box::new(CargoCompilationCheck)),
+            "test_compilation" | "cargo_test_compilation" => checks.push(Box::new(CargoTestCompilationCheck)),
+            "vcs_conflicts" | "conflicts" => checks.push(Box::new(VcsConflictCheck)),
+            _ => {}
+        }
+    }
 
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
@@ -185,9 +194,104 @@ pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>,
     }
 }
 
+/// Evaluates all mandatory and advisory pre-checks before allowing `finisher` execution.
+///
+/// # Errors
+/// Returns a list of blocking failure diagnostics if any mandatory check fails.
+pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>, Vec<String>> {
+    evaluate_pre_flight_checks(workspace_root, &["cargo_compilation", "test_compilation", "vcs_conflicts"])
+}
+
+/// Discovers the path to an agent's Markdown specification file.
+#[must_use]
+pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Option<std::path::PathBuf> {
+    let mut candidates = vec![
+        workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
+        workspace_root.join(format!(".agents/agents/{agent_name}.md")),
+    ];
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = std::path::PathBuf::from(home);
+        candidates.push(home_path.join(format!(".gemini/config/plugins/agy-suite/agents/{agent_name}.md")));
+        candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
+    }
+
+    candidates.into_iter().find(|p| p.is_file())
+}
+
+/// Parses the list of `pre_launch_checks` from an agent's Markdown frontmatter.
+#[must_use]
+pub fn parse_pre_launch_checks(content: &str) -> Vec<String> {
+    let trimmed = content.trim_start();
+    let Some(rest) = trimmed.strip_prefix("---") else {
+        return Vec::new();
+    };
+
+    let Some(end_idx) = rest.find("\n---") else {
+        return Vec::new();
+    };
+
+    let Some(frontmatter) = rest.get(..end_idx) else {
+        return Vec::new();
+    };
+    let mut checks = Vec::new();
+    let mut in_checks_block = false;
+
+    for line in frontmatter.lines() {
+        let trimmed_line = line.trim();
+        if trimmed_line.starts_with("pre_launch_checks:")
+            || trimmed_line.starts_with("preLaunchChecks:")
+            || trimmed_line.starts_with("gatekeeper_checks:")
+        {
+            if trimmed_line.ends_with("[]") {
+                return Vec::new();
+            }
+            in_checks_block = true;
+            continue;
+        }
+
+        if in_checks_block {
+            if let Some(item) = trimmed_line.strip_prefix('-') {
+                let name = item.trim().trim_matches(['"', '\'']);
+                if !name.is_empty() {
+                    checks.push(name.to_owned());
+                }
+            } else if !trimmed_line.is_empty() && !trimmed_line.starts_with('#') {
+                break;
+            }
+        }
+    }
+
+    checks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_parse_pre_launch_checks() {
+        let sample = "\
+---
+name: sentinel
+pre_launch_checks:
+  - cargo_compilation
+  - vcs_conflicts
+---
+# Prompt
+";
+        let checks = parse_pre_launch_checks(sample);
+        assert_eq!(checks, vec!["cargo_compilation", "vcs_conflicts"]);
+
+        let empty_sample = "\
+---
+name: sentinel
+pre_launch_checks: []
+---
+";
+        let empty_checks = parse_pre_launch_checks(empty_sample);
+        assert_eq!(empty_checks, Vec::<String>::new());
+    }
 
     #[test]
     fn test_gate_check_trait_dispatch() {

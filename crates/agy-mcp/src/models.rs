@@ -56,6 +56,12 @@ pub(crate) struct ToolDefinition {
     pub(crate) description: String,
     pub(crate) action: ToolAction,
     #[serde(default)]
+    pub(crate) category: Option<String>,
+    #[serde(default)]
+    pub(crate) mutating: bool,
+    #[serde(default)]
+    pub(crate) tracks_circuit_breaker: bool,
+    #[serde(default)]
     pub(crate) command: Vec<String>,
     #[serde(default)]
     pub(crate) args: Vec<ToolArg>,

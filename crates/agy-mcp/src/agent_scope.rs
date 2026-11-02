@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Resolves the requested agent from command line arguments, environment variables, or `.pipeline/active_agent.json`.
 #[must_use]
@@ -65,37 +65,20 @@ fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
 }
 
 /// Resolves the list of allowed MCP tools for the given agent name.
-/// Checks the agent markdown file frontmatter first, then falls back to canonical defaults.
+/// Reads directly from the agent Markdown frontmatter (`mcp_tools:`).
+/// If no agent file exists or if no tools are listed, returns an empty set (air-gapped default deny).
 #[must_use]
 pub(crate) fn resolve_allowed_tools(workspace_root: &Path, agent_name: &str) -> HashSet<String> {
-    if let Some(tools) = parse_tools_from_agent_files(workspace_root, agent_name)
-        && !tools.is_empty()
-    {
-        return tools;
-    }
-
-    canonical_agent_tools(agent_name)
+    parse_tools_from_agent_files(workspace_root, agent_name).unwrap_or_default()
 }
 
 fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Option<HashSet<String>> {
-    let mut candidates = vec![
-        workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
-        workspace_root.join(format!(".agents/agents/{agent_name}.md")),
-    ];
-
-    if let Ok(home) = std::env::var("HOME") {
-        let home_path = PathBuf::from(home);
-        candidates.push(home_path.join(format!(".gemini/config/plugins/agy-suite/agents/{agent_name}.md")));
-        candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
-    }
-
-    for path in candidates {
-        if path.is_file()
-            && let Ok(content) = fs::read_to_string(&path)
-            && let Some(tools) = extract_mcp_tools_from_markdown(&content)
-        {
-            return Some(tools);
-        }
+    let path = agy_common::find_agent_manifest_path(workspace_root, agent_name)?;
+    if path.is_file()
+        && let Ok(content) = fs::read_to_string(&path)
+        && let Some(tools) = extract_mcp_tools_from_markdown(&content)
+    {
+        return Some(tools);
     }
 
     None
@@ -141,138 +124,6 @@ pub(crate) fn extract_mcp_tools_from_markdown(content: &str) -> Option<HashSet<S
     }
 }
 
-#[allow(clippy::too_many_lines, reason = "Canonical default mapping table for all 9 agents")]
-fn canonical_agent_tools(agent: &str) -> HashSet<String> {
-    let list: &[&str] = match agent {
-        "coder" => &[
-            "read_project_file",
-            "modify_code",
-            "write_file",
-            "search_codebase",
-            "inspect_workspace_diff",
-            "run_quick_check",
-            "run_cargo_verification",
-            "run_cargo_test",
-            "run_cargo_clippy",
-            "run_cargo_clippy_fix",
-            "run_cargo_fmt",
-            "query_tool_help",
-        ],
-        "copilot" => &[
-            "read_project_file",
-            "write_file",
-            "modify_code",
-            "search_codebase",
-            "inspect_module_structure",
-            "inspect_project_state",
-            "inspect_workspace_diff",
-            "inspect_parent_commit",
-            "inspect_revision_log",
-            "inspect_bookmarks",
-            "run_quick_check",
-            "query_tool_help",
-        ],
-        "finisher" => &[
-            "read_project_file",
-            "search_codebase",
-            "query_project_spec",
-            "inspect_module_structure",
-            "inspect_workspace_diff",
-            "inspect_parent_commit",
-            "inspect_revision_log",
-            "inspect_workspace_conflicts",
-            "inspect_bookmarks",
-            "inspect_project_state",
-            "run_cargo_nextest",
-            "run_cargo_clippy",
-            "run_cargo_doc",
-            "run_cargo_fmt",
-            "run_cargo_check_targets",
-            "run_git_cliff",
-            "query_tool_help",
-        ],
-        "mini" => &[
-            "eval_symbolic_math",
-        ],
-        "perf-analyst" => &[
-            "read_project_file",
-            "search_codebase",
-            "run_cargo_asm",
-            "run_cargo_bench",
-            "run_gungraun_bench",
-            "run_criterion_bench",
-            "run_divan_bench",
-            "run_cargo_careful",
-            "run_cargo_miri",
-            "run_flamegraph",
-            "run_samply_profile",
-            "run_cargo_perf",
-            "run_cargo_bloat",
-            "run_hyperfine",
-            "run_valgrind_cachegrind",
-            "run_strace_summary",
-            "run_cargo_zigbuild",
-            "run_nasm_check",
-            "run_qemu_kernel_test",
-            "analyze_llvm_mca",
-            "inspect_binary_sections",
-            "inspect_symbol_table",
-            "write_file",
-            "query_tool_help",
-        ],
-        "planner" => &[
-            "read_project_file",
-            "write_file",
-            "modify_code",
-            "search_codebase",
-            "inspect_module_structure",
-            "query_project_spec",
-            "query_tool_help",
-        ],
-        "spec-checker" => &[
-            "read_project_file",
-            "search_codebase",
-            "query_project_spec",
-            "inspect_module_structure",
-            "inspect_bookmarks",
-            "inspect_revision_log",
-            "run_cargo_clippy",
-            "run_cargo_deny",
-            "run_cargo_machete",
-            "run_cargo_semver_checks",
-            "run_cargo_public_api",
-            "run_cargo_hack",
-            "run_cargo_outdated",
-            "run_ast_grep",
-            "query_tool_help",
-        ],
-        "sysadmin" => &[
-            "query_tool_help",
-        ],
-        "test-author" => &[
-            "read_project_file",
-            "search_codebase",
-            "write_file",
-            "modify_code",
-            "run_quick_check",
-            "run_cargo_verification",
-            "run_cargo_test",
-            "run_cargo_nextest",
-            "run_cargo_check_targets",
-            "run_coverage_summary",
-            "run_mutation_tests",
-            "run_cargo_insta",
-            "run_cargo_fuzz",
-            "run_property_tests",
-            "run_concurrency_tests",
-            "query_tool_help",
-        ],
-        _ => &[],
-    };
-
-    list.iter().map(|&s| s.to_owned()).collect()
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit tests allow panics on test setup")]
 mod tests {
@@ -289,14 +140,9 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_agent_tools() {
-        let coder_tools = canonical_agent_tools("coder");
-        assert!(coder_tools.contains("modify_code"));
-        assert!(!coder_tools.contains("eval_symbolic_math"));
-
-        let mini_tools = canonical_agent_tools("mini");
-        assert_eq!(mini_tools.len(), 1);
-        assert!(mini_tools.contains("eval_symbolic_math"));
+    fn test_resolve_allowed_tools_unconfigured_agent_is_airgapped() {
+        let tools = resolve_allowed_tools(Path::new("."), "nonexistent-agent-without-file");
+        assert!(tools.is_empty());
     }
 
     #[test]

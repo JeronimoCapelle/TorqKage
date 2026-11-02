@@ -5,6 +5,10 @@ effort: high
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+pre_launch_checks:
+  - cargo_compilation
+  - test_compilation
+  - vcs_conflicts
 tools:
   - ask_question
 inheritMcp: false

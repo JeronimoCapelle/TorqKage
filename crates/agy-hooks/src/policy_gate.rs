@@ -34,7 +34,7 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
 
     // 0. Circuit Breaker Sentry: If 2 consecutive failures occurred, all mutating tools require explicit confirmation
     let ledger = CircuitBreakerLedger::load(root);
-    if ledger.tripped && is_default_mutating_tool(tool_name) {
+    if ledger.tripped && is_mutating_tool(tool_name, root) {
         return PreToolResponse::ask(format!(
             "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
              Last Error: {}\n\
@@ -52,8 +52,8 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
         ));
     }
 
-    // 2. Default mutating tools that alter source code or repository manifests
-    if is_default_mutating_tool(tool_name) {
+    // 2. Mutating tools that alter source code or repository manifests
+    if is_mutating_tool(tool_name, root) {
         return PreToolResponse::ask(format!(
             "Policy Gate: Tool '{tool_name}' applies automated filesystem or code modifications. Confirm execution?"
         ));
@@ -63,42 +63,49 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     PreToolResponse::allow()
 }
 
-/// Checks whether a tool is a default mutating tool that requires confirmation.
-fn is_default_mutating_tool(tool_name: &str) -> bool {
-    matches!(
-        tool_name,
-        "run_cargo_clippy_fix" | "modify_code" | "write_file"
-    )
+/// Checks whether a tool is declared or known as a mutating tool.
+fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
+    check_tool_attribute_in_config(tool_name, root, "mutating")
+        || matches!(
+            tool_name,
+            "run_cargo_clippy_fix" | "modify_code" | "write_file"
+        )
 }
 
 /// Inspects tools.toml (if present) for `require_permission_gate = true`.
 fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
-    let config_path = root.join("tools.toml");
-    let plugin_config = root.join("plugins/agy-suite/tools.toml");
+    check_tool_attribute_in_config(tool_name, root, "require_permission_gate")
+}
 
-    let path_to_read = if config_path.is_file() {
-        config_path
-    } else if plugin_config.is_file() {
-        plugin_config
-    } else {
-        return false;
-    };
+/// Inspects tools.toml files across workspace and plugin installations for a boolean flag.
+fn check_tool_attribute_in_config(tool_name: &str, root: &Path, attribute: &str) -> bool {
+    let mut candidates = vec![
+        root.join("tools.toml"),
+        root.join("plugins/agy-suite/tools.toml"),
+    ];
 
-    if let Ok(content) = std::fs::read_to_string(path_to_read) {
-        let header = format!("[tools.{tool_name}]");
-        let mut in_section = false;
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if trimmed == header {
-                in_section = true;
-                continue;
-            }
-            if in_section {
-                if trimmed.starts_with('[') {
-                    break;
+    if let Ok(home) = std::env::var("HOME") {
+        candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml"));
+    }
+
+    let needle = format!("{attribute} = true");
+    for path in candidates {
+        if path.is_file() && let Ok(content) = std::fs::read_to_string(&path) {
+            let header = format!("[tools.{tool_name}]");
+            let mut in_section = false;
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed == header {
+                    in_section = true;
+                    continue;
                 }
-                if trimmed.contains("require_permission_gate = true") {
-                    return true;
+                if in_section {
+                    if trimmed.starts_with('[') {
+                        break;
+                    }
+                    if trimmed.contains(&needle) {
+                        return true;
+                    }
                 }
             }
         }
@@ -178,6 +185,30 @@ mod tests {
         let res = evaluate_policy(&input, &temp_dir);
         assert_eq!(res.decision, HookDecision::Ask);
         assert!(res.reason.unwrap().contains("CIRCUIT BREAKER TRIPPED"));
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_declarative_mutating_tool_triggers_ask() {
+        let temp_dir = std::env::temp_dir().join(format!("hook_decl_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        drop(std::fs::create_dir_all(&temp_dir));
+        drop(std::fs::write(
+            temp_dir.join("tools.toml"),
+            "[tools.custom_db_migrate]\nmutating = true\naction = \"static_command\"\n",
+        ));
+
+        let input = PreToolUseInput {
+            tool_call: Some(ToolCallPayload {
+                name: "custom_db_migrate".to_owned(),
+                args: json!({}),
+            }),
+            ..Default::default()
+        };
+
+        let res = evaluate_policy(&input, &temp_dir);
+        assert_eq!(res.decision, HookDecision::Ask);
+        assert!(res.reason.unwrap().contains("applies automated filesystem or code modifications"));
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

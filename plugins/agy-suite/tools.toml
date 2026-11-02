@@ -7,12 +7,16 @@
 [base_tools.code_modifier]
 description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
 action = "mpatch_edit"
+category = "filesystem"
+mutating = true
 enforce_workspace_bounds = true
 ban_dangerous_files = true
 
 [base_tools.file_creator]
 description = "Creates a new file strictly within the canonical workspace bounds"
 action = "file_write"
+category = "filesystem"
+mutating = true
 enforce_workspace_bounds = true
 ban_dangerous_files = true
 
@@ -88,6 +92,8 @@ allowed_dirs = ["*"]
 [tools.run_quick_check]
 description = "Runs cargo check with zero token noise. Returns exit code only."
 action = "static_command"
+category = "compilation"
+tracks_circuit_breaker = true
 command = ["cargo", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
@@ -95,6 +101,8 @@ timeout_seconds = 60
 [tools.run_cargo_verification]
 description = "Runs cargo check and returns filtered JSON error spans."
 action = "cargo_json_diagnostics"
+category = "compilation"
+tracks_circuit_breaker = true
 command = ["cargo", "check", "--message-format=json"]
 output_capture = "json_spans"
 attach_rustc_explain = true
@@ -103,6 +111,8 @@ timeout_seconds = 120
 [tools.run_cargo_clippy]
 description = "Runs cargo clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
 action = "cargo_json_diagnostics"
+category = "compilation"
+tracks_circuit_breaker = true
 command = ["cargo", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
 output_capture = "json_spans"
 attach_rustc_explain = true
@@ -111,6 +121,8 @@ timeout_seconds = 120
 [tools.run_cargo_clippy_fix]
 description = "Runs cargo clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
 action = "static_command"
+category = "compilation"
+mutating = true
 command = ["cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -205,6 +217,8 @@ timeout_seconds = 30
 [tools.run_cargo_test]
 description = "Executes unit and integration tests via standard cargo test with optional target/filter overrides"
 action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "test"]
 args = [
     { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
@@ -552,6 +566,8 @@ timeout_seconds = 120
 [tools.run_cargo_check_targets]
 description = "Verifies compilation health of benches and examples (cargo check --benches --examples)"
 action = "static_command"
+category = "compilation"
+tracks_circuit_breaker = true
 command = ["cargo", "check", "--benches", "--examples"]
 output_capture = "both"
 truncate_lines = 100
@@ -560,6 +576,8 @@ timeout_seconds = 60
 [tools.run_cargo_fmt]
 description = "Formats all workspace source files according to rustfmt style guidelines"
 action = "static_command"
+category = "compilation"
+mutating = true
 command = ["cargo", "fmt"]
 output_capture = "stdout"
 truncate_lines = 50

@@ -70,11 +70,7 @@ pub(crate) fn dispatch_action(
 }
 
 fn is_compiler_verification_tool(tool: &ToolDefinition) -> bool {
-    tool.name == "run_quick_check"
-        || tool.name == "run_cargo_verification"
-        || tool.name == "run_cargo_test"
-        || tool.name == "run_cargo_check_targets"
-        || tool.action == ToolAction::CargoJsonDiagnostics
+    tool.tracks_circuit_breaker || tool.action == ToolAction::CargoJsonDiagnostics
 }
 
 fn update_circuit_breaker(
@@ -217,6 +213,7 @@ mod tests {
 
         let tool = ToolDefinition {
             name: "run_quick_check".to_owned(),
+            tracks_circuit_breaker: true,
             action: ToolAction::StaticCommand,
             ..Default::default()
         };

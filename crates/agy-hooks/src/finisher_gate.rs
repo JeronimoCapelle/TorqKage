@@ -22,25 +22,23 @@ pub(crate) fn execute() {
 
 /// Evaluates a tool invocation input and produces a `PreToolResponse`.
 pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolResponse {
-    // Determine target agent type from tool call arguments
-    let is_finisher = input.tool_call.as_ref().is_some_and(|tc| {
-        if tc.name != "invoke_subagent" {
-            return false;
-        }
+    let Some(ref tc) = input.tool_call else {
+        return PreToolResponse::allow();
+    };
 
-        let type_name = tc
-            .args
-            .get("TypeName")
-            .or_else(|| tc.args.get("typeName"))
-            .or_else(|| tc.args.get("type_name"))
-            .and_then(Value::as_str)
-            .unwrap_or_default();
+    if tc.name != "invoke_subagent" {
+        return PreToolResponse::allow();
+    }
 
-        type_name.eq_ignore_ascii_case("finisher")
-    });
+    let type_name = tc
+        .args
+        .get("TypeName")
+        .or_else(|| tc.args.get("typeName"))
+        .or_else(|| tc.args.get("type_name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default();
 
-    // If this invocation is not dispatching the finisher agent, immediately allow
-    if !is_finisher {
+    if type_name.is_empty() {
         return PreToolResponse::allow();
     }
 
@@ -52,14 +50,35 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
         .cloned()
         .unwrap_or_else(|| WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from(".")));
 
-    // Run modular finisher quality gate checks
-    match agy_common::evaluate_finisher_readiness(&root) {
+    // 1. Check if the target agent declares pre_launch_checks in its markdown file
+    let checks = if let Some(path) = agy_common::find_agent_manifest_path(&root, type_name)
+        && let Ok(content) = std::fs::read_to_string(&path)
+    {
+        let declared = agy_common::parse_pre_launch_checks(&content);
+        if declared.is_empty() && type_name.eq_ignore_ascii_case("finisher") {
+            vec!["cargo_compilation".to_owned(), "test_compilation".to_owned(), "vcs_conflicts".to_owned()]
+        } else {
+            declared
+        }
+    } else if type_name.eq_ignore_ascii_case("finisher") {
+        vec!["cargo_compilation".to_owned(), "test_compilation".to_owned(), "vcs_conflicts".to_owned()]
+    } else {
+        Vec::new()
+    };
+
+    if checks.is_empty() {
+        return PreToolResponse::allow();
+    }
+
+    let check_refs: Vec<&str> = checks.iter().map(String::as_str).collect();
+    match agy_common::evaluate_pre_flight_checks(&root, &check_refs) {
         Ok(_warnings) => PreToolResponse::allow(),
         Err(errors) => {
             let reason = format!(
-                "🛑 Finisher Gatekeeper Denied: Project does not compile or has unresolved conflicts.\n\
-                 The finisher agent cannot be invoked until the codebase builds cleanly and all tests compile.\n\n\
+                "🛑 Subagent Admission Denied for '{type_name}': Mandatory pre-launch quality gates failed.\n\
+                 Target agent requirements: [{}]\n\n\
                  {}",
+                checks.join(", "),
                 errors.join("\n\n")
             );
             PreToolResponse::deny(reason)

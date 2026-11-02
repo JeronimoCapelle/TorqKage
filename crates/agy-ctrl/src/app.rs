@@ -36,6 +36,10 @@ pub(crate) enum FleetFocus {
 }
 
 /// The core application state for `agy-ctrl`.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Terminal UI application state contains multiple toggle flags"
+)]
 #[derive(Debug)]
 pub(crate) struct App {
     pub(crate) workspace_root: PathBuf,

@@ -13,7 +13,10 @@ pub mod supervisor;
 
 pub use diagnostics::{CompactErrorReport, DiagnosticSpan};
 pub use error::{AgyError, Result};
-pub use gatekeeper::{GateCheck, GateCheckStatus, evaluate_finisher_readiness};
+pub use gatekeeper::{
+    GateCheck, GateCheckStatus, evaluate_finisher_readiness, evaluate_pre_flight_checks,
+    find_agent_manifest_path, parse_pre_launch_checks,
+};
 pub use jujutsu::JujutsuWorkspace;
 pub use models::{
     CircuitBreakerLedger, CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision,

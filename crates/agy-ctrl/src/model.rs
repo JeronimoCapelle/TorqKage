@@ -40,13 +40,35 @@ impl ToolCategory {
     }
 }
 
+impl std::str::FromStr for ToolCategory {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "compilation" => Ok(Self::Compilation),
+            "testing" => Ok(Self::Testing),
+            "profiling" => Ok(Self::Profiling),
+            "filesystem" => Ok(Self::Filesystem),
+            "release" => Ok(Self::Release),
+            "diagnostics" => Ok(Self::Diagnostics),
+            _ => Ok(Self::Other),
+        }
+    }
+}
+
 /// In-memory representation of an MCP tool loaded from `tools.toml`.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Tool configuration holds multiple boolean policy flags"
+)]
 #[derive(Debug, Clone)]
 pub(crate) struct ToolItem {
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) action: String,
     pub(crate) category: ToolCategory,
+    pub(crate) mutating: bool,
+    pub(crate) tracks_circuit_breaker: bool,
     pub(crate) command: Option<Vec<String>>,
     pub(crate) allowed_directories: Option<Vec<String>>,
     pub(crate) timeout_seconds: Option<u64>,
@@ -138,6 +160,9 @@ struct RawToolToml {
     inherit: Option<String>,
     description: Option<String>,
     action: Option<String>,
+    category: Option<String>,
+    mutating: Option<bool>,
+    tracks_circuit_breaker: Option<bool>,
     command: Option<Vec<String>>,
     allowed_directories: Option<Vec<String>>,
     timeout_seconds: Option<u64>,
@@ -186,7 +211,30 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
                 b.action.clone()
             })
             .unwrap_or_else(|| "static_command".to_owned());
-        let category = ToolItem::infer_category(&name);
+        let category = raw_tool
+            .category
+            .as_deref()
+            .or_else(|| {
+                let b = base?;
+                b.category.as_deref()
+            })
+            .and_then(|c| c.parse().ok())
+            .unwrap_or_else(|| ToolItem::infer_category(&name));
+
+        let mutating = raw_tool
+            .mutating
+            .or_else(|| {
+                let b = base?;
+                b.mutating
+            })
+            .unwrap_or(false);
+        let tracks_circuit_breaker = raw_tool
+            .tracks_circuit_breaker
+            .or_else(|| {
+                let b = base?;
+                b.tracks_circuit_breaker
+            })
+            .unwrap_or(false);
 
         let command = raw_tool.command.or_else(|| {
             let b = base?;
@@ -238,6 +286,8 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
             description,
             action,
             category,
+            mutating,
+            tracks_circuit_breaker,
             command,
             allowed_directories,
             timeout_seconds,
@@ -258,6 +308,10 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
 }
 
 /// Agent manifest parsed from an agent Markdown file with YAML frontmatter.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "Agent manifest reflects multi-flag YAML frontmatter"
+)]
 #[derive(Debug, Clone)]
 pub(crate) struct AgentManifest {
     pub(crate) file_path: PathBuf,
@@ -272,6 +326,7 @@ pub(crate) struct AgentManifest {
     pub(crate) native_tools: Vec<String>,
     pub(crate) mcp_tools: Vec<String>,
     pub(crate) allowed_subagents: Vec<String>,
+    pub(crate) pre_launch_checks: Vec<String>,
     pub(crate) directives: String,
     pub(crate) modified: bool,
 }
@@ -344,6 +399,12 @@ impl AgentManifest {
                 out.push_str(&format!("  - {sub}\n"));
             }
         }
+        if !self.pre_launch_checks.is_empty() {
+            out.push_str("pre_launch_checks:\n");
+            for check in &self.pre_launch_checks {
+                out.push_str(&format!("  - {check}\n"));
+            }
+        }
         if !self.inherit_mcp {
             out.push_str("inheritMcp: false\n");
         }
@@ -403,6 +464,7 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
     let mut subagent = false;
     let mut inherit_mcp = true;
     let mut allowed_subagents = Vec::new();
+    let mut pre_launch_checks = Vec::new();
     let mut native_tools = Vec::new();
     let mut mcp_tools = Vec::new();
 
@@ -448,6 +510,15 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
             inherit_mcp = val.trim().parse::<bool>().unwrap_or(true);
         } else if trimmed_line.starts_with("allowed_subagents:") {
             current_list = Some(&mut allowed_subagents);
+        } else if trimmed_line.starts_with("pre_launch_checks:")
+            || trimmed_line.starts_with("preLaunchChecks:")
+            || trimmed_line.starts_with("gatekeeper_checks:")
+        {
+            if trimmed_line.ends_with("[]") {
+                pre_launch_checks.clear();
+            } else {
+                current_list = Some(&mut pre_launch_checks);
+            }
         } else if trimmed_line.starts_with("tools:") {
             if trimmed_line.ends_with("[]") {
                 native_tools.clear();
@@ -482,6 +553,7 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
         native_tools,
         mcp_tools,
         allowed_subagents,
+        pre_launch_checks,
         directives,
         modified: false,
     })
@@ -560,6 +632,9 @@ subagent: true
 inheritMcp: false
 allowed_subagents:
   - mini
+pre_launch_checks:
+  - cargo_compilation
+  - vcs_conflicts
 tools: []
 mcp_tools:
   - run_cargo_clippy
@@ -584,10 +659,13 @@ You are a test agent. Always pass tests.
         assert!(!manifest.inherit_mcp);
         assert_eq!(manifest.mcp_tools, vec!["run_cargo_clippy", "run_cargo_test"]);
         assert_eq!(manifest.allowed_subagents, vec!["mini"]);
+        assert_eq!(manifest.pre_launch_checks, vec!["cargo_compilation", "vcs_conflicts"]);
         assert!(manifest.directives.contains("You are a test agent."));
 
         let serialized = manifest.serialize();
         assert!(serialized.contains("name: test-agent"));
+        assert!(serialized.contains("pre_launch_checks:"));
+        assert!(serialized.contains("- cargo_compilation"));
         assert!(serialized.contains("mcp_tools:"));
         assert!(serialized.contains("- run_cargo_clippy"));
         assert!(serialized.contains("inheritMcp: false"));

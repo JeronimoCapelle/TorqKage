@@ -10,6 +10,9 @@ struct RawTool {
     inherit: Option<String>,
     description: Option<String>,
     action: Option<ToolAction>,
+    category: Option<String>,
+    mutating: Option<bool>,
+    tracks_circuit_breaker: Option<bool>,
     command: Option<Vec<String>>,
     args: Option<Vec<ToolArg>>,
     output_capture: Option<OutputCapture>,
@@ -100,6 +103,18 @@ fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDefini
             .clone()
             .or_else(|| base?.action.clone())
             .unwrap_or_default(),
+        category: raw
+            .category
+            .clone()
+            .or_else(|| base?.category.clone()),
+        mutating: raw
+            .mutating
+            .or_else(|| base?.mutating)
+            .unwrap_or(false),
+        tracks_circuit_breaker: raw
+            .tracks_circuit_breaker
+            .or_else(|| base?.tracks_circuit_breaker)
+            .unwrap_or(false),
         command: raw
             .command
             .clone()
