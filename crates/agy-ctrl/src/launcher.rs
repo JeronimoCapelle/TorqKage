@@ -132,6 +132,7 @@ pub(crate) fn launch_agy_interactive(
     workspace_root: &Path,
     agent: &AgentManifest,
     sandbox: bool,
+    isolated_workspace: bool,
     resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
     // 1. Run pre-launch checks
@@ -145,6 +146,18 @@ pub(crate) fn launch_agy_interactive(
     drop(execute!(stdout(), LeaveAlternateScreen));
     drop(terminal.show_cursor());
 
+    let (effective_workspace, was_isolated) = if isolated_workspace && agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
+        match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
+            Ok(ws_path) => (ws_path, true),
+            Err(e) => {
+                eprintln!("⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root.");
+                (workspace_root.to_path_buf(), false)
+            }
+        }
+    } else {
+        (workspace_root.to_path_buf(), false)
+    };
+
     // Print friendly launcher header
     println!("\n================================================================================");
     if let Some(conv_id) = resume_conversation {
@@ -155,7 +168,12 @@ pub(crate) fn launch_agy_interactive(
     }
     println!("   Effort: {} | Permissions: {} | Policy: {}", agent.effort, agent.permission_mode, agent.command_execution_policy);
     println!("   Sandbox: {}", if sandbox { "ENABLED (Bubblewrap isolation)" } else { "DISABLED (direct host)" });
-    println!("   Workspace: {}", workspace_root.display());
+    if was_isolated {
+        println!("   Workspace: {} (🛡️ Jujutsu Isolated Workspace)", effective_workspace.display());
+        println!("   (Main working copy @ and editor buffers are fully protected)");
+    } else {
+        println!("   Workspace: {}", workspace_root.display());
+    }
     println!("   (Exiting the agy session will return you directly to agy-ctrl)");
     println!("================================================================================\n");
 
@@ -169,12 +187,20 @@ pub(crate) fn launch_agy_interactive(
     } else {
         cmd.arg("--agent").arg(&agent.name);
     }
-    cmd.current_dir(workspace_root);
+    cmd.current_dir(&effective_workspace);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
     let status_res = cmd.status();
+
+    if was_isolated {
+        println!("\n--------------------------------------------------------------------------------");
+        println!("🏁 [agy-ctrl] Session ended in isolated workspace: .workspaces/{}", agent.name);
+        println!("   Changes are committed to workspace '{}@'.", agent.name);
+        println!("   Use 'jj workspace list' or 'jj diff -R .workspaces/{}' to inspect.", agent.name);
+        println!("--------------------------------------------------------------------------------");
+    }
 
     // 4. Resume Ratatui & crossterm alternate screen regardless of status
     drop(enable_raw_mode());
@@ -194,6 +220,7 @@ pub(crate) fn launch_agy_headless(
     workspace_root: &Path,
     agent: &AgentManifest,
     sandbox: bool,
+    isolated_workspace: bool,
     resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
     let report = run_pre_launch_checks(workspace_root, agent);
@@ -201,17 +228,31 @@ pub(crate) fn launch_agy_headless(
         return Err(report.format_diagnostics());
     }
 
+    let (effective_workspace, was_isolated) = if isolated_workspace && agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
+        match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
+            Ok(ws_path) => (ws_path, true),
+            Err(e) => {
+                eprintln!("⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root.");
+                (workspace_root.to_path_buf(), false)
+            }
+        }
+    } else {
+        (workspace_root.to_path_buf(), false)
+    };
+
     if let Some(conv_id) = resume_conversation {
         println!(
-            "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {})",
+            "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
-            if sandbox { "ENABLED" } else { "DISABLED" }
+            if sandbox { "ENABLED" } else { "DISABLED" },
+            if was_isolated { "YES (.workspaces)" } else { "NO" }
         );
     } else {
         println!(
-            "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {})",
+            "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
-            if sandbox { "ENABLED" } else { "DISABLED" }
+            if sandbox { "ENABLED" } else { "DISABLED" },
+            if was_isolated { "YES (.workspaces)" } else { "NO" }
         );
     }
 
@@ -224,15 +265,28 @@ pub(crate) fn launch_agy_headless(
     } else {
         cmd.arg("--agent").arg(&agent.name);
     }
-    cmd.current_dir(workspace_root);
+    cmd.current_dir(&effective_workspace);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    cmd.status().map_err(|e| format!("Failed to spawn 'agy': {e}"))
+    let res = cmd.status().map_err(|e| format!("Failed to spawn 'agy': {e}"));
+
+    if was_isolated {
+        println!("\n🏁 [agy-ctrl] Session ended in isolated workspace: .workspaces/{}", agent.name);
+        println!("   Changes are committed to workspace '{}@'.", agent.name);
+    }
+
+    res
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::expect_used,
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "Unit test assertions"
+)]
 mod tests {
     use super::*;
     use std::path::PathBuf;
@@ -299,5 +353,29 @@ mod tests {
         // The only errors should be missing manifest file and possibly agy CLI if PATH is weird,
         // but no cargo check errors from finisher gatekeeper
         assert!(!report.errors.iter().any(|e| e.contains("Finisher requires 100% clean compilation")));
+    }
+
+    #[test]
+    fn test_launch_headless_pre_check_failure() {
+        let manifest = AgentManifest {
+            file_path: PathBuf::from("nonexistent.md"),
+            name: "broken-agent".to_owned(),
+            description: "test".to_owned(),
+            effort: "low".to_owned(),
+            permission_mode: "acceptEdits".to_owned(),
+            command_execution_policy: "off".to_owned(),
+            main_agent: false,
+            subagent: true,
+            inherit_mcp: false,
+            allowed_subagents: Vec::new(),
+            native_tools: Vec::new(),
+            mcp_tools: Vec::new(),
+            directives: String::new(),
+            modified: true, // triggers pre-check error
+        };
+
+        let res = launch_agy_headless(Path::new("."), &manifest, false, true, None);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("unsaved modifications"));
     }
 }

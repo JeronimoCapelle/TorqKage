@@ -93,7 +93,13 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
     };
 
-    let mod_para = Paragraph::new(Line::from(vec![mod_span, sandbox_span]))
+    let iso_span = if app.isolated_workspace {
+        Span::styled(" [ISO: ON] ", Style::default().fg(Color::Black).bg(Color::LightCyan).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(" [ISO: OFF] ", Style::default().fg(Color::DarkGray))
+    };
+
+    let mod_para = Paragraph::new(Line::from(vec![mod_span, sandbox_span, iso_span]))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
     frame.render_widget(mod_para, header_chunks[2]);
@@ -177,7 +183,7 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         let right_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(5), // Metadata banner with session resumption
+                Constraint::Length(6), // Metadata banner with session resumption & circuit breaker
                 Constraint::Min(8),    // MCP Tools checklist
                 Constraint::Length(4), // Tool description preview
             ])
@@ -211,6 +217,18 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
             },
         );
 
+        let cb_span = match app.circuit_breaker_status.as_ref() {
+            Some(cb) if cb.tripped => Span::styled(
+                format!("🛑 TRIPPED ({}/{} strikes - {})", cb.consecutive_failures, cb.max_strikes, cb.last_error_signature.as_deref().unwrap_or("fail")),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            Some(cb) if cb.consecutive_failures > 0 => Span::styled(
+                format!("⚠ {}/{} strikes", cb.consecutive_failures, cb.max_strikes),
+                Style::default().fg(Color::Yellow),
+            ),
+            _ => Span::styled("✔ OK (0/2 strikes)", Style::default().fg(Color::Green)),
+        };
+
         let meta_lines = vec![
             Line::from(vec![
                 Span::styled("Role: ", Style::default().fg(Color::DarkGray)),
@@ -238,6 +256,17 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 session_span,
                 Span::styled(" | Launch: ", Style::default().fg(Color::DarkGray)),
                 action_span,
+            ]),
+            Line::from(vec![
+                Span::styled("Workspace: ", Style::default().fg(Color::DarkGray)),
+                if app.isolated_workspace {
+                    Span::styled(format!("Isolated (.workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::styled("Direct (@)", Style::default().fg(Color::DarkGray))
+                },
+                Span::styled(" [w: toggle] | Circuit Breaker: ", Style::default().fg(Color::DarkGray)),
+                cb_span,
+                Span::styled(" [k: reset]", Style::default().fg(Color::DarkGray)),
             ]),
         ];
         let meta_para = Paragraph::new(meta_lines).block(
@@ -557,9 +586,11 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     // Shortcuts
     let shortcuts = Line::from(vec![
         Span::styled(" [Enter/r Resume] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-        Span::styled("[n New Session] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
+        Span::styled("[n New] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled("[w Iso] ", Style::default().fg(Color::LightCyan)),
         Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
+        Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
+        Span::styled("[k Reset CB] ", Style::default().fg(Color::LightRed)),
         Span::styled("[g Gate Tool] ", Style::default().fg(Color::LightBlue)),
         Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
         Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
@@ -614,6 +645,14 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
         Line::from(vec![
             Span::styled("  F4 (or r)       ", Style::default().fg(Color::Red)),
             Span::styled("Atomic Rollback: revert unsaved changes to disk/VCS state", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("  w               ", Style::default().fg(Color::Cyan)),
+            Span::styled("Toggle Jujutsu workspace isolation (.workspaces/<agent>)", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("  k               ", Style::default().fg(Color::Cyan)),
+            Span::styled("Reset 2-strike compiler circuit breaker to clean state", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
             Span::styled("  Esc / F1        ", Style::default().fg(Color::Cyan)),

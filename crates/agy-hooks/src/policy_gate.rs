@@ -1,7 +1,7 @@
 //! Granular tool-level permission policy enforcement (`enforce-tool-policy`).
 
 use std::path::{Path, PathBuf};
-use agy_common::{PreToolResponse, PreToolUseInput, WorkspaceResolver};
+use agy_common::{CircuitBreakerLedger, PreToolResponse, PreToolUseInput, WorkspaceResolver};
 
 use crate::stdin;
 
@@ -31,6 +31,19 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     };
 
     let tool_name = tc.name.as_str();
+
+    // 0. Circuit Breaker Sentry: If 2 consecutive failures occurred, all mutating tools require explicit confirmation
+    let ledger = CircuitBreakerLedger::load(root);
+    if ledger.tripped && is_default_mutating_tool(tool_name) {
+        return PreToolResponse::ask(format!(
+            "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
+             Last Error: {}\n\
+             Autonomous loop halted to prevent token burn and code regression.\n\
+             Confirm manual override to allow tool '{tool_name}'?",
+            ledger.consecutive_failures,
+            ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
+        ));
+    }
 
     // 1. Check if tool is explicitly declared as requiring permission in tools.toml
     if is_tool_gated_in_config(tool_name, root) {
@@ -142,5 +155,30 @@ mod tests {
 
         let res = evaluate_policy(&input, Path::new("."));
         assert_eq!(res.decision, HookDecision::Ask);
+    }
+
+    #[test]
+    fn test_circuit_breaker_tripped_triggers_ask() {
+        let temp_dir = std::env::temp_dir().join(format!("hook_cb_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let mut ledger = CircuitBreakerLedger::new("coder");
+        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("borrow error")));
+        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("borrow error")));
+        assert!(ledger.tripped);
+
+        let input = PreToolUseInput {
+            tool_call: Some(ToolCallPayload {
+                name: "modify_code".to_owned(),
+                args: json!({"path": "src/lib.rs", "diff": "..."}),
+            }),
+            ..Default::default()
+        };
+
+        let res = evaluate_policy(&input, &temp_dir);
+        assert_eq!(res.decision, HookDecision::Ask);
+        assert!(res.reason.unwrap().contains("CIRCUIT BREAKER TRIPPED"));
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }

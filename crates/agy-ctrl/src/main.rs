@@ -58,7 +58,8 @@ fn main() -> ExitCode {
         Some("--launch" | "launch") => {
             let agent_arg = args.get(2).map(String::as_str);
             let has_sandbox = args.iter().any(|a| a == "--sandbox");
-            handle_cli_launch(&workspace_root, agent_arg, has_sandbox)
+            let has_isolated = args.iter().any(|a| a == "--isolated" || a == "--workspace");
+            handle_cli_launch(&workspace_root, agent_arg, has_sandbox, has_isolated)
         }
         Some("--help" | "-h" | "help") => {
             print_cli_usage();
@@ -66,7 +67,8 @@ fn main() -> ExitCode {
         }
         Some(agent_name) if !agent_name.starts_with('-') => {
             let has_sandbox = args.iter().any(|a| a == "--sandbox");
-            handle_cli_launch(&workspace_root, Some(agent_name), has_sandbox)
+            let has_isolated = args.iter().any(|a| a == "--isolated" || a == "--workspace");
+            handle_cli_launch(&workspace_root, Some(agent_name), has_sandbox, has_isolated)
         }
         _ => {
             // Interactive Ratatui TUI Mode
@@ -80,9 +82,9 @@ fn main() -> ExitCode {
     }
 }
 
-fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bool) -> ExitCode {
+fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bool, isolated: bool) -> ExitCode {
     let Some(agent_name) = agent_arg else {
-        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT> [--sandbox]");
+        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT> [--sandbox] [--isolated]");
         return ExitCode::FAILURE;
     };
 
@@ -95,7 +97,7 @@ fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bo
     let resume_conv = session::find_agent_session_for_workspace(&agent.name, workspace_root)
         .map(|s| s.conversation_id);
 
-    match launcher::launch_agy_headless(workspace_root, &agent, sandbox, resume_conv.as_deref()) {
+    match launcher::launch_agy_headless(workspace_root, &agent, sandbox, isolated, resume_conv.as_deref()) {
         Ok(status) => {
             if status.success() {
                 ExitCode::SUCCESS
@@ -116,19 +118,20 @@ fn print_cli_usage() {
          \n\
          USAGE:\n\
            agy-ctrl [OPTIONS]\n\
-           agy-ctrl launch <AGENT> [--sandbox]  (or agy-ctrl <AGENT> [--sandbox])\n\
+           agy-ctrl launch <AGENT> [--sandbox] [--isolated]  (or agy-ctrl <AGENT> [--sandbox] [--isolated])\n\
          \n\
          OPTIONS:\n\
            --status, status      Print ASCII agent fleet status & tool distribution matrix\n\
            --validate, validate  Run pre-flight validation on agy-suite plugin and tools\n\
            --launch, launch      Run pre-flight checks and launch interactive agy session with <AGENT>\n\
            --sandbox             Launch agent session inside an isolated Bubblewrap OS container\n\
+           --isolated, --workspace Launch session inside isolated Jujutsu workspace (.workspaces/<agent>)\n\
            --help, -h            Show this help reference\n\
          \n\
          INTERACTIVE TUI:\n\
            Run without arguments in an interactive terminal to launch the visual policy deck.\n\
            In TUI mode, press [Enter/l] on any agent to launch agy directly.\n\
-           Shortcuts: [p] Cycle Policy (Auto/Ask/Plan), [b] Toggle Sandbox, [g] Gate Tool (Ask/Allow)\n"
+           Shortcuts: [w] Workspace Isolation, [k] Reset CB, [p] Policy, [b] Sandbox, [g] Gate Tool\n"
     );
 }
 
@@ -176,12 +179,14 @@ fn event_loop(
                     &app.workspace_root,
                     &agent,
                     app.sandbox_enabled,
+                    app.isolated_workspace,
                     resume_conv.as_deref(),
                 ) {
                     Ok(status) => {
                         // Reload agents from disk in case tools were modified
                         app.agents = model::discover_agents(&app.workspace_root);
                         app.refresh_selected_agent_session();
+                        app.refresh_circuit_breaker();
                         app.status_message = Some((
                             format!("✔ Returned from agy session with agent '{agent_name}' ({status})"),
                             false,
@@ -263,6 +268,14 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         }
         KeyCode::F(8) | KeyCode::Char('b') => {
             app.toggle_sandbox();
+            return;
+        }
+        KeyCode::Char('w') => {
+            app.toggle_isolated_workspace();
+            return;
+        }
+        KeyCode::Char('k') => {
+            app.reset_circuit_breaker();
             return;
         }
         KeyCode::Char('p') => {

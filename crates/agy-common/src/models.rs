@@ -1,6 +1,6 @@
 //! `ProtoJSON` models and lifecycle event payload schemas for Antigravity hooks.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 /// Output decision for Antigravity `PreToolUse` hooks.
@@ -463,6 +463,138 @@ impl PipelineHandoff {
     }
 }
 
+/// Persistent tracking ledger for the deterministic compiler circuit breaker.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CircuitBreakerLedger {
+    pub agent: String,
+    pub consecutive_failures: usize,
+    pub max_strikes: usize,
+    pub tripped: bool,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_error_signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_error_details: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub last_tool: Option<String>,
+    pub last_updated: String,
+}
+
+impl CircuitBreakerLedger {
+    pub const DEFAULT_MAX_STRIKES: usize = 2;
+    pub const FILE_NAME: &'static str = "circuit_breaker.json";
+
+    #[must_use]
+    pub fn new(agent: impl Into<String>) -> Self {
+        Self {
+            agent: agent.into(),
+            consecutive_failures: 0,
+            max_strikes: Self::DEFAULT_MAX_STRIKES,
+            tripped: false,
+            last_error_signature: None,
+            last_error_details: None,
+            last_tool: None,
+            last_updated: format!("{}", jiff::Timestamp::now()),
+        }
+    }
+
+    /// Loads the circuit breaker state from `.pipeline/circuit_breaker.json` in `workspace_root`.
+    /// Returns a clean ledger with 0 failures if the file does not exist or is invalid.
+    #[must_use]
+    pub fn load(workspace_root: &Path) -> Self {
+        let path = workspace_root.join(".pipeline").join(Self::FILE_NAME);
+        if let Ok(data) = std::fs::read_to_string(&path)
+            && let Ok(ledger) = serde_json::from_str::<Self>(&data)
+        {
+            return ledger;
+        }
+        Self::new("unknown")
+    }
+
+    /// Saves the ledger state to `.pipeline/circuit_breaker.json`.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if directory creation or file writing fails.
+    pub fn save(&self, workspace_root: &Path) -> std::io::Result<()> {
+        let dir = workspace_root.join(".pipeline");
+        std::fs::create_dir_all(&dir)?;
+        let data = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(dir.join(Self::FILE_NAME), data)
+    }
+
+    /// Records a successful verification / compiler pass, resetting consecutive failures to 0.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if saving fails.
+    pub fn record_success(&mut self, workspace_root: &Path, tool_name: Option<&str>) -> std::io::Result<()> {
+        self.consecutive_failures = 0;
+        self.tripped = false;
+        self.last_error_signature = None;
+        self.last_error_details = None;
+        self.last_tool = tool_name.map(ToOwned::to_owned);
+        self.last_updated = format!("{}", jiff::Timestamp::now());
+        self.save(workspace_root)
+    }
+
+    /// Records a failed compilation or verification attempt.
+    /// Increments consecutive failures and trips the breaker if `failures >= max_strikes`.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if saving fails.
+    pub fn record_failure(
+        &mut self,
+        workspace_root: &Path,
+        agent: Option<&str>,
+        tool_name: Option<&str>,
+        error_sig: Option<&str>,
+        error_details: Option<&str>,
+    ) -> std::io::Result<()> {
+        if let Some(a) = agent {
+            a.clone_into(&mut self.agent);
+        }
+        self.consecutive_failures = self.consecutive_failures.saturating_add(1);
+        if self.consecutive_failures >= self.max_strikes {
+            self.tripped = true;
+        }
+        self.last_error_signature = error_sig.map(ToOwned::to_owned);
+        self.last_error_details = error_details.map(|d| {
+            d.lines().filter(|l| !l.trim().is_empty()).take(25).collect::<Vec<_>>().join("\n")
+        });
+        self.last_tool = tool_name.map(ToOwned::to_owned);
+        self.last_updated = format!("{}", jiff::Timestamp::now());
+        self.save(workspace_root)
+    }
+
+    /// Manually resets the circuit breaker to clean state.
+    ///
+    /// # Errors
+    /// Returns `io::Error` if saving fails.
+    pub fn reset(&mut self, workspace_root: &Path) -> std::io::Result<()> {
+        self.consecutive_failures = 0;
+        self.tripped = false;
+        self.last_error_signature = None;
+        self.last_error_details = None;
+        self.last_updated = format!("{}", jiff::Timestamp::now());
+        self.save(workspace_root)
+    }
+}
+
+/// Extracts the first compiler error code (e.g., "E0502") from compiler output.
+#[must_use]
+pub fn extract_rustc_error_code(output: &str) -> Option<String> {
+    for line in output.lines() {
+        if let Some(idx) = line.find("error[E") {
+            let start = idx.saturating_add(6);
+            if let Some(rest) = line.get(start..)
+                && let Some(end) = rest.find(']')
+            {
+                return rest.get(..end).map(ToOwned::to_owned);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,
@@ -575,5 +707,51 @@ mod tests {
         let md = record.to_markdown();
         let parsed = HandoffRecord::from_markdown(&md).expect("markdown parse failed");
         assert_eq!(parsed, record);
+    }
+
+    #[test]
+    fn test_circuit_breaker_trips_at_max_strikes() {
+        let temp_dir = std::env::temp_dir().join(format!("cb_test_{}", jiff::Timestamp::now().as_nanosecond()));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let mut ledger = CircuitBreakerLedger::new("coder");
+        assert_eq!(ledger.consecutive_failures, 0);
+        assert!(!ledger.tripped);
+
+        // Strike 1
+        ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        assert_eq!(ledger.consecutive_failures, 1);
+        assert!(!ledger.tripped);
+
+        // Strike 2: Circuit breaker trips!
+        ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        assert_eq!(ledger.consecutive_failures, 2);
+        assert!(ledger.tripped);
+        assert_eq!(ledger.last_error_signature.as_deref(), Some("E0502"));
+
+        // Persisted load verification
+        let loaded = CircuitBreakerLedger::load(&temp_dir);
+        assert_eq!(loaded.consecutive_failures, 2);
+        assert!(loaded.tripped);
+
+        // Record success: resets to clean
+        ledger.record_success(&temp_dir, Some("run_quick_check")).unwrap();
+        assert_eq!(ledger.consecutive_failures, 0);
+        assert!(!ledger.tripped);
+
+        let loaded_clean = CircuitBreakerLedger::load(&temp_dir);
+        assert_eq!(loaded_clean.consecutive_failures, 0);
+        assert!(!loaded_clean.tripped);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_extract_rustc_error_code() {
+        let sample_output = "error[E0502]: cannot borrow `*self` as mutable, as it is also borrowed as immutable\n  --> src/main.rs:10:5";
+        assert_eq!(extract_rustc_error_code(sample_output), Some("E0502".to_owned()));
+
+        let clean_output = "Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s";
+        assert_eq!(extract_rustc_error_code(clean_output), None);
     }
 }

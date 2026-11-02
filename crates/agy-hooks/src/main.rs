@@ -48,6 +48,17 @@ fn main() -> ExitCode {
             state::execute();
             ExitCode::SUCCESS
         }
+        "reset-circuit-breaker" => {
+            let root = agy_common::WorkspaceResolver::find_root(None).unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let mut ledger = agy_common::CircuitBreakerLedger::load(&root);
+            if ledger.reset(&root).is_ok() {
+                println!("Circuit breaker reset successfully.");
+                ExitCode::SUCCESS
+            } else {
+                eprintln!("Failed to reset circuit breaker.");
+                ExitCode::FAILURE
+            }
+        }
         "help" | "--help" | "-h" => {
             print_usage();
             ExitCode::SUCCESS
@@ -74,6 +85,7 @@ fn print_usage() {
            enforce-tool-policy PreToolUse hook enforcing granular ASK vs ALLOW decision per tool\n\
            record-handoff  Stop hook recording session metadata to .pipeline/last_handoff.md\n\
            inject-wake     SessionStart hook injecting last handoff state into conversation\n\
-           inspect-state   Concise Markdown repository state summary for tools.toml\n"
+           inspect-state   Concise Markdown repository state summary for tools.toml\n\
+           reset-circuit-breaker Reset the 2-strike compiler failure circuit breaker\n"
     );
 }

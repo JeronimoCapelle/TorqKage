@@ -31,3 +31,8 @@ mutants.out/
 !.zed/tasks.json
 *.swp
 *~
+
+# Multi-Agent Workspaces & Ephemeral State
+/.workspaces/
+.pipeline/circuit_breaker.json
+

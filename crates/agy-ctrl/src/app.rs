@@ -53,6 +53,8 @@ pub(crate) struct App {
     pub(crate) pending_launch: Option<(String, Option<String>)>,
     pub(crate) active_agent_session: Option<crate::session::SessionSummary>,
     pub(crate) sandbox_enabled: bool,
+    pub(crate) isolated_workspace: bool,
+    pub(crate) circuit_breaker_status: Option<agy_common::CircuitBreakerLedger>,
     pub(crate) should_quit: bool,
 }
 
@@ -80,6 +82,8 @@ impl App {
 
         let agents = discover_agents(&workspace_root);
 
+        let circuit_breaker_status = Some(agy_common::CircuitBreakerLedger::load(&workspace_root));
+
         let mut app = Self {
             workspace_root,
             agents,
@@ -92,14 +96,43 @@ impl App {
             directives_scroll: 0,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter/r] Resume, [n] New Session, [p] Policy, [b] Sandbox, [F2] Save".to_owned(), false)),
+            status_message: Some(("Press [Enter/r] Resume, [n] New Session, [p] Policy, [b] Sandbox, [w] Workspace, [k] Reset CB".to_owned(), false)),
             pending_launch: None,
             active_agent_session: None,
             sandbox_enabled: false,
+            isolated_workspace: false,
+            circuit_breaker_status,
             should_quit: false,
         };
         app.refresh_selected_agent_session();
         Ok(app)
+    }
+
+    /// Refreshes the circuit breaker state from disk.
+    pub(crate) fn refresh_circuit_breaker(&mut self) {
+        self.circuit_breaker_status = Some(agy_common::CircuitBreakerLedger::load(&self.workspace_root));
+    }
+
+    /// Toggles Jujutsu workspace isolation (.workspaces/<agent>) for launched sessions.
+    pub(crate) fn toggle_isolated_workspace(&mut self) {
+        self.isolated_workspace = !self.isolated_workspace;
+        let mode = if self.isolated_workspace {
+            "ENABLED (.workspaces/<agent>)"
+        } else {
+            "DISABLED (direct repo root)"
+        };
+        self.status_message = Some((format!("Workspace Isolation: {mode}"), false));
+    }
+
+    /// Manually resets the 2-strike compiler failure circuit breaker.
+    pub(crate) fn reset_circuit_breaker(&mut self) {
+        let mut ledger = agy_common::CircuitBreakerLedger::load(&self.workspace_root);
+        if ledger.reset(&self.workspace_root).is_ok() {
+            self.circuit_breaker_status = Some(ledger);
+            self.status_message = Some(("Circuit Breaker RESET: 0 consecutive failures".to_owned(), false));
+        } else {
+            self.status_message = Some(("Failed to reset circuit breaker".to_owned(), true));
+        }
     }
 
     /// Discovers the latest resumable session for the selected agent in this workspace.
