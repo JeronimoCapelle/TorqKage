@@ -143,34 +143,43 @@ fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> R
 }
 
 fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
-    let jj_out = std::process::Command::new("jj")
-        .args(["diff", "--stat"])
-        .current_dir(workspace_root)
-        .output();
+    if agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
+        let jj_out = std::process::Command::new("jj")
+            .args(["diff", "--summary", "--color=never"])
+            .current_dir(workspace_root)
+            .output();
 
-    if let Ok(out) = jj_out
-        && out.status.success()
-        && !out.stdout.is_empty()
-    {
-        return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+        if let Ok(out) = jj_out
+            && out.status.success()
+            && !out.stdout.is_empty()
+        {
+            return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+        }
+        return Ok(());
     }
 
-    let git_out = std::process::Command::new("git")
-        .args(["status", "--porcelain"])
-        .current_dir(workspace_root)
-        .output();
+    if workspace_root.join(".git").exists() {
+        let git_out = std::process::Command::new("git")
+            .args(["status", "--porcelain"])
+            .current_dir(workspace_root)
+            .output();
 
-    if let Ok(gout) = git_out
-        && gout.status.success()
-        && !gout.stdout.is_empty()
-    {
-        return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+        if let Ok(gout) = git_out
+            && gout.status.success()
+            && !gout.stdout.is_empty()
+        {
+            return Err("Pre-flight gate failed: 'require_git_clean' is enabled, but repository has uncommitted modifications.".to_owned());
+        }
     }
 
     Ok(())
 }
 
 fn check_clippy_clean(workspace_root: &Path) -> Result<(), String> {
+    if !workspace_root.join("Cargo.toml").is_file() {
+        return Ok(());
+    }
+
     let output = std::process::Command::new("cargo")
         .args(["clippy", "--all-targets", "--", "-D", "warnings"])
         .current_dir(workspace_root)
@@ -184,6 +193,10 @@ fn check_clippy_clean(workspace_root: &Path) -> Result<(), String> {
 }
 
 fn check_tests_passed(workspace_root: &Path) -> Result<(), String> {
+    if !workspace_root.join("Cargo.toml").is_file() {
+        return Ok(());
+    }
+
     let output = std::process::Command::new("cargo")
         .args(["test", "--no-fail-fast"])
         .current_dir(workspace_root)
@@ -250,6 +263,26 @@ mod tests {
         let ledger = CircuitBreakerLedger::load(&temp_dir);
         assert_eq!(ledger.consecutive_failures, 0);
         assert!(!ledger.tripped);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_evaluate_pre_flight_guards_passes_clean() {
+        let temp_dir = std::env::temp_dir().join(format!("mcp_guards_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let tool = ToolDefinition {
+            name: "test_guarded_tool".to_owned(),
+            require_git_clean: true,
+            require_clippy_clean: true,
+            require_tests_passed: true,
+            ..Default::default()
+        };
+
+        // In a directory with no Cargo.toml and no git, pre-flight guards pass gracefully
+        let res = evaluate_pre_flight_guards(&tool, &temp_dir);
+        res.unwrap();
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

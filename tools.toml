@@ -29,6 +29,7 @@ ban_dangerous_files = true
 [tools.read_project_file]
 description = "Reads a file within the project root. Output is truncated safely."
 action = "file_read"
+category = "filesystem"
 enforce_workspace_bounds = true
 ban_dangerous_files = true
 truncate_lines = 800
@@ -38,14 +39,19 @@ emit_truncation_notice = true
 [tools.query_project_spec]
 description = "Searches the in-repo docs/ directory for grep-ready specs, opcodes, and ABI definitions"
 action = "file_search"
+category = "filesystem"
 enforce_dir = "docs"
 enforce_workspace_bounds = true
+ban_dangerous_files = true
 truncate_lines = 150
 timeout_seconds = 10
 
 [tools.search_codebase]
 description = "Searches the codebase for a text or regex pattern using ripgrep (bounded to project root)"
 action = "parameterized_command"
+category = "filesystem"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
 command = ["rg", "--max-count", "30", "--max-columns", "200", "--"]
 args = [
     { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" }
@@ -134,6 +140,7 @@ require_permission_gate = true
 [tools.inspect_module_structure]
 description = "Visualizes crate module tree and visibility boundaries (pub/crate). Defaults to clean module tree; can focus on specific modules or packages."
 action = "parameterized_command"
+category = "diagnostics"
 command = ["cargo", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
@@ -147,6 +154,7 @@ timeout_seconds = 30
 [tools.run_cargo_deny]
 description = "Checks supply-chain security, RustSec advisories, banned crates, license allowlists, and sources via cargo-deny"
 action = "static_command"
+category = "release"
 command = ["cargo", "deny", "check"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -155,6 +163,7 @@ timeout_seconds = 60
 [tools.run_cargo_machete]
 description = "Scans Cargo.toml manifests for unused dependencies via cargo-machete"
 action = "static_command"
+category = "diagnostics"
 command = ["cargo", "machete"]
 output_capture = "stdout"
 truncate_lines = 80
@@ -163,6 +172,8 @@ timeout_seconds = 45
 [tools.run_cargo_public_api]
 description = "Inspects and diffs the exposed public API surface of the crate against git revisions"
 action = "static_command"
+category = "release"
+require_git_clean = true
 command = ["cargo", "public-api", "diff"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -171,6 +182,10 @@ timeout_seconds = 60
 [tools.run_cargo_semver_checks]
 description = "Verifies semantic versioning contract rules against the published API baseline"
 action = "static_command"
+category = "release"
+require_git_clean = true
+require_clippy_clean = true
+require_tests_passed = true
 command = ["cargo", "semver-checks", "check-release"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -179,6 +194,7 @@ timeout_seconds = 180
 [tools.run_cargo_hack]
 description = "Performs matrix verification checking all feature flag combinations (--each-feature)"
 action = "static_command"
+category = "compilation"
 command = ["cargo", "hack", "check", "--each-feature"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -187,6 +203,7 @@ timeout_seconds = 180
 [tools.run_cargo_outdated]
 description = "Scans dependencies to find available SemVer updates and compatibility ranges"
 action = "static_command"
+category = "diagnostics"
 command = ["cargo", "outdated", "--depth", "1"]
 output_capture = "stdout"
 truncate_lines = 60
@@ -195,6 +212,7 @@ timeout_seconds = 60
 [tools.run_cargo_expand]
 description = "Expands macros and visualizes generated compiler tokens for a specific item (struct, enum, fn, module) with token-smart fallback on error"
 action = "parameterized_command"
+category = "diagnostics"
 command = ["cargo", "expand"]
 args = [
     { name = "item_path", required = true, regex = "^[a-zA-Z0-9_:]+$", description = "Target item or module path to expand (e.g. 'Processor' or 'types::state')" }
@@ -207,6 +225,7 @@ timeout_seconds = 60
 [tools.run_ast_grep]
 description = "Performs structural AST pattern queries across source trees via ast-grep"
 action = "static_command"
+category = "diagnostics"
 command = ["ast-grep", "scan"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -231,6 +250,8 @@ timeout_seconds = 180
 [tools.run_cargo_nextest]
 description = "Executes unit and integration tests in parallel via nextest with optional target/filter overrides"
 action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "nextest", "run"]
 args = [
     { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional integration test target" },
@@ -243,6 +264,8 @@ timeout_seconds = 120
 [tools.run_coverage_summary]
 description = "Extracts line and branch coverage summary via cargo llvm-cov"
 action = "static_command"
+category = "testing"
+require_tests_passed = true
 command = ["cargo", "llvm-cov", "--summary-only"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -251,6 +274,8 @@ timeout_seconds = 180
 [tools.run_mutation_tests]
 description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs"
 action = "static_command"
+category = "testing"
+require_tests_passed = true
 command = ["cargo", "mutants", "--no-shuffle"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -259,6 +284,8 @@ timeout_seconds = 300
 [tools.run_cargo_insta]
 description = "Executes snapshot tests for golden ASTs, opcode decoders, and struct serialization"
 action = "static_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "insta", "test", "--accept"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -267,6 +294,7 @@ timeout_seconds = 120
 [tools.run_cargo_fuzz]
 description = "Executes libFuzzer target to discover crashes, panics, and out-of-bounds byte accesses"
 action = "static_command"
+category = "testing"
 command = ["cargo", "fuzz", "run", "--", "-max_total_time=60"]
 output_capture = "stderr"
 truncate_lines = 100
@@ -275,6 +303,8 @@ timeout_seconds = 90
 [tools.run_property_tests]
 description = "Executes generative property-based tests via proptest with randomized inputs (optional filter override)"
 action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "test", "--test", "property_test"]
 args = [
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional property test name filter" }
@@ -286,6 +316,8 @@ timeout_seconds = 120
 [tools.run_concurrency_tests]
 description = "Executes exhaustive state-space permutation tests for atomic algorithms via loom (optional filter override)"
 action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "test", "--test", "concurrency_test"]
 args = [
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional loom test name filter" }
@@ -299,6 +331,7 @@ timeout_seconds = 180
 [tools.run_cargo_asm]
 description = "Disassembles functions to inspect generated assembly, auto-vectorization, and spills"
 action = "static_command"
+category = "profiling"
 command = ["cargo", "asm"]
 output_capture = "stdout"
 truncate_lines = 250
@@ -307,6 +340,8 @@ timeout_seconds = 60
 [tools.run_cargo_bench]
 description = "Executes benchmark suites across Divan, Criterion2, and Gungraun with optional target/filter overrides"
 action = "parameterized_command"
+category = "profiling"
+require_tests_passed = true
 command = ["cargo", "bench"]
 args = [
     { name = "bench_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--bench", description = "Specific benchmark target ('benchmark', 'criterion_bench', 'gungraun_bench')" },
@@ -319,6 +354,8 @@ timeout_seconds = 240
 [tools.run_gungraun_bench]
 description = "Executes deterministic instruction/cache profiling benchmarks via Gungraun (Valgrind Callgrind/Cachegrind/DHAT + Linux perf)"
 action = "parameterized_command"
+category = "profiling"
+require_tests_passed = true
 command = ["cargo", "bench", "--bench", "gungraun_bench"]
 args = [
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
@@ -330,6 +367,8 @@ timeout_seconds = 240
 [tools.run_criterion_bench]
 description = "Executes statistical throughput and latency distribution benchmarks via Criterion2"
 action = "parameterized_command"
+category = "profiling"
+require_tests_passed = true
 command = ["cargo", "bench", "--bench", "criterion_bench"]
 args = [
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
@@ -341,6 +380,8 @@ timeout_seconds = 240
 [tools.run_divan_bench]
 description = "Executes fast, allocation-aware microbenchmarks via Divan"
 action = "parameterized_command"
+category = "profiling"
+require_tests_passed = true
 command = ["cargo", "bench", "--bench", "benchmark"]
 args = [
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark function filter" }
@@ -352,6 +393,8 @@ timeout_seconds = 180
 [tools.run_cargo_careful]
 description = "Executes tests with extra debug checks to detect undefined behavior and invalid operations"
 action = "static_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "careful", "test"]
 output_capture = "stderr"
 truncate_lines = 150
@@ -360,6 +403,8 @@ timeout_seconds = 180
 [tools.run_cargo_miri]
 description = "Runs tests inside Miri interpreter to verify strict pointer provenance and Tree Borrows"
 action = "static_command"
+category = "testing"
+tracks_circuit_breaker = true
 command = ["cargo", "miri", "test"]
 output_capture = "stderr"
 truncate_lines = 200
@@ -368,6 +413,8 @@ timeout_seconds = 300
 [tools.run_flamegraph]
 description = "Generates CPU flame graphs to identify profiling hotspots and callstack bottlenecks"
 action = "static_command"
+category = "profiling"
+require_tests_passed = true
 command = ["cargo", "flamegraph", "--root", "--deterministic"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -376,6 +423,7 @@ timeout_seconds = 240
 [tools.run_cargo_perf]
 description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count)"
 action = "static_command"
+category = "profiling"
 command = ["perf", "stat", "-B", "cargo", "test", "--no-run"]
 output_capture = "stderr"
 truncate_lines = 50
@@ -384,6 +432,7 @@ timeout_seconds = 60
 [tools.run_valgrind_cachegrind]
 description = "Simulates L1/LLC cache references, misses, and branch mispredictions via Valgrind Cachegrind"
 action = "static_command"
+category = "profiling"
 command = ["valgrind", "--tool=cachegrind", "--cache-sim=yes", "cargo", "test", "--no-run"]
 output_capture = "stderr"
 truncate_lines = 100
@@ -392,6 +441,7 @@ timeout_seconds = 180
 [tools.run_strace_summary]
 description = "Collects statistical call counts, errors, and time spent in Linux kernel system calls via strace"
 action = "static_command"
+category = "profiling"
 command = ["strace", "-c", "-f", "cargo", "test", "--no-run"]
 output_capture = "stderr"
 truncate_lines = 80
@@ -400,6 +450,7 @@ timeout_seconds = 60
 [tools.run_cargo_bloat]
 description = "Analyzes binary size per symbol and crate to pinpoint monomorphization bloat"
 action = "static_command"
+category = "profiling"
 command = ["cargo", "bloat", "--release", "-n", "30"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -408,6 +459,8 @@ timeout_seconds = 60
 [tools.run_hyperfine]
 description = "Executes black-box binary benchmarking via hyperfine with statistical timing and warmup"
 action = "static_command"
+category = "profiling"
+require_tests_passed = true
 command = ["hyperfine", "--warmup", "3"]
 output_capture = "stdout"
 truncate_lines = 40
@@ -416,6 +469,8 @@ timeout_seconds = 120
 [tools.run_samply_profile]
 description = "Samples CPU execution with samply and generates profile data for the Firefox Profiler UI"
 action = "static_command"
+category = "profiling"
+require_tests_passed = true
 command = ["samply", "record", "--no-open"]
 output_capture = "stdout"
 truncate_lines = 30
@@ -424,6 +479,7 @@ timeout_seconds = 180
 [tools.inspect_binary_sections]
 description = "Prints section sizes (.text, .data, .bss) of compiled ELF binaries using cargo-size / rust-size"
 action = "static_command"
+category = "profiling"
 command = ["cargo", "size", "--release"]
 output_capture = "stdout"
 truncate_lines = 30
@@ -432,6 +488,7 @@ timeout_seconds = 30
 [tools.inspect_symbol_table]
 description = "Dumps demangled symbols and object exports using cargo-nm / rust-nm"
 action = "static_command"
+category = "profiling"
 command = ["cargo", "nm", "--release", "--demangle"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -440,6 +497,7 @@ timeout_seconds = 30
 [tools.analyze_llvm_mca]
 description = "Pipes generated assembly into llvm-mca to simulate CPU instruction ports, latency, and register pressure"
 action = "static_command"
+category = "profiling"
 command = ["llvm-mca", "-march=x86-64", "-mcpu=native"]
 output_capture = "stdout"
 truncate_lines = 150
@@ -448,6 +506,7 @@ timeout_seconds = 30
 [tools.run_cargo_zigbuild]
 description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
 action = "static_command"
+category = "compilation"
 command = ["cargo", "zigbuild", "check"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -456,6 +515,7 @@ timeout_seconds = 180
 [tools.run_nasm_check]
 description = "Assembles x86 real-mode and bare-metal bootloader assembly sources via NASM"
 action = "static_command"
+category = "compilation"
 command = ["nasm", "-f", "elf64", "-v"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -464,6 +524,7 @@ timeout_seconds = 30
 [tools.run_qemu_kernel_test]
 description = "Boots bare-metal OS kernel images headlessly under QEMU x86_64 emulator with serial stdout capture"
 action = "static_command"
+category = "testing"
 command = ["qemu-system-x86_64", "-display", "none", "-serial", "stdio", "-no-reboot"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -474,6 +535,10 @@ timeout_seconds = 60
 [tools.run_git_cliff]
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
+category = "release"
+require_git_clean = true
+require_clippy_clean = true
+require_tests_passed = true
 command = ["git-cliff", "--unreleased", "--strip", "header"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -482,6 +547,7 @@ timeout_seconds = 30
 [tools.eval_symbolic_math]
 description = "Executes exact symbolic mathematics (ODEs, Jacobians, Taylor series, simplifications) via SymPy inside an isolated, network-less Bubblewrap jail"
 action = "parameterized_command"
+category = "other"
 command = [
     "bwrap",
     "--unshare-all",
@@ -503,6 +569,7 @@ timeout_seconds = 15
 [tools.query_tool_help]
 description = "Retrieves live tldr or --help usage for a local CLI binary"
 action = "cli_manual"
+category = "diagnostics"
 sanitize_input = "^[a-zA-Z0-9_-]+$"
 truncate_lines = 100
 timeout_seconds = 10
@@ -510,6 +577,7 @@ timeout_seconds = 10
 [tools.inspect_project_state]
 description = "Inspects repository state: active checkpoint (.pipeline/checkpoint.json), uncommitted changes (jj diff --stat), and recent handoff notes"
 action = "static_command"
+category = "diagnostics"
 command = ["agy-hooks", "inspect-state"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -518,6 +586,7 @@ timeout_seconds = 10
 [tools.inspect_workspace_diff]
 description = "Inspects the active working tree diff (jj diff or git diff) with automatic line truncation"
 action = "static_command"
+category = "diagnostics"
 command = ["jj", "diff"]
 output_capture = "stdout"
 truncate_lines = 200
@@ -526,6 +595,7 @@ timeout_seconds = 10
 [tools.inspect_parent_commit]
 description = "Inspects the parent commit (@-) metadata, commit message, and full diff in Jujutsu"
 action = "static_command"
+category = "diagnostics"
 command = ["jj", "show", "@-"]
 output_capture = "stdout"
 truncate_lines = 250
@@ -534,6 +604,7 @@ timeout_seconds = 10
 [tools.inspect_revision_log]
 description = "Displays the recent Jujutsu revision history and change graph with change IDs and descriptions"
 action = "static_command"
+category = "diagnostics"
 command = ["jj", "log", "-n", "10", "--no-graph"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -542,6 +613,7 @@ timeout_seconds = 10
 [tools.inspect_workspace_conflicts]
 description = "Checks if any commits or files in the Jujutsu repository contain unresolved merge/rebase conflicts"
 action = "static_command"
+category = "diagnostics"
 command = ["jj", "log", "-r", "conflicts()", "--no-graph"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -550,6 +622,7 @@ timeout_seconds = 10
 [tools.inspect_bookmarks]
 description = "Lists Jujutsu bookmarks (git branches) and their remote tracking status"
 action = "static_command"
+category = "diagnostics"
 command = ["jj", "bookmark", "list"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -558,6 +631,8 @@ timeout_seconds = 10
 [tools.run_cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
 action = "static_command"
+category = "release"
+require_clippy_clean = true
 command = ["cargo", "doc", "--no-deps"]
 output_capture = "both"
 truncate_lines = 100
