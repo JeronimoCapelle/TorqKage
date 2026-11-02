@@ -60,7 +60,13 @@ impl JujutsuWorkspace {
 
     /// Checks if an isolated workspace has zero uncommitted changes.
     #[must_use]
+    #[allow(clippy::print_stderr, reason = "Advisory notice when jj binary is absent")]
     pub fn is_workspace_clean(ws_path: &Path) -> bool {
+        if !is_jj_in_path() {
+            eprintln!("[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot check workspace clean state.");
+            return false;
+        }
+
         let Ok(out) = Command::new("jj")
             .args(["--color=never", "diff", "--summary"])
             .current_dir(ws_path)
@@ -94,6 +100,12 @@ impl JujutsuWorkspace {
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
+
+        if !is_jj_in_path() {
+            eprintln!("[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot initialize isolated agent workspace.");
+            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+        }
+
         let workspaces_dir = repo_root.join(".workspaces");
         std::fs::create_dir_all(&workspaces_dir)?;
         let agent_ws_path = workspaces_dir.join(agent);
@@ -187,6 +199,17 @@ impl JujutsuWorkspace {
         }
         Ok(())
     }
+}
+
+fn is_jj_in_path() -> bool {
+    if let Some(paths) = std::env::var_os("PATH") {
+        for p in std::env::split_paths(&paths) {
+            if p.join("jj").is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]

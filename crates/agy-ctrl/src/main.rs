@@ -1,6 +1,19 @@
 //! # agy-ctrl
 //!
-//! Offline Ratatui terminal configuration deck and CLI management utility for `agy-suite`.
+//! Offline Ratatui 0.29 terminal control deck, fleet manager, and orchestration utility for `agy-suite`.
+//!
+//! ## Overview
+//! `agy-ctrl` provides a full-terminal interactive TUI dashboard for managing the Antigravity agent fleet,
+//! inspecting declarative MCP tools, viewing the compiler failure circuit breaker, and launching supervised
+//! `agy` agent sessions with automatic pre-flight gatekeeper checks and Jujutsu workspace isolation.
+//!
+//! ## Core Architecture
+//! - [`app`]: Central state machine handling keyboard navigation, tab switching, and editing buffers.
+//! - [`launcher`]: Pre-launch validator and TTY suspension pipeline for spawning `agy` child sessions.
+//! - [`model`]: In-memory models for agent frontmatter manifests and declarative MCP tool definitions.
+//! - [`session`]: SQLite reader querying `conversation_summaries.db` for session resumption.
+//! - [`ui`]: Modular Ratatui rendering pipelines for the Fleet Matrix, Tool Catalog, and Diagnostics.
+//! - [`vcs`]: Jujutsu and Git snapshotting helpers for automated rollbacks and pre-save checkpoints.
 
 #![allow(clippy::print_stdout, reason = "CLI summary flags emit output to stdout")]
 #![allow(clippy::print_stderr, reason = "CLI error diagnostics emit output to stderr")]

@@ -51,20 +51,9 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
         .unwrap_or_else(|| WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from(".")));
 
     // 1. Check if the target agent declares pre_launch_checks in its markdown file
-    let checks = if let Some(path) = agy_common::find_agent_manifest_path(&root, type_name)
-        && let Ok(content) = std::fs::read_to_string(&path)
-    {
-        let declared = agy_common::parse_pre_launch_checks(&content);
-        if declared.is_empty() && type_name.eq_ignore_ascii_case("finisher") {
-            vec!["cargo_compilation".to_owned(), "test_compilation".to_owned(), "vcs_conflicts".to_owned()]
-        } else {
-            declared
-        }
-    } else if type_name.eq_ignore_ascii_case("finisher") {
-        vec!["cargo_compilation".to_owned(), "test_compilation".to_owned(), "vcs_conflicts".to_owned()]
-    } else {
-        Vec::new()
-    };
+    let checks = agy_common::find_agent_manifest_path(&root, type_name)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .map_or_else(Vec::new, |content| agy_common::parse_pre_launch_checks(&content));
 
     if checks.is_empty() {
         return PreToolResponse::allow();
@@ -87,6 +76,7 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "Unit test assertions and timestamps")]
 mod tests {
     use super::*;
     use agy_common::models::ToolCallPayload;
@@ -126,8 +116,20 @@ mod tests {
 
     #[test]
     fn test_finisher_subagent_evaluates_readiness() {
-        // Point workspace to temp dir without Cargo.toml so checks succeed
-        let temp_dir = std::env::temp_dir();
+        let temp_dir = std::env::temp_dir().join(format!(
+            "finisher_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let agents_dir = temp_dir.join("plugins/agy-suite/agents");
+        drop(std::fs::create_dir_all(&agents_dir));
+        drop(std::fs::write(
+            agents_dir.join("finisher.md"),
+            "---\nname: finisher\npre_launch_checks:\n  - vcs_conflicts\n---\nPrompt",
+        ));
+
         let mut input = PreToolUseInput {
             tool_call: Some(ToolCallPayload {
                 name: "invoke_subagent".to_owned(),
@@ -139,9 +141,11 @@ mod tests {
             }),
             ..Default::default()
         };
-        input.common.workspace_paths = vec![temp_dir];
+        input.common.workspace_paths = vec![temp_dir.clone()];
 
         let res = evaluate_tool_invocation(&input);
         assert_eq!(res.decision, agy_common::models::HookDecision::Allow);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }

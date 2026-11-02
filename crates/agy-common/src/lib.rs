@@ -1,7 +1,18 @@
 //! # agy-common
 //!
-//! Shared types, process hygiene supervisor, dynamic workspace root resolver,
-//! and `ProtoJSON` models for the `agy-suite` workspace.
+//! Shared systems primitives, process hygiene supervisor, dynamic workspace root resolver,
+//! and `ProtoJSON` lifecycle models for the `agy-suite` workspace.
+//!
+//! ## Submodules
+//! - [`error`]: Centralized typed error hierarchy ([`AgyError`]).
+//! - [`frontmatter`]: YAML frontmatter extraction from Markdown agent manifests ([`AgentFrontmatter`]).
+//! - [`gatekeeper`]: Modular admission gates and quality checks ([`GateCheck`], [`VcsConflictCheck`]).
+//! - [`jujutsu`]: Jujutsu workspace isolation, branch sync, and build cache symlinking ([`JujutsuWorkspace`]).
+//! - [`models`]: `ProtoJSON` schema models for Antigravity lifecycle hooks, handoffs, and circuit breaker.
+//! - [`resolver`]: Workspace and repository root discovery across Jujutsu and Git checkouts ([`WorkspaceResolver`]).
+//! - [`sandbox`]: Linux container / outer sandbox detection and Bubblewrap jail builder.
+//! - [`supervisor`]: Process hygiene supervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`).
+//! - [`tools`]: Declarative `tools.toml` models, parser, and template inheritance engine.
 
 pub mod error;
 pub mod frontmatter;

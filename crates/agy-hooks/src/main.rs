@@ -1,14 +1,32 @@
 //! # agy-hooks
 //!
 //! Dedicated featherweight CLI binary (<500KB, <1ms startup) handling Antigravity lifecycle events.
+//!
+//! ## Overview
+//! `agy-hooks` is invoked ephemerally by the Antigravity agent runtime during lifecycle events
+//! (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`). It exchanges `ProtoJSON`
+//! payloads over `stdin`/`stdout` without background daemon overhead.
+//!
+//! ## Subcommands
+//! - `detect-wip`: Emits ephemeral notification on working tree modification; burns zero tokens if clean.
+//! - `check-conflicts`: Blocks builds and tests if unresolved Jujutsu or Git conflict markers exist.
+//! - `check-subagent`: Intercepts `invoke_subagent` and evaluates declared `pre_launch_checks` (alias: `check-finisher`).
+//! - `enforce-tool-policy`: Enforces operator confirmation (`ask`) for mutating tools or tripped circuit breaker.
+//! - `record-handoff`: Captures session state and modified files to `.pipeline/` upon session termination.
+//! - `inject-wake`: Injects prior handoff state into Turn 1 of new conversation sessions.
+//! - `reset-circuit-breaker`: Resets the 2-strike compiler failure ledger.
+//! - `ensure-workspace`: Configures an isolated Jujutsu workspace with shared target build cache.
+//! - `check-clean`: Verifies that a workspace has zero uncommitted modifications.
 
 #![allow(clippy::print_stdout, reason = "CLI hook tool emits ProtoJSON directly to stdout")]
 #![allow(clippy::print_stderr, reason = "CLI diagnostics are emitted to stderr")]
 
+mod config;
 mod conflicts;
 mod finisher_gate;
 mod handoff;
 mod policy_gate;
+mod pre_tool_use;
 mod state;
 mod stdin;
 mod wip;
@@ -20,6 +38,10 @@ fn main() -> ExitCode {
     let command = args.get(1).map_or("help", String::as_str);
 
     match command {
+        "pre-tool-use" | "tool-use" => {
+            pre_tool_use::execute();
+            ExitCode::SUCCESS
+        }
         "detect-wip" => {
             wip::execute();
             ExitCode::SUCCESS
@@ -28,7 +50,7 @@ fn main() -> ExitCode {
             conflicts::execute();
             ExitCode::SUCCESS
         }
-        "check-finisher" => {
+        "check-subagent" | "check-finisher" => {
             finisher_gate::execute();
             ExitCode::SUCCESS
         }
@@ -116,9 +138,10 @@ fn print_usage() {
     eprintln!("  agy-hooks <COMMAND>");
     eprintln!();
     eprintln!("COMMANDS:");
+    eprintln!("  pre-tool-use          Unified hybrid PreToolUse hook evaluating hooks.toml pipeline (alias: tool-use)");
     eprintln!("  detect-wip            PreInvocation ephemeral notification on working tree modification");
     eprintln!("  check-conflicts       PreToolUse hook blocking builds/tests when unresolved conflicts exist");
-    eprintln!("  check-finisher        PreToolUse hook blocking finisher dispatch when compilation or conflicts fail");
+    eprintln!("  check-subagent        PreToolUse hook blocking subagent dispatch when pre-launch quality gates fail (alias: check-finisher)");
     eprintln!("  enforce-tool-policy   PreToolUse hook enforcing granular ASK vs ALLOW decision per tool");
     eprintln!("  record-handoff        Stop hook recording session metadata to .pipeline/last_handoff.md");
     eprintln!("  inject-wake           SessionStart hook injecting last handoff state into conversation");

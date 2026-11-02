@@ -204,6 +204,7 @@ pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>,
 
 /// Discovers the path to an agent's Markdown specification file.
 #[must_use]
+#[allow(clippy::print_stderr, reason = "Advisory notice when agent manifest is missing")]
 pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Option<std::path::PathBuf> {
     let mut candidates = vec![
         workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
@@ -216,7 +217,11 @@ pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Opti
         candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
     }
 
-    candidates.into_iter().find(|p| p.is_file())
+    let found = candidates.into_iter().find(|p| p.is_file());
+    if found.is_none() {
+        eprintln!("[agy-common] Advisory: Agent manifest for '{agent_name}' not found across workspace or ~/.gemini/config.");
+    }
+    found
 }
 
 /// Parses the list of `pre_launch_checks` from an agent's Markdown frontmatter.

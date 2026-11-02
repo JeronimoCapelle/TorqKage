@@ -26,43 +26,15 @@
       }
     ]
   },
-  "conflict-blocker": {
+  "unified-tool-guard": {
     "PreToolUse": [
       {
-        "matcher": "run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check",
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
-            "command": "agy-hooks check-conflicts",
-            "timeout": 2
-          }
-        ]
-      }
-    ]
-  },
-  "finisher-gatekeeper": {
-    "PreToolUse": [
-      {
-        "matcher": "invoke_subagent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "agy-hooks check-finisher",
-            "timeout": 30
-          }
-        ]
-      }
-    ]
-  },
-  "tool-policy-gate": {
-    "PreToolUse": [
-      {
-        "matcher": "modify_code|write_file|run_cargo_clippy_fix",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "agy-hooks enforce-tool-policy",
-            "timeout": 2
+            "command": "agy-hooks pre-tool-use",
+            "timeout": 15
           }
         ]
       }

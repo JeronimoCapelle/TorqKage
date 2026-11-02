@@ -86,12 +86,15 @@ impl App {
         } else {
             let plugin_tools = workspace_root.join("plugins/agy-suite/tools.toml");
             if plugin_tools.is_file() {
+                eprintln!("[agy-ctrl] Notice: Loaded tools configuration from fallback: {}", plugin_tools.display());
                 load_tools_from_file(&plugin_tools)?
             } else if let Ok(home) = std::env::var("HOME") {
                 let home_tools = PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
                 if home_tools.is_file() {
+                    eprintln!("[agy-ctrl] Notice: Loaded tools configuration from installed plugin: {}", home_tools.display());
                     load_tools_from_file(&home_tools)?
                 } else {
+                    eprintln!("[agy-ctrl] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config.");
                     Vec::new()
                 }
             } else {
@@ -435,8 +438,19 @@ impl App {
 
         // Reload tools from disk if tools were modified
         let tools_path = self.workspace_root.join("tools.toml");
-        if tools_path.is_file()
-            && let Ok(loaded) = load_tools_from_file(&tools_path)
+        let plugin_tools = self.workspace_root.join("plugins/agy-suite/tools.toml");
+        let candidate = if tools_path.is_file() {
+            tools_path
+        } else if plugin_tools.is_file() {
+            plugin_tools
+        } else if let Ok(home) = std::env::var("HOME") {
+            PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml")
+        } else {
+            tools_path
+        };
+
+        if candidate.is_file()
+            && let Ok(loaded) = load_tools_from_file(&candidate)
         {
             self.tools = loaded;
         }

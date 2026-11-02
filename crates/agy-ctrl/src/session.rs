@@ -42,6 +42,7 @@ pub(crate) fn find_agent_session_for_workspace(
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
     if which::which("sqlite3").is_err() {
+        eprintln!("[agy-ctrl] Advisory: 'sqlite3' CLI not found in PATH; past conversation session discovery disabled.");
         return None;
     }
 

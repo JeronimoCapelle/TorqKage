@@ -142,3 +142,37 @@ fn test_check_conflicts_e2e() {
     // Clean working repo should allow
     assert_eq!(resp.decision, agy_common::HookDecision::Allow);
 }
+
+#[test]
+fn test_pre_tool_use_read_only_allowed_e2e() {
+    let payload = agy_common::PreToolUseInput {
+        tool_call: Some(agy_common::models::ToolCallPayload {
+            name: "read_project_file".to_owned(),
+            args: serde_json::json!({"path": "src/lib.rs"}),
+        }),
+        ..Default::default()
+    };
+
+    let input_json = serde_json::to_string(&payload).expect("serialize payload");
+    let (success, stdout, _) = run_hook_subcommand("pre-tool-use", Some(&input_json));
+    assert!(success);
+    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    assert_eq!(resp.decision, agy_common::HookDecision::Allow);
+}
+
+#[test]
+fn test_pre_tool_use_mutating_asks_e2e() {
+    let payload = agy_common::PreToolUseInput {
+        tool_call: Some(agy_common::models::ToolCallPayload {
+            name: "modify_code".to_owned(),
+            args: serde_json::json!({"path": "src/lib.rs"}),
+        }),
+        ..Default::default()
+    };
+
+    let input_json = serde_json::to_string(&payload).expect("serialize payload");
+    let (success, stdout, _) = run_hook_subcommand("pre-tool-use", Some(&input_json));
+    assert!(success);
+    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    assert_eq!(resp.decision, agy_common::HookDecision::Ask);
+}

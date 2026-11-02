@@ -1,0 +1,36 @@
+# hooks.toml — Declarative Hybrid Lifecycle Hook Configuration for agy-hooks
+#
+# This file defines the execution pipeline and guard rules for Antigravity lifecycle hooks.
+# The engine evaluates native high-assurance Rust primitives (<1ms in-memory) alongside
+# optional declarative custom checks without requiring Rust recompilation.
+
+[pre_tool_use]
+# The ordered pipeline of safety checks evaluated sequentially on every tool call.
+# Execution halts on the first non-allow decision (first 'deny' or 'ask').
+#
+# Available native primitives:
+# - "circuit_breaker": Halts mutating tools if 2 consecutive compiler failures occurred.
+# - "subagent_admission": Dynamically evaluates target agent's frontmatter pre_launch_checks.
+# - "vcs_conflicts": Blocks execution when Jujutsu or Git conflict markers exist.
+# - "tool_policy": Asks for operator confirmation [y/n] for mutating or permission-gated tools.
+pipeline = [
+    "circuit_breaker",
+    "subagent_admission",
+    "vcs_conflicts",
+    "tool_policy",
+]
+
+# Matcher pattern for tools that trigger the vcs_conflicts check before running.
+# Supports exact names, wildcard prefix (e.g. 'run_cargo_.*'), or pipe separation '|'.
+vcs_conflicts_matcher = "run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check"
+
+# Optional declarative custom checks.
+# Add custom assertions below without modifying or recompiling Rust code.
+#
+# [[pre_tool_use.custom_checks]]
+# name = "disk_space_sentry"
+# matcher = "modify_code|write_file"
+# command = ["df", "--output=pcent", "."]
+# fail_if_output_contains = "100%"
+# decision = "deny"
+# reason = "Disk space critical: filesystem write operations blocked."

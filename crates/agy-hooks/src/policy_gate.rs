@@ -63,17 +63,13 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     PreToolResponse::allow()
 }
 
-/// Checks whether a tool is declared or known as a mutating tool.
-fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
+/// Checks whether a tool is declared as a mutating tool in declarative configuration.
+pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
     check_tool_attribute_in_config(tool_name, root, "mutating")
-        || matches!(
-            tool_name,
-            "run_cargo_clippy_fix" | "modify_code" | "write_file"
-        )
 }
 
 /// Inspects tools.toml (if present) for `require_permission_gate = true`.
-fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
+pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
     check_tool_attribute_in_config(tool_name, root, "require_permission_gate")
 }
 
