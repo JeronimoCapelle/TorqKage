@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use serde::Deserialize;
-use crate::models::{OutputCapture, ToolAction, ToolArg, ToolDefinition};
+use crate::models::{AgentGuard, OutputCapture, ToolAction, ToolArg, ToolDefinition};
 
 #[derive(Debug, Clone, Deserialize, Default)]
 struct RawTool {
@@ -37,13 +37,33 @@ struct RawConfigFile {
     base_tools: BTreeMap<String, RawTool>,
     #[serde(default)]
     tools: BTreeMap<String, RawTool>,
+    #[serde(default)]
+    agent_guards: BTreeMap<String, AgentGuard>,
+}
+
+/// Fully loaded and resolved tools and agent guards configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(crate) struct LoadedConfiguration {
+    pub(crate) tools: Vec<ToolDefinition>,
+    pub(crate) agent_guards: BTreeMap<String, AgentGuard>,
 }
 
 /// Parses and resolves all tools defined in a `tools.toml` content string.
 ///
 /// # Errors
 /// Returns an error if the TOML syntax is invalid.
+#[allow(dead_code, reason = "Legacy helper preserved for backward compatibility and testing")]
 pub(crate) fn parse_tools_str(toml_str: &str) -> Result<Vec<ToolDefinition>, toml::de::Error> {
+    parse_full_config_str(toml_str).map(|c| c.tools)
+}
+
+/// Parses and resolves both tools and agent guards defined in a `tools.toml` string.
+///
+/// # Errors
+/// Returns an error if the TOML syntax is invalid.
+pub(crate) fn parse_full_config_str(
+    toml_str: &str,
+) -> Result<LoadedConfiguration, toml::de::Error> {
     let raw: RawConfigFile = toml::from_str(toml_str)?;
 
     let mut resolved_tools = Vec::with_capacity(raw.tools.len());
@@ -58,18 +78,30 @@ pub(crate) fn parse_tools_str(toml_str: &str) -> Result<Vec<ToolDefinition>, tom
         resolved_tools.push(tool);
     }
 
-    Ok(resolved_tools)
+    Ok(LoadedConfiguration {
+        tools: resolved_tools,
+        agent_guards: raw.agent_guards,
+    })
 }
 
 /// Loads and resolves all tools from a given `tools.toml` file path.
 ///
 /// # Errors
 /// Returns an error if reading the file or parsing TOML fails.
+#[allow(dead_code, reason = "Legacy helper preserved for backward compatibility and testing")]
 pub(crate) fn load_tools_from_path(path: &Path) -> Result<Vec<ToolDefinition>, String> {
+    load_full_config_from_path(path).map(|c| c.tools)
+}
+
+/// Loads and resolves tools and agent guards from a given `tools.toml` file path.
+///
+/// # Errors
+/// Returns an error if reading the file or parsing TOML fails.
+pub(crate) fn load_full_config_from_path(path: &Path) -> Result<LoadedConfiguration, String> {
     let content = std::fs::read_to_string(path)
         .map_err(|err| format!("Failed to read tools configuration at '{}': {err}", path.display()))?;
 
-    parse_tools_str(&content)
+    parse_full_config_str(&content)
         .map_err(|err| format!("Failed to parse tools configuration at '{}': {err}", path.display()))
 }
 
@@ -205,5 +237,34 @@ mod tests {
         let check_tool = tools.iter().find(|t| t.name == "simple_check").expect("not found");
         assert_eq!(check_tool.action, ToolAction::StaticCommand);
         assert_eq!(check_tool.command, vec!["cargo".to_owned(), "check".to_owned()]);
+    }
+
+    #[test]
+    fn test_parse_agent_guards() {
+        let toml_sample = r#"
+            [tools.write_file]
+            description = "Writes a file"
+            action = "file_write"
+
+            [agent_guards.coder]
+            allowed_dirs = ["src"]
+            disallowed_dirs = ["tests", "benches"]
+
+            [agent_guards.planner]
+            allowed_dirs = ["docs"]
+            allowed_files = ["ARCHITECTURE.md"]
+        "#;
+
+        let loaded = parse_full_config_str(toml_sample).expect("parse failed");
+        assert_eq!(loaded.tools.len(), 1);
+        assert_eq!(loaded.agent_guards.len(), 2);
+
+        let coder_guard = loaded.agent_guards.get("coder").expect("coder guard missing");
+        assert_eq!(coder_guard.allowed_dirs, vec!["src".to_owned()]);
+        assert_eq!(coder_guard.disallowed_dirs, vec!["tests".to_owned(), "benches".to_owned()]);
+
+        let planner_guard = loaded.agent_guards.get("planner").expect("planner guard missing");
+        assert_eq!(planner_guard.allowed_dirs, vec!["docs".to_owned()]);
+        assert_eq!(planner_guard.allowed_files, vec!["ARCHITECTURE.md".to_owned()]);
     }
 }

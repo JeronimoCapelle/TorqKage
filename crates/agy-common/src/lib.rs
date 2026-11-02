@@ -14,7 +14,7 @@ pub use diagnostics::{CompactErrorReport, DiagnosticSpan};
 pub use error::{AgyError, Result};
 pub use gatekeeper::{GateCheck, GateCheckStatus, evaluate_finisher_readiness};
 pub use models::{
-    CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision, InjectStep,
+    CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision, InjectStep, PipelineHandoff,
     PostInvocationInput, PostInvocationResponse, PostToolUseInput, PreInvocationInput,
     PreInvocationResponse, PreToolResponse, PreToolUseInput, SessionStartInput,
     SessionStartResponse, SystemMessagePayload, StopInput, StopResponse, ToolCallPayload,

@@ -402,6 +402,67 @@ impl HandoffRecord {
     }
 }
 
+/// Structured inter-agent pipeline handoff manifest stored at `.pipeline/handoff.json`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PipelineHandoff {
+    pub from_agent: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_agent: Option<String>,
+    pub timestamp: String,
+    #[serde(default)]
+    pub modified_files: Vec<String>,
+    #[serde(default)]
+    pub deliverables: Vec<String>,
+    pub summary: String,
+    pub status: String,
+}
+
+impl PipelineHandoff {
+    /// Constructs a new `PipelineHandoff` with the current UTC timestamp.
+    #[must_use]
+    pub fn new(
+        from_agent: impl Into<String>,
+        target_agent: Option<String>,
+        summary: impl Into<String>,
+        modified_files: Vec<String>,
+        deliverables: Vec<String>,
+        status: impl Into<String>,
+    ) -> Self {
+        Self {
+            from_agent: from_agent.into(),
+            target_agent,
+            timestamp: format!("{}", jiff::Timestamp::now()),
+            modified_files,
+            deliverables,
+            summary: summary.into(),
+            status: status.into(),
+        }
+    }
+
+    /// Formats an actionable prompt block for session context injection.
+    #[allow(clippy::format_push_string, reason = "Constructing human-readable prompt string")]
+    #[must_use]
+    pub fn to_injection_message(&self) -> String {
+        let mut msg = format!(
+            "[PIPELINE CONTEXT HANDOFF]: Work handed off from '{}'",
+            self.from_agent
+        );
+        if let Some(ref target) = self.target_agent {
+            msg.push_str(&format!(" to '{target}'"));
+        }
+        msg.push_str(&format!(" (Status: {}).\n", self.status));
+        msg.push_str(&format!("Summary: {}\n", self.summary));
+
+        if !self.deliverables.is_empty() {
+            msg.push_str(&format!("Deliverables / Specs: {}.\n", self.deliverables.join(", ")));
+        }
+        if !self.modified_files.is_empty() {
+            msg.push_str(&format!("Modified Files: {}.\n", self.modified_files.join(", ")));
+        }
+        msg
+    }
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,

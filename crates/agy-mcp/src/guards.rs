@@ -1,6 +1,8 @@
 //! Composable security guards, path confinement, and UTF-8 truncation primitives.
 
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
+use crate::models::AgentGuard;
 
 /// Inspects a target path against dangerous files, secrets, and repository internals.
 ///
@@ -179,6 +181,85 @@ pub(crate) fn check_enforce_boundaries(
     Ok(())
 }
 
+/// Enforces agent-specific directory and file path boundaries.
+///
+/// # Errors
+/// Returns an error if the agent is restricted and the target path violates the agent's guard.
+pub(crate) fn check_agent_guard(
+    workspace_root: &Path,
+    candidate: &Path,
+    agent_name: Option<&str>,
+    guards: &BTreeMap<String, AgentGuard>,
+) -> Result<(), String> {
+    let Some(agent) = agent_name else {
+        return Ok(());
+    };
+
+    let Some(guard) = guards.get(agent) else {
+        return Ok(());
+    };
+
+    let relative = candidate
+        .strip_prefix(workspace_root)
+        .unwrap_or(candidate);
+    let rel_lossy = relative.to_string_lossy();
+
+    // 1. Check disallowed files
+    for disallowed_file in &guard.disallowed_files {
+        if rel_lossy == *disallowed_file {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is not permitted to modify file '{rel_lossy}'."
+            ));
+        }
+    }
+
+    // 2. Check disallowed directories
+    for disallowed_dir in &guard.disallowed_dirs {
+        let clean = disallowed_dir.trim_matches(['/', '\\']);
+        let is_disallowed = rel_lossy == clean
+            || rel_lossy.starts_with(&format!("{clean}/"))
+            || rel_lossy.starts_with(&format!("{clean}\\"))
+            || rel_lossy.contains(&format!("/{clean}/"))
+            || rel_lossy.contains(&format!("\\{clean}\\"));
+        if is_disallowed {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{clean}/'."
+            ));
+        }
+    }
+
+    // 3. Check allowed files
+    let matches_allowed_file = guard.allowed_files.iter().any(|f| rel_lossy == *f);
+    if matches_allowed_file {
+        return Ok(());
+    }
+
+    // 4. Check allowed directories
+    if !guard.allowed_dirs.is_empty() {
+        if guard.allowed_dirs.iter().any(|d| d == "*") {
+            return Ok(());
+        }
+
+        let is_allowed = guard.allowed_dirs.iter().any(|dir| {
+            let clean = dir.trim_matches(['/', '\\']);
+            rel_lossy == clean
+                || rel_lossy.starts_with(&format!("{clean}/"))
+                || rel_lossy.starts_with(&format!("{clean}\\"))
+                || rel_lossy.contains(&format!("/{clean}/"))
+                || rel_lossy.contains(&format!("\\{clean}\\"))
+        });
+
+        if !is_allowed {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is restricted to directories {:?} or files {:?}, but '{rel_lossy}' was requested.",
+                guard.allowed_dirs, guard.allowed_files
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 /// Truncates string output by lines and bytes safely on UTF-8 boundaries.
 pub(crate) fn truncate_output(
     text: &str,
@@ -293,5 +374,45 @@ mod tests {
         let bad_dir = root.join("src/main.rs");
         assert!(check_enforce_boundaries(&root, &good_dir, Some("docs"), None).is_ok());
         assert!(check_enforce_boundaries(&root, &bad_dir, Some("docs"), None).is_err());
+    }
+
+    #[test]
+    fn test_check_agent_guard() {
+        let root = std::env::temp_dir();
+        let mut guards = BTreeMap::new();
+
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                disallowed_dirs: vec!["tests".to_owned()],
+                allowed_files: Vec::new(),
+                disallowed_files: vec!["Cargo.toml".to_owned()],
+            },
+        );
+
+        guards.insert(
+            "planner".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["docs".to_owned()],
+                disallowed_dirs: vec!["src".to_owned()],
+                allowed_files: vec!["ARCHITECTURE.md".to_owned()],
+                disallowed_files: Vec::new(),
+            },
+        );
+
+        // Coder tests
+        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("coder"), &guards).is_ok());
+        assert!(check_agent_guard(&root, &root.join("tests/test.rs"), Some("coder"), &guards).is_err());
+        assert!(check_agent_guard(&root, &root.join("Cargo.toml"), Some("coder"), &guards).is_err());
+
+        // Planner tests
+        assert!(check_agent_guard(&root, &root.join("ARCHITECTURE.md"), Some("planner"), &guards).is_ok());
+        assert!(check_agent_guard(&root, &root.join("docs/rfc.md"), Some("planner"), &guards).is_ok());
+        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("planner"), &guards).is_err());
+
+        // Unrestricted agent
+        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok());
+        assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
     }
 }

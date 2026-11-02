@@ -1,8 +1,9 @@
 //! `file_write` action handler with path confinement, directory allowlisting, and security guards.
 
+use std::collections::BTreeMap;
 use std::path::Path;
-use crate::guards::{check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
-use crate::models::ToolDefinition;
+use crate::guards::{check_agent_guard, check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
+use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded file write action.
 ///
@@ -12,6 +13,8 @@ pub(crate) fn execute(
     tool: &ToolDefinition,
     workspace_root: &Path,
     arguments: &serde_json::Value,
+    agent_name: Option<&str>,
+    agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
     let path_str = arguments
         .get("path")
@@ -40,6 +43,8 @@ pub(crate) fn execute(
         tool.enforce_dir.as_deref(),
         tool.enforce_file_target.as_deref(),
     )?;
+
+    check_agent_guard(workspace_root, &safe_path, agent_name, agent_guards)?;
 
     if let Some(parent) = safe_path.parent()
         && !parent.exists()
@@ -100,7 +105,8 @@ mod tests {
             "content": "pub fn hello() -> &'static str { \"world\" }\n"
         });
 
-        let res = execute(&tool, &temp, &args);
+        let guards = BTreeMap::new();
+        let res = execute(&tool, &temp, &args, None, &guards);
         assert!(res.is_ok());
 
         let written = std::fs::read_to_string(temp.join("src/lib.rs")).unwrap();
@@ -121,7 +127,8 @@ mod tests {
             "content": "SECRET=1234\n"
         });
 
-        let res = execute(&tool, &temp, &args);
+        let guards = BTreeMap::new();
+        let res = execute(&tool, &temp, &args, None, &guards);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("sensitive file pattern"));
     }
@@ -140,7 +147,8 @@ mod tests {
             "content": "fn test() {}"
         });
 
-        let res = execute(&tool, &temp, &args);
+        let guards = BTreeMap::new();
+        let res = execute(&tool, &temp, &args, None, &guards);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("outside allowed directories"));
     }
@@ -158,12 +166,44 @@ mod tests {
             "path": ".pipeline/other.md",
             "content": "# Other"
         });
-        assert!(execute(&tool, &temp, &bad_args).is_err());
+        let guards = BTreeMap::new();
+        assert!(execute(&tool, &temp, &bad_args, None, &guards).is_err());
 
         let good_args = json!({
             "path": ".pipeline/spec.md",
             "content": "# Spec"
         });
-        assert!(execute(&tool, &temp, &good_args).is_ok());
+        assert!(execute(&tool, &temp, &good_args, None, &guards).is_ok());
+    }
+
+    #[test]
+    fn test_file_write_agent_guard_enforced() {
+        let temp = create_test_dir("agent-guard");
+        let tool = ToolDefinition {
+            name: "write_file".to_owned(),
+            enforce_workspace_bounds: true,
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        let test_file = json!({
+            "path": "tests/test.rs",
+            "content": "// test"
+        });
+        assert!(execute(&tool, &temp, &test_file, Some("coder"), &guards).is_err());
+
+        let src_file = json!({
+            "path": "src/main.rs",
+            "content": "fn main() {}"
+        });
+        assert!(execute(&tool, &temp, &src_file, Some("coder"), &guards).is_ok());
     }
 }

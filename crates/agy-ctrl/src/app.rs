@@ -50,7 +50,8 @@ pub(crate) struct App {
     pub(crate) show_help: bool,
     pub(crate) validation_modal: Option<(bool, String)>,
     pub(crate) status_message: Option<(String, bool)>,
-    pub(crate) pending_launch: Option<String>,
+    pub(crate) pending_launch: Option<(String, Option<String>)>,
+    pub(crate) active_agent_session: Option<crate::session::SessionSummary>,
     pub(crate) sandbox_enabled: bool,
     pub(crate) should_quit: bool,
 }
@@ -79,7 +80,7 @@ impl App {
 
         let agents = discover_agents(&workspace_root);
 
-        Ok(Self {
+        let mut app = Self {
             workspace_root,
             agents,
             tools,
@@ -91,11 +92,24 @@ impl App {
             directives_scroll: 0,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter/l] Launch agy, [p] Policy, [s] Sandbox, [F2] Save".to_owned(), false)),
+            status_message: Some(("Press [Enter/r] Resume, [n] New Session, [p] Policy, [b] Sandbox, [F2] Save".to_owned(), false)),
             pending_launch: None,
+            active_agent_session: None,
             sandbox_enabled: false,
             should_quit: false,
-        })
+        };
+        app.refresh_selected_agent_session();
+        Ok(app)
+    }
+
+    /// Discovers the latest resumable session for the selected agent in this workspace.
+    pub(crate) fn refresh_selected_agent_session(&mut self) {
+        if let Some(agent) = self.selected_agent() {
+            self.active_agent_session =
+                crate::session::find_agent_session_for_workspace(&agent.name, &self.workspace_root);
+        } else {
+            self.active_agent_session = None;
+        }
     }
 
     /// Toggles outer-loop Bubblewrap sandbox execution on or off for launched `agy` sessions.
@@ -130,9 +144,17 @@ impl App {
     }
 
     /// Requests launching an interactive `agy` session for the currently selected agent.
-    pub(crate) fn request_launch(&mut self) {
+    /// If `resume` is true and a previous session exists for this workspace, resumes it.
+    pub(crate) fn request_launch(&mut self, resume: bool) {
         if let Some(agent) = self.selected_agent() {
-            self.pending_launch = Some(agent.name.clone());
+            let resume_id = if resume {
+                self.active_agent_session
+                    .as_ref()
+                    .map(|s| s.conversation_id.clone())
+            } else {
+                None
+            };
+            self.pending_launch = Some((agent.name.clone(), resume_id));
         }
     }
 
@@ -148,7 +170,7 @@ impl App {
     }
 
     /// Moves selection to the next agent.
-    pub(crate) const fn next_agent(&mut self) {
+    pub(crate) fn next_agent(&mut self) {
         if !self.agents.is_empty() {
             let next = self.selected_agent_idx.saturating_add(1);
             if next >= self.agents.len() {
@@ -157,11 +179,12 @@ impl App {
                 self.selected_agent_idx = next;
             }
             self.directives_scroll = 0;
+            self.refresh_selected_agent_session();
         }
     }
 
     /// Moves selection to the previous agent.
-    pub(crate) const fn prev_agent(&mut self) {
+    pub(crate) fn prev_agent(&mut self) {
         if !self.agents.is_empty() {
             if self.selected_agent_idx == 0 {
                 self.selected_agent_idx = self.agents.len().saturating_sub(1);
@@ -169,6 +192,7 @@ impl App {
                 self.selected_agent_idx = self.selected_agent_idx.saturating_sub(1);
             }
             self.directives_scroll = 0;
+            self.refresh_selected_agent_session();
         }
     }
 

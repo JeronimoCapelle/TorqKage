@@ -3,15 +3,16 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use agy_common::{
-    HandoffRecord, InjectStep, SessionStartInput, SessionStartResponse, StopInput, StopResponse,
-    WorkspaceResolver,
+    HandoffRecord, InjectStep, PipelineHandoff, SessionStartInput, SessionStartResponse, StopInput,
+    StopResponse, WorkspaceResolver,
 };
 use crate::stdin::read_stdin_payload;
 
 /// Executes the `record-handoff` hook (`Stop`).
 ///
 /// Captures working copy changes and active agent metadata, writing a Markdown summary
-/// to `.pipeline/last_handoff.md`. Emits `{}` on `stdout` permitting loop termination.
+/// to `.pipeline/last_handoff.md` and structured JSON to `.pipeline/handoff.json`.
+/// Emits `{}` on `stdout` permitting loop termination.
 pub(crate) fn execute_record_handoff() {
     let input: StopInput = read_stdin_payload();
 
@@ -28,12 +29,24 @@ pub(crate) fn execute_record_handoff() {
         "WIP".to_owned()
     };
 
-    let record = HandoffRecord::new(agent_name, modified_files, status);
+    let record = HandoffRecord::new(&agent_name, modified_files.clone(), &status);
 
     let pipeline_dir = root.join(".pipeline");
     if std::fs::create_dir_all(&pipeline_dir).is_ok() {
         let handoff_path = pipeline_dir.join("last_handoff.md");
         drop(std::fs::write(&handoff_path, record.to_markdown()));
+
+        let pipeline_handoff = PipelineHandoff::new(
+            &agent_name,
+            None,
+            format!("Session completed by agent '{agent_name}' with status '{status}'."),
+            modified_files,
+            Vec::new(),
+            status,
+        );
+        if let Ok(json_str) = serde_json::to_string_pretty(&pipeline_handoff) {
+            drop(std::fs::write(pipeline_dir.join("handoff.json"), json_str));
+        }
     }
 
     let resp = StopResponse::allow();
@@ -44,38 +57,41 @@ pub(crate) fn execute_record_handoff() {
 
 /// Executes the `inject-wake` hook (`SessionStart`).
 ///
-/// Reads `.pipeline/last_handoff.md` if present and emits a `systemMessage` step
+/// Reads `.pipeline/handoff.json` (or `.pipeline/last_handoff.md`) if present and emits a `systemMessage` step
 /// providing immediate continuity context for the starting conversation session.
 pub(crate) fn execute_inject_wake() {
     let input: SessionStartInput = read_stdin_payload();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
-    let handoff_path = root.join(".pipeline").join("last_handoff.md");
+    let pipeline_dir = root.join(".pipeline");
+    let json_handoff = pipeline_dir.join("handoff.json");
+    let md_handoff = pipeline_dir.join("last_handoff.md");
 
-    let resp = if handoff_path.exists() {
-        std::fs::read_to_string(&handoff_path).map_or_else(
-            |_| SessionStartResponse::default(),
-            |content| {
-                if let Some(record) = HandoffRecord::from_markdown(&content) {
-                    let files_str = if record.modified_files.is_empty() {
-                        "Working tree clean.".to_owned()
-                    } else {
-                        format!("Modified files: {}.", record.modified_files.join(", "))
-                    };
+    let resp = if json_handoff.exists()
+        && let Ok(content) = std::fs::read_to_string(&json_handoff)
+        && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
+    {
+        SessionStartResponse {
+            inject_steps: vec![InjectStep::system(handoff.to_injection_message())],
+        }
+    } else if md_handoff.exists()
+        && let Ok(content) = std::fs::read_to_string(&md_handoff)
+        && let Some(record) = HandoffRecord::from_markdown(&content)
+    {
+        let files_str = if record.modified_files.is_empty() {
+            "Working tree clean.".to_owned()
+        } else {
+            format!("Modified files: {}.", record.modified_files.join(", "))
+        };
 
-                    let msg = format!(
-                        "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
-                        record.previous_agent, files_str, record.status
-                    );
+        let msg = format!(
+            "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
+            record.previous_agent, files_str, record.status
+        );
 
-                    SessionStartResponse {
-                        inject_steps: vec![InjectStep::system(msg)],
-                    }
-                } else {
-                    SessionStartResponse::default()
-                }
-            },
-        )
+        SessionStartResponse {
+            inject_steps: vec![InjectStep::system(msg)],
+        }
     } else {
         SessionStartResponse::default()
     };

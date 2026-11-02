@@ -50,51 +50,47 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 15
 
-# --- Tier 1: Project Code Modification & Creation (Root Supervised) ---
+# --- Tier 1: Unified Project Code Modification & Creation ---
 
+[tools.modify_code]
+inherit = "base_tools.code_modifier"
+description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
+
+[tools.write_file]
+inherit = "base_tools.file_creator"
+description = "Creates a new file strictly within the canonical workspace bounds"
+
+# Aliases for backward compatibility
 [tools.modify_project_code]
 inherit = "base_tools.code_modifier"
-allowed_directories = ["src", "tests", "benches", "examples", "docs"]
+description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
 
 [tools.write_project_file]
 inherit = "base_tools.file_creator"
-allowed_directories = ["src", "tests", "benches", "examples", "docs"]
+description = "Creates a new file strictly within the canonical workspace bounds"
 
-# --- Tier 1B: Source Code Implementation (Coder Confined strictly to src/) ---
+# ==============================================================================
+# DECLARATIVE PER-AGENT PATH & DIRECTORY GUARDS
+# ==============================================================================
 
-[tools.modify_source_code]
-inherit = "base_tools.code_modifier"
-description = "Applies Aider search/replace blocks strictly within src/ via mpatch"
-allowed_directories = ["src"]
+[agent_guards.coder]
+allowed_dirs = ["src"]
+disallowed_dirs = ["tests", "benches"]
 
-[tools.write_source_file]
-inherit = "base_tools.file_creator"
-description = "Creates a new source code module file strictly inside src/"
-allowed_directories = ["src"]
+[agent_guards.test-author]
+allowed_dirs = ["tests", "benches"]
+disallowed_dirs = ["src"]
 
-# --- Tier 2: Test Suites & Benchmarks (Test Author Confined) ---
+[agent_guards.planner]
+allowed_dirs = ["docs", ".scratchpad"]
+allowed_files = ["ARCHITECTURE.md"]
+disallowed_dirs = ["src", "tests", "benches"]
 
-[tools.modify_test_code]
-inherit = "base_tools.code_modifier"
-description = "Applies Aider search/replace blocks strictly within tests/ and benches/ via mpatch"
-allowed_directories = ["tests", "benches"]
+[agent_guards.copilot]
+allowed_dirs = ["*"]
 
-[tools.write_test_file]
-inherit = "base_tools.file_creator"
-description = "Creates a new test suite or harness file strictly inside tests/ or benches/"
-allowed_directories = ["tests", "benches"]
-
-# --- Tier 3: Design Documents & Architecture Specs (Planner Confined) ---
-
-[tools.modify_design_doc]
-inherit = "base_tools.code_modifier"
-description = "Applies design edits strictly to ARCHITECTURE.md and .scratchpad/ via mpatch"
-allowed_directories = ["ARCHITECTURE.md", ".scratchpad"]
-
-[tools.write_design_doc]
-inherit = "base_tools.file_creator"
-description = "Writes design artifacts, architecture notes, and reports strictly to ARCHITECTURE.md or .scratchpad/"
-allowed_directories = ["ARCHITECTURE.md", ".scratchpad"]
+[agent_guards.finisher]
+allowed_dirs = ["*"]
 
 # --- Compilation & Compiler Diagnostics ---
 

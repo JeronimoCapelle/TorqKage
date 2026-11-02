@@ -37,7 +37,8 @@ mcp_tools:
   - analyze_llvm_mca
   - inspect_binary_sections
   - inspect_symbol_table
-  - write_design_doc
+  - write_file
+  - write_project_file
   - query_tool_help
 ---
 

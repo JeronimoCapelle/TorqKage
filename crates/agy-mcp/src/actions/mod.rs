@@ -9,8 +9,9 @@ pub(crate) mod mpatch_edit;
 pub(crate) mod parameterized_cmd;
 pub(crate) mod static_cmd;
 
+use std::collections::BTreeMap;
 use std::path::Path;
-use crate::models::{ToolAction, ToolDefinition};
+use crate::models::{AgentGuard, ToolAction, ToolDefinition};
 
 /// Dispatches tool execution to the appropriate action handler.
 ///
@@ -22,6 +23,8 @@ pub(crate) fn dispatch_action(
     tool: &ToolDefinition,
     workspace_root: &Path,
     arguments: &serde_json::Value,
+    agent_name: Option<&str>,
+    agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<(String, bool), String> {
     evaluate_pre_flight_guards(tool, workspace_root)?;
 
@@ -32,12 +35,12 @@ pub(crate) fn dispatch_action(
         }
 
         ToolAction::FileWrite => {
-            let content = file_write::execute(tool, workspace_root, arguments)?;
+            let content = file_write::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
         }
 
         ToolAction::MpatchEdit => {
-            let content = mpatch_edit::execute(tool, workspace_root, arguments)?;
+            let content = mpatch_edit::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
         }
 

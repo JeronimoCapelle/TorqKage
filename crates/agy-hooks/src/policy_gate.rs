@@ -55,6 +55,8 @@ fn is_default_mutating_tool(tool_name: &str) -> bool {
     matches!(
         tool_name,
         "run_cargo_clippy_fix"
+            | "modify_code"
+            | "write_file"
             | "modify_project_code"
             | "modify_source_code"
             | "modify_test_code"

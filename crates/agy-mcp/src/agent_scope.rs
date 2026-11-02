@@ -146,8 +146,10 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
     let list: &[&str] = match agent {
         "coder" => &[
             "read_project_file",
-            "modify_source_code",
-            "write_source_file",
+            "modify_code",
+            "write_file",
+            "modify_project_code",
+            "write_project_file",
             "search_codebase",
             "inspect_workspace_diff",
             "run_quick_check",
@@ -160,6 +162,8 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
         ],
         "copilot" => &[
             "read_project_file",
+            "write_file",
+            "modify_code",
             "write_project_file",
             "modify_project_code",
             "search_codebase",
@@ -217,13 +221,16 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
             "analyze_llvm_mca",
             "inspect_binary_sections",
             "inspect_symbol_table",
-            "write_design_doc",
+            "write_file",
+            "write_project_file",
             "query_tool_help",
         ],
         "planner" => &[
             "read_project_file",
-            "write_design_doc",
-            "modify_design_doc",
+            "write_file",
+            "modify_code",
+            "write_project_file",
+            "modify_project_code",
             "search_codebase",
             "inspect_module_structure",
             "query_project_spec",
@@ -252,8 +259,10 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
         "test-author" => &[
             "read_project_file",
             "search_codebase",
-            "write_test_file",
-            "modify_test_code",
+            "write_file",
+            "modify_code",
+            "write_project_file",
+            "modify_project_code",
             "run_quick_check",
             "run_cargo_verification",
             "run_cargo_test",
@@ -291,8 +300,8 @@ mod tests {
     #[test]
     fn test_canonical_agent_tools() {
         let coder_tools = canonical_agent_tools("coder");
-        assert!(coder_tools.contains("modify_source_code"));
-        assert!(!coder_tools.contains("modify_design_doc"));
+        assert!(coder_tools.contains("modify_code"));
+        assert!(!coder_tools.contains("eval_symbolic_math"));
 
         let mini_tools = canonical_agent_tools("mini");
         assert_eq!(mini_tools.len(), 1);

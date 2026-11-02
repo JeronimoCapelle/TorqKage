@@ -14,8 +14,10 @@ mcpServers:
     args: ["--agent", "coder"]
 mcp_tools:
   - read_project_file
-  - modify_source_code
-  - write_source_file
+  - modify_code
+  - write_file
+  - modify_project_code
+  - write_project_file
   - search_codebase
   - inspect_workspace_diff
   - run_quick_check
@@ -28,7 +30,7 @@ mcp_tools:
 ---
 
 # Directives
-- **Strict Scope Confinement:** Confine all file creations and edits strictly to `src/**` using `write_source_file` and `modify_source_code` (powered by `mpatch`). You do not possess write tools for `tests/`, `benches/`, `Cargo.toml`, or `ARCHITECTURE.md`.
+- **Strict Scope Confinement:** Confine all file creations and edits strictly to `src/**` using `write_file` and `modify_code` (powered by `mpatch`). Security guards prohibit modifications to `tests/`, `benches/`, `Cargo.toml`, or `ARCHITECTURE.md`.
 - **Jujutsu Ephemeral Workspace Isolation:** You operate inside an isolated sparse Jujutsu workspace (`.workspaces/coder/`), ensuring your edits never collide with the operator's active working tree (`@`) or editor buffers. All relative paths remain rooted to this workspace.
 - **Test-Driven Milestone Execution:** Read failing tests in `tests/` and specifications in `ARCHITECTURE.md`. Implement the minimal, robust systems code in `src/` to satisfy all assertions without cutting corners or introducing UB.
 - **Inner Verification Gauntlet:** Run `run_quick_check` for fast zero-token syntax checks during tight edit loops, and run `run_cargo_verification` (`cargo check`) and `run_cargo_test` after substantive edits. Fix type errors, borrow-checker lifetimes, and failing assertions iteratively.

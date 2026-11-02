@@ -14,8 +14,10 @@ mcpServers:
 mcp_tools:
   - read_project_file
   - search_codebase
-  - write_test_file
-  - modify_test_code
+  - write_file
+  - modify_code
+  - write_project_file
+  - modify_project_code
   - run_quick_check
   - run_cargo_verification
   - run_cargo_test

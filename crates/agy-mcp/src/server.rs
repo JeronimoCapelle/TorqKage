@@ -1,10 +1,11 @@
 //! The Model Context Protocol (MCP) server daemon handling JSON-RPC 2.0 requests over stdio.
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use crate::actions;
-use crate::models::ToolDefinition;
+use crate::models::{AgentGuard, ToolDefinition};
 use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
 use crate::schema::McpTool;
 
@@ -15,6 +16,7 @@ pub(crate) struct McpServer {
     mcp_tools: Vec<McpTool>,
     workspace_root: PathBuf,
     agent: Option<String>,
+    agent_guards: BTreeMap<String, AgentGuard>,
 }
 
 impl McpServer {
@@ -25,6 +27,7 @@ impl McpServer {
         tools: Vec<ToolDefinition>,
         workspace_root: PathBuf,
         agent_name: Option<String>,
+        agent_guards: BTreeMap<String, AgentGuard>,
     ) -> Self {
         let (tools, agent) = match agent_name {
             Some(name) => {
@@ -50,6 +53,7 @@ impl McpServer {
             mcp_tools,
             workspace_root,
             agent,
+            agent_guards,
         }
     }
 
@@ -121,7 +125,13 @@ impl McpServer {
                     .unwrap_or(&empty_args);
 
                 let (content_text, is_error) =
-                    match actions::dispatch_action(tool, &self.workspace_root, arguments) {
+                    match actions::dispatch_action(
+                        tool,
+                        &self.workspace_root,
+                        arguments,
+                        self.agent.as_deref(),
+                        &self.agent_guards,
+                    ) {
                         Ok((text, err)) => (text, err),
                         Err(err_msg) => (err_msg, true),
                     };
@@ -228,7 +238,7 @@ mod tests {
             },
         ];
 
-        McpServer::new(tools, std::env::temp_dir(), None)
+        McpServer::new(tools, std::env::temp_dir(), None, BTreeMap::new())
     }
 
     #[test]
@@ -294,7 +304,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let server = McpServer::new(tools, temp_dir.clone(), None);
+        let server = McpServer::new(tools, temp_dir.clone(), None, BTreeMap::new());
         let req = JsonRpcRequest {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(3)),
@@ -329,7 +339,7 @@ mod tests {
             },
         ];
 
-        let server = McpServer::new(tools, temp_dir.clone(), None);
+        let server = McpServer::new(tools, temp_dir.clone(), None, BTreeMap::new());
 
         // 1. Write file
         let write_req = JsonRpcRequest {
@@ -375,23 +385,31 @@ mod tests {
     fn test_agent_scoping_coder_cannot_call_design_doc() {
         let tools = vec![
             ToolDefinition {
-                name: "modify_source_code".to_owned(),
+                name: "modify_code".to_owned(),
                 description: "Modify source code".to_owned(),
                 action: ToolAction::MpatchEdit,
                 ..Default::default()
             },
             ToolDefinition {
-                name: "modify_design_doc".to_owned(),
-                description: "Modify design doc".to_owned(),
-                action: ToolAction::MpatchEdit,
+                name: "eval_symbolic_math".to_owned(),
+                description: "Symbolic math".to_owned(),
+                action: ToolAction::ParameterizedCommand,
                 ..Default::default()
             },
         ];
 
-        // Scope to coder
-        let server = McpServer::new(tools, std::env::temp_dir(), Some("coder".to_owned()));
+        let temp_dir = std::env::temp_dir().join(format!("agy_test_scope_{}", std::process::id()));
+        let agents_dir = temp_dir.join("plugins/agy-suite/agents");
+        std::fs::create_dir_all(&agents_dir).expect("create dir");
+        std::fs::write(
+            agents_dir.join("coder.md"),
+            "---\nname: coder\nmcp_tools:\n  - modify_code\n---\n",
+        ).expect("write mock coder.md");
 
-        // 1. tools/list should ONLY have modify_source_code, NOT modify_design_doc
+        // Scope to coder
+        let server = McpServer::new(tools, temp_dir.clone(), Some("coder".to_owned()), BTreeMap::new());
+
+        // 1. tools/list should ONLY have modify_code, NOT eval_symbolic_math
         let list_req = JsonRpcRequest {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(1)),
@@ -401,21 +419,23 @@ mod tests {
         let list_resp = server.handle_request(list_req).expect("list resp");
         let tool_list = list_resp.result.unwrap()["tools"].as_array().unwrap().clone();
         assert_eq!(tool_list.len(), 1);
-        assert_eq!(tool_list[0]["name"], "modify_source_code");
+        assert_eq!(tool_list[0]["name"], "modify_code");
 
-        // 2. tools/call on modify_design_doc should fail with error
+        // 2. tools/call on eval_symbolic_math should fail with error
         let call_req = JsonRpcRequest {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(2)),
             method: "tools/call".to_owned(),
             params: Some(json!({
-                "name": "modify_design_doc",
-                "arguments": { "path": "ARCHITECTURE.md", "patch": "..." }
+                "name": "eval_symbolic_math",
+                "arguments": { "expression": "2+2" }
             })),
         };
         let call_resp = server.handle_request(call_req).expect("call resp");
         assert!(call_resp.error.is_some());
         let err = call_resp.error.unwrap();
         assert!(err.message.contains("unauthorized for agent 'coder'"));
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }

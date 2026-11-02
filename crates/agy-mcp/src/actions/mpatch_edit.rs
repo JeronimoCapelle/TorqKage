@@ -1,9 +1,10 @@
 //! `mpatch_edit` action handler applying fuzzy Aider search/replace blocks and unified diffs.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use mpatch::{patch_content_str, ApplyOptions};
-use crate::guards::{check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
-use crate::models::ToolDefinition;
+use crate::guards::{check_agent_guard, check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
+use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded fuzzy code modification using `mpatch`.
 ///
@@ -13,6 +14,8 @@ pub(crate) fn execute(
     tool: &ToolDefinition,
     workspace_root: &Path,
     arguments: &serde_json::Value,
+    agent_name: Option<&str>,
+    agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
     let path_str = arguments
         .get("path")
@@ -41,6 +44,8 @@ pub(crate) fn execute(
         tool.enforce_dir.as_deref(),
         tool.enforce_file_target.as_deref(),
     )?;
+
+    check_agent_guard(workspace_root, &safe_path, agent_name, agent_guards)?;
 
     if !safe_path.exists() {
         return Err(format!(
@@ -169,7 +174,8 @@ mod tests {
             "patch": patch
         });
 
-        let res = execute(&tool, &temp, &args);
+        let guards = BTreeMap::new();
+        let res = execute(&tool, &temp, &args, None, &guards);
         assert!(res.is_ok());
 
         let modified = std::fs::read_to_string(&file_path).unwrap();
@@ -198,7 +204,40 @@ mod tests {
             "patch": patch
         });
 
-        let res = execute(&tool, &temp, &args);
+        let guards = BTreeMap::new();
+        let res = execute(&tool, &temp, &args, None, &guards);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_mpatch_agent_guard_blocks_unauthorized_dir() {
+        let temp = create_test_dir("agent-guard");
+        let tests_dir = temp.join("tests");
+        std::fs::create_dir_all(&tests_dir).unwrap();
+        let file_path = tests_dir.join("test.rs");
+        std::fs::write(&file_path, "fn test() {}\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "modify_code".to_owned(),
+            enforce_workspace_bounds: true,
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        let patch = "<<<<<<< SEARCH\nfn test() {}\n=======\nfn test_updated() {}\n>>>>>>> REPLACE";
+        let args = json!({
+            "path": "tests/test.rs",
+            "patch": patch
+        });
+
+        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_err());
     }
 }

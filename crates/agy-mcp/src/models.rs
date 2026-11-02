@@ -95,6 +95,19 @@ pub(crate) struct ToolDefinition {
     pub(crate) error_fallback: Option<String>,
 }
 
+/// Declarative path and directory guards scoped to a specific agent role.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub(crate) struct AgentGuard {
+    #[serde(default)]
+    pub(crate) allowed_dirs: Vec<String>,
+    #[serde(default)]
+    pub(crate) disallowed_dirs: Vec<String>,
+    #[serde(default)]
+    pub(crate) allowed_files: Vec<String>,
+    #[serde(default)]
+    pub(crate) disallowed_files: Vec<String>,
+}
+
 const fn default_timeout_seconds() -> u64 {
     30
 }

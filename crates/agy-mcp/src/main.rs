@@ -26,7 +26,7 @@ async fn main() -> ExitCode {
     eprintln!("[agy-mcp] Workspace root: '{}'", workspace_root.display());
     eprintln!("[agy-mcp] Loading declarative tools configuration from '{}'...", config_path.display());
 
-    let tools = match config::load_tools_from_path(&config_path) {
+    let loaded_config = match config::load_full_config_from_path(&config_path) {
         Ok(t) => t,
         Err(err) => {
             eprintln!("🛑 [agy-mcp] Startup failure: {err}");
@@ -34,14 +34,19 @@ async fn main() -> ExitCode {
         }
     };
 
-    let report = validator::validate_tools(&tools);
+    let report = validator::validate_tools(&loaded_config.tools);
     eprintln!("{}", report.summary());
 
     for warning in report.warnings {
         eprintln!("[agy-mcp] Warning: {warning}");
     }
 
-    let server = McpServer::new(tools, workspace_root, agent_name);
+    let server = McpServer::new(
+        loaded_config.tools,
+        workspace_root,
+        agent_name,
+        loaded_config.agent_guards,
+    );
 
     if let Err(err) = server.run_stdio().await {
         eprintln!("🛑 [agy-mcp] Stdio loop error: {err}");

@@ -119,6 +119,9 @@ pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest
 
 /// Suspends Ratatui, runs pre-launch checks, and spawns an interactive `agy` CLI session.
 ///
+/// If `resume_conversation` is specified, resumes that specific session using `agy --conversation <id>`.
+/// Otherwise, boots a new session with `agy --agent <name>`.
+///
 /// Once the user exits the `agy` session, raw mode and alternate screen are re-established,
 /// returning the user seamlessly back to the `agy-ctrl` deck.
 ///
@@ -129,6 +132,7 @@ pub(crate) fn launch_agy_interactive(
     workspace_root: &Path,
     agent: &AgentManifest,
     sandbox: bool,
+    resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
     // 1. Run pre-launch checks
     let report = run_pre_launch_checks(workspace_root, agent);
@@ -143,7 +147,12 @@ pub(crate) fn launch_agy_interactive(
 
     // Print friendly launcher header
     println!("\n================================================================================");
-    println!("🚀 [agy-ctrl] Launching interactive agy session with agent: {}", agent.name);
+    if let Some(conv_id) = resume_conversation {
+        println!("🚀 [agy-ctrl] RESUMING previous agy session for agent: {}", agent.name);
+        println!("   Conversation ID: {conv_id}");
+    } else {
+        println!("🚀 [agy-ctrl] Launching fresh agy session with agent: {}", agent.name);
+    }
     println!("   Effort: {} | Permissions: {} | Policy: {}", agent.effort, agent.permission_mode, agent.command_execution_policy);
     println!("   Sandbox: {}", if sandbox { "ENABLED (Bubblewrap isolation)" } else { "DISABLED (direct host)" });
     println!("   Workspace: {}", workspace_root.display());
@@ -155,7 +164,11 @@ pub(crate) fn launch_agy_interactive(
     if sandbox {
         cmd.arg("--sandbox");
     }
-    cmd.arg("--agent").arg(&agent.name);
+    if let Some(conv_id) = resume_conversation {
+        cmd.arg("--conversation").arg(conv_id);
+    } else {
+        cmd.arg("--agent").arg(&agent.name);
+    }
     cmd.current_dir(workspace_root);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
@@ -173,7 +186,7 @@ pub(crate) fn launch_agy_interactive(
     status_res.map_err(|e| format!("Failed to execute 'agy': {e}"))
 }
 
-/// Headless launcher: runs pre-launch checks and spawns `agy --agent <name>` directly from CLI.
+/// Headless launcher: runs pre-launch checks and spawns `agy` directly from CLI.
 ///
 /// # Errors
 /// Returns an error string if pre-launch checks fail or if `agy` cannot be spawned.
@@ -181,23 +194,36 @@ pub(crate) fn launch_agy_headless(
     workspace_root: &Path,
     agent: &AgentManifest,
     sandbox: bool,
+    resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
     let report = run_pre_launch_checks(workspace_root, agent);
     if !report.is_ok() {
         return Err(report.format_diagnostics());
     }
 
-    println!(
-        "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {})",
-        agent.name,
-        if sandbox { "ENABLED" } else { "DISABLED" }
-    );
+    if let Some(conv_id) = resume_conversation {
+        println!(
+            "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {})",
+            agent.name,
+            if sandbox { "ENABLED" } else { "DISABLED" }
+        );
+    } else {
+        println!(
+            "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {})",
+            agent.name,
+            if sandbox { "ENABLED" } else { "DISABLED" }
+        );
+    }
 
     let mut cmd = Command::new("agy");
     if sandbox {
         cmd.arg("--sandbox");
     }
-    cmd.arg("--agent").arg(&agent.name);
+    if let Some(conv_id) = resume_conversation {
+        cmd.arg("--conversation").arg(conv_id);
+    } else {
+        cmd.arg("--agent").arg(&agent.name);
+    }
     cmd.current_dir(workspace_root);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());

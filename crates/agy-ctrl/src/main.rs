@@ -12,6 +12,7 @@
 mod app;
 mod launcher;
 mod model;
+mod session;
 mod summary;
 mod ui;
 mod vcs;
@@ -91,7 +92,10 @@ fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bo
         return ExitCode::FAILURE;
     };
 
-    match launcher::launch_agy_headless(workspace_root, &agent, sandbox) {
+    let resume_conv = session::find_agent_session_for_workspace(&agent.name, workspace_root)
+        .map(|s| s.conversation_id);
+
+    match launcher::launch_agy_headless(workspace_root, &agent, sandbox, resume_conv.as_deref()) {
         Ok(status) => {
             if status.success() {
                 ExitCode::SUCCESS
@@ -165,12 +169,19 @@ fn event_loop(
 ) -> Result<(), String> {
     while !app.should_quit {
         // Handle pending launch request if one was triggered
-        if let Some(agent_name) = app.pending_launch.take() {
+        if let Some((agent_name, resume_conv)) = app.pending_launch.take() {
             if let Some(agent) = app.agents.iter().find(|a| a.name == agent_name).cloned() {
-                match launcher::launch_agy_interactive(terminal, &app.workspace_root, &agent, app.sandbox_enabled) {
+                match launcher::launch_agy_interactive(
+                    terminal,
+                    &app.workspace_root,
+                    &agent,
+                    app.sandbox_enabled,
+                    resume_conv.as_deref(),
+                ) {
                     Ok(status) => {
                         // Reload agents from disk in case tools were modified
                         app.agents = model::discover_agents(&app.workspace_root);
+                        app.refresh_selected_agent_session();
                         app.status_message = Some((
                             format!("✔ Returned from agy session with agent '{agent_name}' ({status})"),
                             false,
@@ -235,7 +246,11 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             return;
         }
         KeyCode::Char('l') => {
-            app.request_launch();
+            app.request_launch(true);
+            return;
+        }
+        KeyCode::Char('n') => {
+            app.request_launch(false);
             return;
         }
         KeyCode::F(1) | KeyCode::Char('?') => {
@@ -258,7 +273,7 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
             app.toggle_tool_permission_gate();
             return;
         }
-        KeyCode::F(4) | KeyCode::Char('r') => {
+        KeyCode::F(4) => {
             app.rollback();
             return;
         }
@@ -306,9 +321,13 @@ fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
             FleetFocus::AgentList => app.next_agent(),
             FleetFocus::ToolList => app.next_tool(),
         },
-        KeyCode::Enter => match app.fleet_focus {
-            FleetFocus::AgentList => app.request_launch(),
+        KeyCode::Enter | KeyCode::Char('r') => match app.fleet_focus {
+            FleetFocus::AgentList => app.request_launch(true),
             FleetFocus::ToolList => app.toggle_current_tool(),
+        },
+        KeyCode::Char('n') => match app.fleet_focus {
+            FleetFocus::AgentList => app.request_launch(false),
+            FleetFocus::ToolList => {}
         },
         KeyCode::Char(' ') => match app.fleet_focus {
             FleetFocus::AgentList => app.toggle_fleet_focus(),

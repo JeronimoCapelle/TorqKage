@@ -177,13 +177,40 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
         let right_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(4), // Metadata banner
+                Constraint::Length(5), // Metadata banner with session resumption
                 Constraint::Min(8),    // MCP Tools checklist
                 Constraint::Length(4), // Tool description preview
             ])
             .split(main_chunks[1]);
 
-        // Top Metadata
+        // Top Metadata & Session Resumption
+        let (session_span, action_span) = app.active_agent_session.as_ref().map_or_else(
+            || {
+                (
+                    Span::styled(
+                        "None (no prior session found for workspace)",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        "[Enter/n: Start Fresh Session]",
+                        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    ),
+                )
+            },
+            |sess| {
+                (
+                    Span::styled(
+                        format!("Resumable (conv: {}, {} steps)", sess.short_id(), sess.step_count),
+                        Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        "[Enter/r: Resume]  [n: New Session]",
+                        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    ),
+                )
+            },
+        );
+
         let meta_lines = vec![
             Line::from(vec![
                 Span::styled("Role: ", Style::default().fg(Color::DarkGray)),
@@ -205,6 +232,12 @@ fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
                     },
                     Style::default().fg(Color::Green),
                 ),
+            ]),
+            Line::from(vec![
+                Span::styled("Session: ", Style::default().fg(Color::DarkGray)),
+                session_span,
+                Span::styled(" | Launch: ", Style::default().fg(Color::DarkGray)),
+                action_span,
             ]),
         ];
         let meta_para = Paragraph::new(meta_lines).block(
@@ -523,10 +556,11 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     // Shortcuts
     let shortcuts = Line::from(vec![
-        Span::styled(" [Enter/l Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::styled(" [Enter/r Resume] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::styled("[n New Session] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
         Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
-        Span::styled("[b Sandbox] ", Style::default().fg(Color::Cyan)),
-        Span::styled("[g Gate Tool] ", Style::default().fg(Color::Yellow)),
+        Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
+        Span::styled("[g Gate Tool] ", Style::default().fg(Color::LightBlue)),
         Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
         Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
         Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
