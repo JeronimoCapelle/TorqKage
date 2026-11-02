@@ -16,6 +16,7 @@ mcp_tools:
   - search_codebase
   - query_project_spec
   - inspect_module_structure
+  - inspect_module_dependencies
   - inspect_bookmarks
   - inspect_revision_log
   - run_cargo_clippy
@@ -25,6 +26,8 @@ mcp_tools:
   - run_cargo_public_api
   - run_cargo_hack
   - run_cargo_outdated
+  - run_cargo_expand
+  - run_cargo_doc
   - run_ast_grep
   - query_tool_help
 ---

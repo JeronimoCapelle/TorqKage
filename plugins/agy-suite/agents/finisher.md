@@ -33,6 +33,8 @@ mcp_tools:
   - run_cargo_fmt
   - run_cargo_check_targets
   - run_git_cliff
+  - jj_absorb_working_copy
+  - jj_describe_revision
   - query_tool_help
 ---
 

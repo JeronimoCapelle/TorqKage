@@ -151,6 +151,20 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
 
+[tools.inspect_module_dependencies]
+description = "Visualizes crate internal module dependency graph and coupling. Defaults to module-level dependency graph; can focus on specific modules or packages."
+action = "parameterized_command"
+category = "diagnostics"
+command = ["cargo", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus dependency graph on a specific module path" },
+    { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
+]
+output_capture = "stdout"
+truncate_lines = 200
+timeout_seconds = 30
+
 [tools.run_cargo_deny]
 description = "Checks supply-chain security, RustSec advisories, banned crates, license allowlists, and sources via cargo-deny"
 action = "static_command"
@@ -230,6 +244,35 @@ command = ["ast-grep", "scan"]
 output_capture = "stdout"
 truncate_lines = 120
 timeout_seconds = 30
+
+[tools.ast_grep_rewrite]
+description = "Performs structural, AST-aware code search and batch rewrite across source files using ast-grep patterns"
+action = "parameterized_command"
+category = "filesystem"
+mutating = true
+require_permission_gate = true
+command = ["ast-grep", "run", "--update-all"]
+args = [
+    { name = "pattern", required = true, flag = "-p", regex = "^[^\\x00]+$", description = "AST pattern to match (e.g. '$A.unwrap()')" },
+    { name = "rewrite", required = true, flag = "-r", regex = "^[^\\x00]+$", description = "Replacement AST template (e.g. '$A?')" },
+    { name = "lang", required = false, flag = "-l", regex = "^[a-zA-Z0-9]+$", description = "Target language (e.g. 'rust', 'toml', 'json', 'yaml')" },
+    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path (defaults to whole repository)" }
+]
+output_capture = "both"
+truncate_lines = 150
+timeout_seconds = 30
+
+[tools.query_rustc_explain]
+description = "Retrieves the official rustc compiler explanation, error diagnostics, and erroneous/fixed code examples for a specific Rust error code (e.g. E0308)"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["rustc", "--explain"]
+args = [
+    { name = "error_code", required = true, regex = "^E[0-9]{4}$", description = "Standard rustc error code (e.g. 'E0308', 'E0382', 'E0502')" }
+]
+output_capture = "both"
+truncate_lines = 150
+timeout_seconds = 10
 
 # --- Test Suite & Verification Tooling ---
 
@@ -627,6 +670,30 @@ command = ["jj", "bookmark", "list"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
+
+[tools.jj_absorb_working_copy]
+description = "Auto-distributes working copy edits into their closest ancestor commits via Jujutsu absorb"
+action = "static_command"
+category = "diagnostics"
+mutating = true
+command = ["jj", "absorb", "--color=never"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 15
+
+[tools.jj_describe_revision]
+description = "Sets or updates the commit description message for a Jujutsu revision (defaults to active working copy @)"
+action = "parameterized_command"
+category = "diagnostics"
+mutating = true
+command = ["jj", "describe"]
+args = [
+    { name = "message", required = true, flag = "-m", regex = "^[^\\x00]+$", description = "Commit description message (e.g. 'feat(mcp): add module dependency inspection')" },
+    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:-]+$", description = "Target revision to describe (defaults to '@')" }
+]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 15
 
 [tools.run_cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"

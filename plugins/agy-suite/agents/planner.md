@@ -21,6 +21,9 @@ mcp_tools:
   - modify_code
   - search_codebase
   - inspect_module_structure
+  - inspect_module_dependencies
+  - run_cargo_expand
+  - run_cargo_public_api
   - query_project_spec
   - query_tool_help
 ---

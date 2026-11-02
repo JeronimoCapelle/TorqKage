@@ -18,12 +18,18 @@ mcp_tools:
   - write_file
   - search_codebase
   - inspect_workspace_diff
+  - inspect_module_structure
   - run_quick_check
   - run_cargo_verification
   - run_cargo_test
+  - run_cargo_nextest
   - run_cargo_clippy
   - run_cargo_clippy_fix
   - run_cargo_fmt
+  - run_cargo_expand
+  - query_rustc_explain
+  - ast_grep_rewrite
+  - jj_absorb_working_copy
   - query_tool_help
 ---
 

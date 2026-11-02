@@ -6,21 +6,10 @@ use agy_common::SubprocessSupervisor;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
-/// Executes a parameterized CLI command with argument validation.
-///
-/// Returns a tuple of `(output_text, is_error)`.
-///
-/// # Errors
-/// Returns an error message if argument validation fails or the process fails to spawn.
-pub(crate) fn execute(
+fn validate_and_build_args(
     tool: &ToolDefinition,
-    workspace_root: &Path,
     arguments: &serde_json::Value,
-) -> Result<(String, bool), String> {
-    if tool.command.is_empty() {
-        return Err(format!("Tool '{}' has no command configured", tool.name));
-    }
-
+) -> Result<Vec<String>, String> {
     let mut dynamic_args = Vec::new();
 
     for arg in &tool.args {
@@ -52,6 +41,66 @@ pub(crate) fn execute(
             ));
         }
     }
+
+    Ok(dynamic_args)
+}
+
+fn format_captured_output(
+    output: &std::process::Output,
+    tool: &ToolDefinition,
+    binary: &str,
+) -> String {
+    match tool.output_capture {
+        OutputCapture::ExitCodeOnly => {
+            let code = output.status.code().unwrap_or(-1);
+            format!("Process exited with status code {code}.")
+        }
+
+        OutputCapture::Stderr => String::from_utf8_lossy(&output.stderr).into_owned(),
+
+        OutputCapture::Both => {
+            let stdout_str = String::from_utf8_lossy(&output.stdout);
+            let stderr_str = String::from_utf8_lossy(&output.stderr);
+            if binary == "ast-grep" && stdout_str.trim().is_empty() && stderr_str.trim().is_empty() {
+                "No matching AST patterns found to rewrite.".to_owned()
+            } else if stderr_str.trim().is_empty() {
+                stdout_str.into_owned()
+            } else if stdout_str.trim().is_empty() {
+                stderr_str.into_owned()
+            } else {
+                format!("{stdout_str}\n--- stderr ---\n{stderr_str}")
+            }
+        }
+
+        OutputCapture::Stdout | OutputCapture::JsonSpans => {
+            let text = String::from_utf8_lossy(&output.stdout);
+            if binary == "rg" && text.trim().is_empty() {
+                "No occurrences found in codebase for the specified search query.".to_owned()
+            } else if binary == "ast-grep" && text.trim().is_empty() {
+                "No matching AST patterns found to rewrite.".to_owned()
+            } else {
+                text.into_owned()
+            }
+        }
+    }
+}
+
+/// Executes a parameterized CLI command with argument validation.
+///
+/// Returns a tuple of `(output_text, is_error)`.
+///
+/// # Errors
+/// Returns an error message if argument validation fails or the process fails to spawn.
+pub(crate) fn execute(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    arguments: &serde_json::Value,
+) -> Result<(String, bool), String> {
+    if tool.command.is_empty() {
+        return Err(format!("Tool '{}' has no command configured", tool.name));
+    }
+
+    let dynamic_args = validate_and_build_args(tool, arguments)?;
 
     let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
     let base_args = tool.command.get(1..).unwrap_or(&[]);
@@ -89,41 +138,16 @@ pub(crate) fn execute(
         out
     };
 
-    let is_error = if binary == "rg" && output.status.code() == Some(1) && output.stdout.is_empty() {
+    let is_error = if (binary == "rg" || binary == "ast-grep")
+        && output.status.code() == Some(1)
+        && output.stdout.is_empty()
+    {
         false
     } else {
         !output.status.success()
     };
 
-    let raw_text = match tool.output_capture {
-        OutputCapture::ExitCodeOnly => {
-            let code = output.status.code().unwrap_or(-1);
-            format!("Process exited with status code {code}.")
-        }
-
-        OutputCapture::Stderr => String::from_utf8_lossy(&output.stderr).into_owned(),
-
-        OutputCapture::Both => {
-            let stdout_str = String::from_utf8_lossy(&output.stdout);
-            let stderr_str = String::from_utf8_lossy(&output.stderr);
-            if stderr_str.trim().is_empty() {
-                stdout_str.into_owned()
-            } else if stdout_str.trim().is_empty() {
-                stderr_str.into_owned()
-            } else {
-                format!("{stdout_str}\n--- stderr ---\n{stderr_str}")
-            }
-        }
-
-        OutputCapture::Stdout | OutputCapture::JsonSpans => {
-            let text = String::from_utf8_lossy(&output.stdout);
-            if binary == "rg" && text.trim().is_empty() {
-                "No occurrences found in codebase for the specified search query.".to_owned()
-            } else {
-                text.into_owned()
-            }
-        }
-    };
+    let raw_text = format_captured_output(&output, tool, binary);
 
     // Apply error fallback if configured and process failed
     let final_text = if is_error && tool.error_fallback.as_deref() == Some("token_smart_not_found") {
@@ -327,5 +351,44 @@ mod tests {
         ];
         let extracted = extract_inner_bwrap_command(&bwrap_cmd);
         assert_eq!(extracted, Some(("python3", vec!["-c"])));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_ast_grep_no_matches() {
+        if which::which("ast-grep").is_err() {
+            return;
+        }
+        let temp = create_test_dir("ast_grep");
+        let tool = ToolDefinition {
+            name: "ast_grep_rewrite".to_owned(),
+            command: vec!["ast-grep".to_owned(), "run".to_owned(), "--update-all".to_owned()],
+            args: vec![
+                ToolArg {
+                    name: "pattern".to_owned(),
+                    required: true,
+                    flag: Some("-p".to_owned()),
+                    regex: Some("^[^\\x00]+$".to_owned()),
+                    description: "pattern".to_owned(),
+                },
+                ToolArg {
+                    name: "rewrite".to_owned(),
+                    required: true,
+                    flag: Some("-r".to_owned()),
+                    regex: Some("^[^\\x00]+$".to_owned()),
+                    description: "rewrite".to_owned(),
+                },
+            ],
+            output_capture: OutputCapture::Both,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "pattern": "fn nonexistent_pattern_foo()",
+            "rewrite": "fn replaced()"
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert_eq!(out, "No matching AST patterns found to rewrite.");
     }
 }

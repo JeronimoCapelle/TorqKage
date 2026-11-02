@@ -16,11 +16,15 @@ mcp_tools:
   - search_codebase
   - write_file
   - modify_code
+  - inspect_workspace_diff
+  - inspect_module_structure
   - run_quick_check
   - run_cargo_verification
   - run_cargo_test
   - run_cargo_nextest
   - run_cargo_check_targets
+  - run_cargo_careful
+  - run_cargo_expand
   - run_coverage_summary
   - run_mutation_tests
   - run_cargo_insta

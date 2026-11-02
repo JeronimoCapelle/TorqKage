@@ -28,13 +28,19 @@ mcp_tools:
   - write_file
   - modify_code
   - search_codebase
+  - query_project_spec
   - inspect_module_structure
+  - inspect_module_dependencies
   - inspect_project_state
   - inspect_workspace_diff
+  - inspect_workspace_conflicts
   - inspect_parent_commit
   - inspect_revision_log
   - inspect_bookmarks
   - run_quick_check
+  - query_rustc_explain
+  - jj_absorb_working_copy
+  - jj_describe_revision
   - query_tool_help
 ---
 
