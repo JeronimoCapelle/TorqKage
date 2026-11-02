@@ -102,6 +102,18 @@ pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest
         );
     }
 
+    // Check 6: Finisher specialized gatekeeper pre-flight checks
+    if agent.name == "finisher" {
+        match agy_common::evaluate_finisher_readiness(workspace_root) {
+            Ok(warns) => {
+                report.warnings.extend(warns);
+            }
+            Err(errs) => {
+                report.errors.extend(errs);
+            }
+        }
+    }
+
     report
 }
 
@@ -219,5 +231,32 @@ mod tests {
         let report = run_pre_launch_checks(Path::new("."), &manifest);
         assert!(!report.is_ok());
         assert!(report.errors.iter().any(|e| e.contains("unsaved modifications")));
+    }
+
+    #[test]
+    fn test_run_pre_launch_checks_finisher() {
+        let manifest = AgentManifest {
+            file_path: PathBuf::from("nonexistent.md"),
+            name: "finisher".to_owned(),
+            description: "test finisher".to_owned(),
+            effort: "high".to_owned(),
+            permission_mode: "acceptEdits".to_owned(),
+            command_execution_policy: "prompt".to_owned(),
+            main_agent: false,
+            subagent: true,
+            inherit_mcp: false,
+            allowed_subagents: Vec::new(),
+            native_tools: Vec::new(),
+            mcp_tools: Vec::new(),
+            directives: String::new(),
+            modified: false,
+        };
+
+        // When run against an empty temporary directory with no Cargo.toml, gatekeeper passes cleanly
+        let temp_dir = std::env::temp_dir();
+        let report = run_pre_launch_checks(&temp_dir, &manifest);
+        // The only errors should be missing manifest file and possibly agy CLI if PATH is weird,
+        // but no cargo check errors from finisher gatekeeper
+        assert!(!report.errors.iter().any(|e| e.contains("Finisher requires 100% clean compilation")));
     }
 }

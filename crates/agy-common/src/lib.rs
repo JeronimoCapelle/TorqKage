@@ -5,12 +5,14 @@
 
 pub mod diagnostics;
 pub mod error;
+pub mod gatekeeper;
 pub mod models;
 pub mod resolver;
 pub mod supervisor;
 
 pub use diagnostics::{CompactErrorReport, DiagnosticSpan};
 pub use error::{AgyError, Result};
+pub use gatekeeper::{GateCheck, GateCheckStatus, evaluate_finisher_readiness};
 pub use models::{
     CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision, InjectStep,
     PostInvocationInput, PostInvocationResponse, PostToolUseInput, PreInvocationInput,

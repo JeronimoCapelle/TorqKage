@@ -274,6 +274,7 @@ fn canonical_agent_tools(agent: &str) -> HashSet<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit tests allow panics on test setup")]
 mod tests {
     use super::*;
 

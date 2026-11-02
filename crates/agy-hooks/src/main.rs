@@ -6,6 +6,7 @@
 #![allow(clippy::print_stderr, reason = "CLI diagnostics are emitted to stderr")]
 
 mod conflicts;
+mod finisher_gate;
 mod handoff;
 mod state;
 mod stdin;
@@ -24,6 +25,10 @@ fn main() -> ExitCode {
         }
         "check-conflicts" => {
             conflicts::execute();
+            ExitCode::SUCCESS
+        }
+        "check-finisher" => {
+            finisher_gate::execute();
             ExitCode::SUCCESS
         }
         "record-handoff" => {
@@ -60,6 +65,7 @@ fn print_usage() {
          COMMANDS:\n\
            detect-wip      PreInvocation ephemeral notification on working tree modification\n\
            check-conflicts PreToolUse hook blocking builds/tests when unresolved conflicts exist\n\
+           check-finisher  PreToolUse hook blocking finisher dispatch when compilation or conflicts fail\n\
            record-handoff  Stop hook recording session metadata to .pipeline/last_handoff.md\n\
            inject-wake     SessionStart hook injecting last handoff state into conversation\n\
            inspect-state   Concise Markdown repository state summary for tools.toml\n"

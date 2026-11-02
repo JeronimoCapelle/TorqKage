@@ -1,0 +1,211 @@
+//! # gatekeeper
+//!
+//! Modular quality gatekeeper and pre-flight validation rules for specialized agents (e.g., `finisher`).
+
+use std::path::Path;
+use std::process::Command;
+
+/// Validation check outcome.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GateCheckStatus {
+    /// Mandatory check passed completely.
+    Passed,
+    /// Mandatory check failed; execution must be blocked.
+    Failed(String),
+    /// Advisory warning; execution may proceed with warning.
+    Warning(String),
+}
+
+/// A modular validation rule.
+pub trait GateCheck: Send + Sync {
+    /// Human-readable identifier of the check.
+    fn name(&self) -> &'static str;
+    /// Executes the check against the given workspace root directory.
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus;
+}
+
+/// Validates that the project compiles cleanly (`cargo check --all-targets`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CargoCompilationCheck;
+
+impl GateCheck for CargoCompilationCheck {
+    fn name(&self) -> &'static str {
+        "Cargo Compilation Check"
+    }
+
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
+        if !workspace_root.join("Cargo.toml").is_file() {
+            return GateCheckStatus::Passed;
+        }
+
+        let output = Command::new("cargo")
+            .args(["check", "--all-targets"])
+            .current_dir(workspace_root)
+            .output();
+
+        match output {
+            Ok(out) => {
+                if out.status.success() {
+                    GateCheckStatus::Passed
+                } else {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let raw = format!("{stdout}\n{stderr}");
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(25).collect();
+                    let diag = truncated.join("\n");
+                    GateCheckStatus::Failed(format!(
+                        "Project compilation failed (`cargo check --all-targets`).\n\
+                         Finisher requires 100% clean compilation before review.\n\n\
+                         [Compiler Output]:\n{diag}"
+                    ))
+                }
+            }
+            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo check': {e}")),
+        }
+    }
+}
+
+/// Validates that test harnesses compile without errors (`cargo test --no-run`).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CargoTestCompilationCheck;
+
+impl GateCheck for CargoTestCompilationCheck {
+    fn name(&self) -> &'static str {
+        "Cargo Test Harness Compilation Check"
+    }
+
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
+        if !workspace_root.join("Cargo.toml").is_file() {
+            return GateCheckStatus::Passed;
+        }
+
+        let output = Command::new("cargo")
+            .args(["test", "--no-run"])
+            .current_dir(workspace_root)
+            .output();
+
+        match output {
+            Ok(out) => {
+                if out.status.success() {
+                    GateCheckStatus::Passed
+                } else {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let raw = format!("{stdout}\n{stderr}");
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(20).collect();
+                    let diag = truncated.join("\n");
+                    GateCheckStatus::Failed(format!(
+                        "Test suite compilation failed (`cargo test --no-run`).\n\
+                         All tests must compile before calling finisher.\n\n\
+                         [Compiler Output]:\n{diag}"
+                    ))
+                }
+            }
+            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo test --no-run': {e}")),
+        }
+    }
+}
+
+/// Validates that no unresolved VCS merge conflict markers exist in the working copy.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct VcsConflictCheck;
+
+impl GateCheck for VcsConflictCheck {
+    fn name(&self) -> &'static str {
+        "VCS Conflict Marker Check"
+    }
+
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
+        // 1. Jujutsu conflict check
+        if workspace_root.join(".jj").is_dir() {
+            let output = Command::new("jj")
+                .args(["log", "-r", "conflicts() & @", "--no-graph", "-T", "change_id"])
+                .current_dir(workspace_root)
+                .output();
+
+            if let Ok(out) = output
+                && out.status.success()
+            {
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                if !stdout.is_empty() {
+                    return GateCheckStatus::Failed(format!(
+                        "Unresolved Jujutsu conflict in active commit (@: {stdout}). Resolve conflicts before finisher review."
+                    ));
+                }
+            }
+        }
+
+        // 2. Git conflict check
+        if workspace_root.join(".git").is_dir() {
+            let output = Command::new("git")
+                .args(["diff", "--check"])
+                .current_dir(workspace_root)
+                .output();
+
+            if let Ok(out) = output {
+                let combined = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+                if combined.contains("leftover conflict marker") || combined.contains("conflict marker") {
+                    return GateCheckStatus::Failed(
+                        "Unresolved conflict markers detected in working tree (git diff --check).".to_owned(),
+                    );
+                }
+            }
+        }
+
+        GateCheckStatus::Passed
+    }
+}
+
+/// Evaluates all mandatory and advisory pre-checks before allowing `finisher` execution.
+///
+/// # Errors
+/// Returns a list of blocking failure diagnostics if any mandatory check fails.
+pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>, Vec<String>> {
+    let checks: Vec<Box<dyn GateCheck>> = vec![
+        Box::new(CargoCompilationCheck),
+        Box::new(CargoTestCompilationCheck),
+        Box::new(VcsConflictCheck),
+    ];
+
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+
+    for check in checks {
+        match check.execute(workspace_root) {
+            GateCheckStatus::Passed => {}
+            GateCheckStatus::Failed(err) => errors.push(err),
+            GateCheckStatus::Warning(warn) => warnings.push(warn),
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(warnings)
+    } else {
+        Err(errors)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gate_check_trait_dispatch() {
+        struct MockPass;
+        impl GateCheck for MockPass {
+            fn name(&self) -> &'static str { "Mock Pass" }
+            fn execute(&self, _: &Path) -> GateCheckStatus { GateCheckStatus::Passed }
+        }
+
+        struct MockFail;
+        impl GateCheck for MockFail {
+            fn name(&self) -> &'static str { "Mock Fail" }
+            fn execute(&self, _: &Path) -> GateCheckStatus { GateCheckStatus::Failed("error".to_owned()) }
+        }
+
+        let pass = MockPass;
+        let fail = MockFail;
+        assert_eq!(pass.execute(Path::new(".")), GateCheckStatus::Passed);
+        assert_eq!(fail.execute(Path::new(".")), GateCheckStatus::Failed("error".to_owned()));
+    }
+}

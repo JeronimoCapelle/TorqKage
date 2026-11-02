@@ -39,5 +39,19 @@
         ]
       }
     ]
+  },
+  "finisher-gatekeeper": {
+    "PreToolUse": [
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agy-hooks check-finisher",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
