@@ -40,3 +40,6 @@ mutants.out/
 /.workspaces/
 .pipeline/circuit_breaker.json
 
+# Plugin Binary Bundles
+plugins/agy-suite/bin/
+
