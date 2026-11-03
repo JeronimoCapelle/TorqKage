@@ -113,6 +113,10 @@ cp "${BIN_SOURCE_DIR}/agy-ctrl" "${PLUGIN_DIR}/bin/"
 chmod +x "${PLUGIN_DIR}/bin"/*
 
 if [[ "${LOCAL_ONLY}" = true ]]; then
+    if command -v agy >/dev/null 2>&1; then
+        echo "--> Validating local workspace bundle with 'agy plugin validate'..."
+        agy plugin validate "${PLUGIN_DIR}"
+    fi
     echo "==> [agy-suite] Local workspace bundle complete (--local-only). Files staged in ${PLUGIN_DIR}/bin/."
     exit 0
 fi
@@ -143,6 +147,14 @@ if [[ "${SKIP_SYMLINKS}" = false ]]; then
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${LOCAL_BIN_DIR}/agy-ctrl"
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${LOCAL_BIN_DIR}/agy-mcp"
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${LOCAL_BIN_DIR}/agy-hooks"
+fi
+
+# 5. Validate installed plugin with agy plugin validate
+if command -v agy >/dev/null 2>&1; then
+    echo "--> Validating installed plugin with 'agy plugin validate'..."
+    agy plugin validate "${TARGET_PLUGIN_DIR}"
+else
+    echo "--> Advisory: 'agy' command not found in PATH; skipping plugin validation."
 fi
 
 echo "================================================================================"
