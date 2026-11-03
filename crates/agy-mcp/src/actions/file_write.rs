@@ -164,19 +164,19 @@ mod tests {
         let temp = create_test_dir("enforce");
         let tool = ToolDefinition {
             name: "write_spec".to_owned(),
-            enforce_file_target: Some(".pipeline/spec.md".to_owned()),
+            enforce_file_target: Some(".agy/artifacts/spec.md".to_owned()),
             ..Default::default()
         };
 
         let bad_args = json!({
-            "path": ".pipeline/other.md",
+            "path": ".agy/artifacts/other.md",
             "content": "# Other"
         });
         let guards = BTreeMap::new();
         assert!(execute(&tool, &temp, &bad_args, None, &guards).is_err());
 
         let good_args = json!({
-            "path": ".pipeline/spec.md",
+            "path": ".agy/artifacts/spec.md",
             "content": "# Spec"
         });
         assert!(execute(&tool, &temp, &good_args, None, &guards).is_ok());

@@ -324,7 +324,7 @@ impl StopResponse {
     }
 }
 
-/// Ephemeral session handoff metadata written to `.pipeline/last_handoff.md`.
+/// Ephemeral session handoff metadata written to `.agy/state/last_handoff.md`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HandoffRecord {
     pub previous_agent: String,
@@ -349,7 +349,7 @@ impl HandoffRecord {
         }
     }
 
-    /// Formats the handoff record into a clean Markdown block for `.pipeline/last_handoff.md`.
+    /// Formats the handoff record into a clean Markdown block for `.agy/state/last_handoff.md`.
     #[must_use]
     pub fn to_markdown(&self) -> String {
         let files = if self.modified_files.is_empty() {
@@ -364,7 +364,7 @@ impl HandoffRecord {
         )
     }
 
-    /// Parses a handoff record from `.pipeline/last_handoff.md` content.
+    /// Parses a handoff record from `.agy/state/last_handoff.md` content.
     #[must_use]
     pub fn from_markdown(content: &str) -> Option<Self> {
         let mut record = Self::default();
@@ -402,7 +402,7 @@ impl HandoffRecord {
     }
 }
 
-/// Structured inter-agent pipeline handoff manifest stored at `.pipeline/handoff.json`.
+/// Structured inter-agent handoff manifest stored at `.agy/state/handoff.json`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PipelineHandoff {
     pub from_agent: String,
@@ -497,7 +497,7 @@ impl CircuitBreakerLedger {
         }
     }
 
-    /// Loads the circuit breaker state from `.agy/state/circuit_breaker.json` (or `.pipeline/circuit_breaker.json` fallback).
+    /// Loads the circuit breaker state from `.agy/state/circuit_breaker.json`.
     /// Returns a clean ledger with 0 failures if the file does not exist or is invalid.
     #[must_use]
     pub fn load(workspace_root: &Path) -> Self {

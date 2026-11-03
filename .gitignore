@@ -37,8 +37,6 @@ mutants.out/
 
 # Multi-Agent Workspaces & Ephemeral State (.agy)
 /.agy/
-/.workspaces/
-.pipeline/circuit_breaker.json
 
 # Plugin Binary Bundles
 plugins/agy-suite/bin/

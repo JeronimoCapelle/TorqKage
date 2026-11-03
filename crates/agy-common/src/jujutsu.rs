@@ -88,14 +88,14 @@ impl JujutsuWorkspace {
 
     /// Ensures an isolated Jujutsu workspace exists for the specified agent.
     ///
-    /// Creates `.workspaces/<agent>` if it does not already exist.
+    /// Creates `.agy/workspaces/<agent>` if it does not already exist.
     /// If it already exists and is clean, automatically synchronizes it by branching
     /// a new working copy commit off the latest `default@` revision.
-    /// Links `.workspaces/<agent>/target` to `<workspace_root>/target` to share build artifacts.
+    /// Links `.agy/workspaces/<agent>/target` to `<workspace_root>/target` to share build artifacts.
     /// Returns the canonical path to the isolated workspace.
     ///
     /// # Errors
-    /// Returns `AgyError` if the filesystem or `jj workspace add` fails.
+    /// Returns `AgyError` if Jujutsu is not installed, not initialized, or workspace creation fails.
     #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess and symlink errors")]
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
@@ -106,16 +106,35 @@ impl JujutsuWorkspace {
             return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
         }
 
+        if !Self::is_jj_repo(&repo_root) {
+            if repo_root.join(".git").exists() {
+                eprintln!(
+                    "[agy-common] Advisory: Target workspace '{}' is a Git repository without Jujutsu colocation.\n\
+                     Run 'jj git init --colocate' in the repository root to enable isolated agent workspaces.",
+                    repo_root.display()
+                );
+                return Err(AgyError::Workspace(format!(
+                    "Target workspace '{}' is a Git repository without Jujutsu colocation. \
+                     Run 'jj git init --colocate' in the repository root to enable isolated agent workspaces.",
+                    repo_root.display()
+                )));
+            }
+            eprintln!(
+                "[agy-common] Advisory: Target workspace '{}' is not a Jujutsu repository (.jj not found).\n\
+                 Run 'jj git init --colocate' (for Git projects) or 'jj init' to enable isolated agent workspaces.",
+                repo_root.display()
+            );
+            return Err(AgyError::Workspace(format!(
+                "Target workspace '{}' is not a Jujutsu repository (.jj not found). \
+                 Run 'jj git init --colocate' or 'jj init' to enable isolated agent workspaces.",
+                repo_root.display()
+            )));
+        }
+
         let paths = crate::state::AgyStatePaths::new(&repo_root);
         let workspaces_dir = paths.workspaces_dir();
         std::fs::create_dir_all(&workspaces_dir)?;
-        let modern_ws_path = paths.agent_workspace(agent);
-        let legacy_ws_path = repo_root.join(".workspaces").join(agent);
-        let agent_ws_path = if !modern_ws_path.exists() && legacy_ws_path.is_dir() {
-            legacy_ws_path
-        } else {
-            modern_ws_path
-        };
+        let agent_ws_path = paths.agent_workspace(agent);
 
         if !Self::workspace_exists(&repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
@@ -188,8 +207,7 @@ impl JujutsuWorkspace {
     /// Returns `AgyError` if workspace forget fails.
     #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess errors")]
     pub fn forget_agent_workspace(workspace_root: &Path, agent: &str) -> Result<()> {
-        let modern_ws_path = crate::state::AgyStatePaths::new(workspace_root).agent_workspace(agent);
-        let legacy_ws_path = workspace_root.join(".workspaces").join(agent);
+        let ws_path = crate::state::AgyStatePaths::new(workspace_root).agent_workspace(agent);
         if Self::workspace_exists(workspace_root, agent) {
             let status = Command::new("jj")
                 .args(["--color=never", "workspace", "forget", agent])
@@ -202,11 +220,8 @@ impl JujutsuWorkspace {
                 );
             }
         }
-        if modern_ws_path.exists() {
-            std::fs::remove_dir_all(&modern_ws_path).map_err(AgyError::Io)?;
-        }
-        if legacy_ws_path.exists() {
-            std::fs::remove_dir_all(&legacy_ws_path).map_err(AgyError::Io)?;
+        if ws_path.exists() {
+            std::fs::remove_dir_all(&ws_path).map_err(AgyError::Io)?;
         }
         Ok(())
     }

@@ -11,7 +11,7 @@ impl WorkspaceResolver {
     /// Discovers the canonical repository root by walking up from `start_dir`.
     ///
     /// Correctly distinguishes primary repositories from Jujutsu secondary workspaces
-    /// (e.g. `.workspaces/<agent>`) by resolving pointer files in `.jj/repo`.
+    /// (e.g. `.agy/workspaces/<agent>`) by resolving pointer files in `.jj/repo`.
     ///
     /// # Errors
     /// Returns `AgyError::Io` if querying current directory or canonicalization fails.
@@ -101,10 +101,10 @@ mod tests {
         let main_jj_repo = main_repo.join(".jj/repo");
         std::fs::create_dir_all(&main_jj_repo).unwrap();
 
-        let sub_ws = main_repo.join(".workspaces/coder");
+        let sub_ws = main_repo.join(".agy/workspaces/coder");
         let sub_jj = sub_ws.join(".jj");
         std::fs::create_dir_all(&sub_jj).unwrap();
-        std::fs::write(sub_jj.join("repo"), "../../../.jj/repo").unwrap();
+        std::fs::write(sub_jj.join("repo"), "../../../../.jj/repo").unwrap();
 
         let resolved = WorkspaceResolver::find_root(Some(&sub_ws)).unwrap();
         assert_eq!(resolved, main_repo.canonicalize().unwrap());

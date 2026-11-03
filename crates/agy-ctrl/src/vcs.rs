@@ -44,16 +44,28 @@ pub(crate) fn take_vcs_snapshot(workspace_root: &Path, message: &str) -> String 
     "Working copy snapshot ready".to_owned()
 }
 
+fn resolve_plugin_directory(workspace_root: &Path) -> Option<std::path::PathBuf> {
+    let local = workspace_root.join("plugins/agy-suite");
+    if local.is_dir() {
+        return Some(local);
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let installed = std::path::PathBuf::from(home).join(".gemini/config/plugins/agy-suite");
+        if installed.is_dir() {
+            return Some(installed);
+        }
+    }
+    None
+}
+
 /// Executes `agy plugin validate` on the plugin directory.
 pub(crate) fn run_plugin_validation(workspace_root: &Path) -> Result<String, String> {
-    let plugin_dir = workspace_root.join("plugins/agy-suite");
-    if !plugin_dir.is_dir() {
-        return Err(format!("Plugin directory not found at {}", plugin_dir.display()));
-    }
+    let plugin_dir = resolve_plugin_directory(workspace_root)
+        .ok_or_else(|| "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned())?;
 
     let output = Command::new("agy")
         .current_dir(workspace_root)
-        .args(["plugin", "validate", "plugins/agy-suite"])
+        .args(["plugin", "validate", &plugin_dir.to_string_lossy()])
         .output()
         .map_err(|e| format!("Failed to execute 'agy plugin validate': {e}"))?;
 
@@ -74,7 +86,9 @@ pub(crate) fn run_plugin_validation(workspace_root: &Path) -> Result<String, Str
 
 /// Reinstalls the validated plugin into `~/.gemini/config/plugins/agy-suite`.
 pub(crate) fn run_plugin_install(workspace_root: &Path) -> Result<String, String> {
-    let plugin_dir = workspace_root.join("plugins/agy-suite");
+    let plugin_dir = resolve_plugin_directory(workspace_root)
+        .ok_or_else(|| "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned())?;
+
     let output = Command::new("agy")
         .current_dir(workspace_root)
         .args(["plugin", "install", &plugin_dir.to_string_lossy()])

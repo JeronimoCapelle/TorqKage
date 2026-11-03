@@ -75,7 +75,8 @@ fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocati
     trimmed.hash(&mut hasher);
     let current_hash = hasher.finish();
 
-    let cache_file = get_cache_path(conversation_id);
+    let paths = agy_common::AgyStatePaths::new(root);
+    let cache_file = paths.wip_cache_file(conversation_id);
 
     if let Ok(cached) = std::fs::read_to_string(&cache_file)
         && cached.trim() == format!("{current_hash}")
@@ -84,27 +85,15 @@ fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocati
         return PreInvocationResponse::empty();
     }
 
-    // Hash changed: record new hash
+    // Hash changed: record new hash in .agy/cache/wip/
+    if let Some(parent) = cache_file.parent() {
+        drop(std::fs::create_dir_all(parent));
+    }
     drop(std::fs::write(&cache_file, format!("{current_hash}")));
 
     let modified_files = extract_modified_files(trimmed);
     let notice = format!("[Notice: Files modified on disk: {modified_files}]");
     PreInvocationResponse::ephemeral(notice)
-}
-
-fn get_cache_path(conversation_id: Option<&str>) -> PathBuf {
-    let filename = conversation_id.map_or_else(
-        || ".agy_wip_default.hash".to_owned(),
-        |id| {
-            let sanitized: String = id
-                .chars()
-                .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
-                .collect();
-            format!(".agy_wip_{sanitized}.hash")
-        },
-    );
-
-    std::env::temp_dir().join(filename)
 }
 
 fn extract_modified_files(status_output: &str) -> String {
@@ -139,7 +128,8 @@ mod tests {
 
     #[test]
     fn test_cache_path_generation() {
-        let path = get_cache_path(Some("test-conv-123"));
-        assert!(path.to_string_lossy().contains(".agy_wip_test-conv-123.hash"));
+        let paths = agy_common::AgyStatePaths::new("/home/user/project");
+        let path = paths.wip_cache_file(Some("test-conv-123"));
+        assert_eq!(path, PathBuf::from("/home/user/project/.agy/cache/wip/.wip_test-conv-123.hash"));
     }
 }

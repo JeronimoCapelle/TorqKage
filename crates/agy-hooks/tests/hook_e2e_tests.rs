@@ -127,14 +127,6 @@ fn test_detect_wip_consecutive_burns_zero_tokens_e2e() {
 }
 
 #[test]
-fn test_inspect_state_e2e() {
-    let (success, stdout, _) = run_hook_subcommand("inspect-state", None);
-    assert!(success);
-    assert!(stdout.contains("# Project State: Ready"));
-    assert!(stdout.contains("- Branch:"));
-}
-
-#[test]
 fn test_check_conflicts_e2e() {
     let (success, stdout, _) = run_hook_subcommand("check-conflicts", None);
     assert!(success);

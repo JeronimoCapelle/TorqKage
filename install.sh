@@ -125,6 +125,7 @@ fi
 echo "--> Synchronizing bundle to Gemini plugin root: ${TARGET_PLUGIN_DIR}..."
 mkdir -p "${TARGET_PLUGIN_DIR}/bin"
 mkdir -p "${TARGET_PLUGIN_DIR}/agents"
+mkdir -p "${TARGET_PLUGIN_DIR}/assets"
 
 # Copy declarative files and manifests
 cp "${PLUGIN_DIR}/plugin.json" "${TARGET_PLUGIN_DIR}/"
@@ -133,6 +134,7 @@ cp "${PLUGIN_DIR}/hooks.toml" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/hooks.json" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/mcp_config.json" "${TARGET_PLUGIN_DIR}/"
 cp -r "${PLUGIN_DIR}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
+cp -r "${PLUGIN_DIR}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
 
 # Copy executables
 cp "${PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"

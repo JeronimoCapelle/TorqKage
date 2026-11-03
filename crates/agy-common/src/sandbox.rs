@@ -123,7 +123,7 @@ pub fn build_bubblewrap_command(
 
     cmd.args(["--proc", "/proc", "--dev", "/dev"]);
 
-    // If workspace_root is an isolated subagent workspace (e.g. .workspaces/<agent>),
+    // If workspace_root is an isolated subagent workspace (e.g. .agy/workspaces/<agent>),
     // mount the repo root and shared target cache so symlinks resolve correctly in bwrap
     let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
         .unwrap_or_else(|_| workspace_root.to_path_buf());

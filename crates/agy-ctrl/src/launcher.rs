@@ -147,7 +147,7 @@ pub(crate) fn launch_agy_interactive(
     drop(execute!(stdout(), LeaveAlternateScreen));
     drop(terminal.show_cursor());
 
-    let (effective_workspace, was_isolated) = if isolated_workspace && agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
+    let (effective_workspace, was_isolated) = if isolated_workspace {
         match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
             Ok(ws_path) => (ws_path, true),
             Err(e) => {
@@ -231,7 +231,7 @@ pub(crate) fn launch_agy_headless(
         return Err(report.format_diagnostics());
     }
 
-    let (effective_workspace, was_isolated) = if isolated_workspace && agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
+    let (effective_workspace, was_isolated) = if isolated_workspace {
         match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
             Ok(ws_path) => (ws_path, true),
             Err(e) => {

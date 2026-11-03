@@ -30,7 +30,7 @@ pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
     CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, VcsConflictCheck,
     evaluate_finisher_readiness, evaluate_pre_flight_checks, find_agent_manifest_path,
-    is_cargo_fast_available, parse_pre_launch_checks,
+    parse_pre_launch_checks,
 };
 pub use jujutsu::JujutsuWorkspace;
 pub use models::{

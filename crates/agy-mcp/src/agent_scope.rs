@@ -31,16 +31,16 @@ pub(crate) fn resolve_agent_scope(args: &[String], workspace_root: &Path) -> Opt
         return Some(val.trim().to_owned());
     }
 
-    // 3. Check persistent pipeline state bridge (.pipeline/active_agent.json or .pipeline/active_agent)
-    if let Some(agent) = read_active_agent_from_pipeline(workspace_root) {
+    // 3. Check persistent agent state bridge (.agy/state/active_agent.json or .agy/state/active_agent)
+    if let Some(agent) = read_active_agent_from_state(workspace_root) {
         return Some(agent);
     }
 
     None
 }
 
-/// Reads the active agent identity from `.agy/state/active_agent.json` (or `.pipeline/active_agent.json` fallback).
-fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
+/// Reads the active agent identity from `.agy/state/active_agent.json` or `.agy/state/active_agent`.
+fn read_active_agent_from_state(workspace_root: &Path) -> Option<String> {
     let paths = agy_common::AgyStatePaths::new(workspace_root);
     let json_path = paths.active_agent_file();
     if json_path.is_file()
@@ -55,16 +55,6 @@ fn read_active_agent_from_pipeline(workspace_root: &Path) -> Option<String> {
     let txt_path = paths.state_dir().join("active_agent");
     if txt_path.is_file()
         && let Ok(content) = fs::read_to_string(&txt_path)
-    {
-        let name = content.trim();
-        if !name.is_empty() {
-            return Some(name.to_owned());
-        }
-    }
-
-    let legacy_txt = workspace_root.join(".pipeline/active_agent");
-    if legacy_txt.is_file()
-        && let Ok(content) = fs::read_to_string(&legacy_txt)
     {
         let name = content.trim();
         if !name.is_empty() {
@@ -123,19 +113,20 @@ mod tests {
     }
 
     #[test]
-    fn test_read_active_agent_from_pipeline() {
+    fn test_read_active_agent_from_state() {
         let temp_dir = std::env::temp_dir().join(format!("agy_agent_scope_test_{}", std::process::id()));
-        let pipeline_dir = temp_dir.join(".pipeline");
-        fs::create_dir_all(&pipeline_dir).expect("create pipeline dir");
+        let paths = agy_common::AgyStatePaths::new(&temp_dir);
+        let state_dir = paths.state_dir();
+        fs::create_dir_all(&state_dir).expect("create state dir");
 
         // 1. JSON state
-        fs::write(pipeline_dir.join("active_agent.json"), r#"{"agent": "test-author"}"#).expect("write json");
-        assert_eq!(read_active_agent_from_pipeline(&temp_dir), Some("test-author".to_owned()));
+        fs::write(paths.active_agent_file(), r#"{"agent": "test-author"}"#).expect("write json");
+        assert_eq!(read_active_agent_from_state(&temp_dir), Some("test-author".to_owned()));
 
         // 2. Text fallback
-        fs::remove_file(pipeline_dir.join("active_agent.json")).expect("remove json");
-        fs::write(pipeline_dir.join("active_agent"), "finisher\n").expect("write txt");
-        assert_eq!(read_active_agent_from_pipeline(&temp_dir), Some("finisher".to_owned()));
+        fs::remove_file(paths.active_agent_file()).expect("remove json");
+        fs::write(state_dir.join("active_agent"), "finisher\n").expect("write txt");
+        assert_eq!(read_active_agent_from_state(&temp_dir), Some("finisher".to_owned()));
 
         drop(fs::remove_dir_all(&temp_dir));
     }

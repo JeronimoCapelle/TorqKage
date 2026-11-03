@@ -19,6 +19,7 @@ impl AgyStatePaths {
     pub const STATE_DIR: &'static str = "state";
     pub const WORKSPACES_DIR: &'static str = "workspaces";
     pub const ARTIFACTS_DIR: &'static str = "artifacts";
+    pub const CACHE_DIR: &'static str = "cache";
 
     pub const CIRCUIT_BREAKER_FILE: &'static str = "circuit_breaker.json";
     pub const HANDOFF_JSON_FILE: &'static str = "handoff.json";
@@ -70,87 +71,75 @@ impl AgyStatePaths {
         self.root().join(Self::ARTIFACTS_DIR)
     }
 
-    /// Resolves the circuit breaker ledger file path.
-    /// Checks `.agy/state/circuit_breaker.json`, falling back to `.pipeline/circuit_breaker.json` for reading.
+    /// The `.agy/cache` directory for transient ephemeral caches (WIP diffs, hashes).
+    #[must_use]
+    pub fn cache_dir(&self) -> PathBuf {
+        self.root().join(Self::CACHE_DIR)
+    }
+
+    /// Path to the WIP change hash cache file for a specific conversation session.
+    #[must_use]
+    pub fn wip_cache_file(&self, conversation_id: Option<&str>) -> PathBuf {
+        let filename = conversation_id.map_or_else(
+            || ".wip_default.hash".to_owned(),
+            |id| {
+                let sanitized: String = id
+                    .chars()
+                    .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
+                    .collect();
+                format!(".wip_{sanitized}.hash")
+            },
+        );
+        self.cache_dir().join("wip").join(filename)
+    }
+
+    /// Resolves the circuit breaker ledger file path (`.agy/state/circuit_breaker.json`).
     #[must_use]
     pub fn circuit_breaker_file(&self) -> PathBuf {
-        let modern = self.state_dir().join(Self::CIRCUIT_BREAKER_FILE);
-        if modern.exists() {
-            return modern;
-        }
-        let legacy = self.workspace_root.join(".pipeline").join(Self::CIRCUIT_BREAKER_FILE);
-        if legacy.exists() {
-            return legacy;
-        }
-        modern
+        self.state_dir().join(Self::CIRCUIT_BREAKER_FILE)
     }
 
-    /// Resolves the structured handoff JSON file path.
-    /// Checks `.agy/state/handoff.json`, falling back to `.pipeline/handoff.json` for reading.
+    /// Resolves the structured handoff JSON file path (`.agy/state/handoff.json`).
     #[must_use]
     pub fn handoff_json_file(&self) -> PathBuf {
-        let modern = self.state_dir().join(Self::HANDOFF_JSON_FILE);
-        if modern.exists() {
-            return modern;
-        }
-        let legacy = self.workspace_root.join(".pipeline").join(Self::HANDOFF_JSON_FILE);
-        if legacy.exists() {
-            return legacy;
-        }
-        modern
+        self.state_dir().join(Self::HANDOFF_JSON_FILE)
     }
 
-    /// Resolves the human-readable handoff Markdown file path.
-    /// Checks `.agy/state/last_handoff.md`, falling back to `.pipeline/last_handoff.md` for reading.
+    /// Resolves the human-readable handoff Markdown file path (`.agy/state/last_handoff.md`).
     #[must_use]
     pub fn handoff_md_file(&self) -> PathBuf {
-        let modern = self.state_dir().join(Self::HANDOFF_MD_FILE);
-        if modern.exists() {
-            return modern;
-        }
-        let legacy = self.workspace_root.join(".pipeline").join(Self::HANDOFF_MD_FILE);
-        if legacy.exists() {
-            return legacy;
-        }
-        modern
+        self.state_dir().join(Self::HANDOFF_MD_FILE)
     }
 
-    /// Resolves the active agent bridge file path (`active_agent.json`).
+    /// Resolves the active agent bridge file path (`.agy/state/active_agent.json`).
     #[must_use]
     pub fn active_agent_file(&self) -> PathBuf {
-        let modern = self.state_dir().join(Self::ACTIVE_AGENT_FILE);
-        if modern.exists() {
-            return modern;
-        }
-        let legacy = self.workspace_root.join(".pipeline").join(Self::ACTIVE_AGENT_FILE);
-        if legacy.exists() {
-            return legacy;
-        }
-        modern
+        self.state_dir().join(Self::ACTIVE_AGENT_FILE)
     }
 
-    /// Resolves the session checkpoint file path (`checkpoint.json`).
+    /// Resolves the session checkpoint file path (`.agy/artifacts/checkpoint.json`).
     #[must_use]
     pub fn checkpoint_file(&self) -> PathBuf {
-        let modern = self.artifacts_dir().join(Self::CHECKPOINT_FILE);
-        if modern.exists() {
-            return modern;
-        }
-        let legacy = self.workspace_root.join(".pipeline").join(Self::CHECKPOINT_FILE);
-        if legacy.exists() {
-            return legacy;
-        }
-        modern
+        self.artifacts_dir().join(Self::CHECKPOINT_FILE)
     }
 
-    /// Ensures that the core `.agy/` state directories exist on disk.
+    /// Ensures that the core `.agy/` state and cache directories exist on disk.
+    /// Automatically provisions a self-protecting `<workspace>/.agy/.gitignore` with `*`
+    /// to guarantee external target Git repositories keep `.agy/` cleanly ignored.
     ///
     /// # Errors
-    /// Returns `std::io::Error` if directory creation fails.
+    /// Returns `std::io::Error` if directory or `.gitignore` creation fails.
     pub fn ensure_directories(&self) -> std::io::Result<()> {
         std::fs::create_dir_all(self.state_dir())?;
         std::fs::create_dir_all(self.workspaces_dir())?;
         std::fs::create_dir_all(self.artifacts_dir())?;
+        std::fs::create_dir_all(self.cache_dir().join("wip"))?;
+
+        // Self-protecting gitignore: guarantees git ignores .agy in any project automatically
+        let gitignore = self.root().join(".gitignore");
+        if !gitignore.exists() {
+            drop(std::fs::write(&gitignore, "*\n"));
+        }
         Ok(())
     }
 }
@@ -170,30 +159,32 @@ mod tests {
         assert_eq!(paths.workspaces_dir(), root.join(".agy/workspaces"));
         assert_eq!(paths.agent_workspace("coder"), root.join(".agy/workspaces/coder"));
         assert_eq!(paths.artifacts_dir(), root.join(".agy/artifacts"));
+        assert_eq!(paths.cache_dir(), root.join(".agy/cache"));
+        assert_eq!(paths.circuit_breaker_file(), root.join(".agy/state/circuit_breaker.json"));
+        assert_eq!(paths.handoff_json_file(), root.join(".agy/state/handoff.json"));
+        assert_eq!(paths.handoff_md_file(), root.join(".agy/state/last_handoff.md"));
+        assert_eq!(paths.active_agent_file(), root.join(".agy/state/active_agent.json"));
+        assert_eq!(paths.checkpoint_file(), root.join(".agy/artifacts/checkpoint.json"));
     }
 
     #[test]
     #[allow(clippy::expect_used, reason = "Unit test assertions")]
-    fn test_legacy_pipeline_fallback() {
+    fn test_ensure_directories_creates_self_protecting_gitignore() {
         let temp_dir = std::env::temp_dir().join(format!("agy_paths_test_{}", std::process::id()));
-        let pipeline_dir = temp_dir.join(".pipeline");
-        std::fs::create_dir_all(&pipeline_dir).expect("create legacy pipeline dir");
-
-        // Write legacy circuit breaker
-        let legacy_cb = pipeline_dir.join("circuit_breaker.json");
-        std::fs::write(&legacy_cb, "{}").expect("write legacy cb");
-
         let paths = AgyStatePaths::new(&temp_dir);
-        assert_eq!(paths.circuit_breaker_file(), legacy_cb);
+        paths.ensure_directories().expect("ensure directories failed");
 
-        // Once modern file exists, it takes precedence
-        let modern_state = paths.state_dir();
-        std::fs::create_dir_all(&modern_state).expect("create modern state dir");
-        let modern_cb = modern_state.join("circuit_breaker.json");
-        std::fs::write(&modern_cb, "{}").expect("write modern cb");
+        assert!(paths.state_dir().is_dir());
+        assert!(paths.workspaces_dir().is_dir());
+        assert!(paths.artifacts_dir().is_dir());
+        assert!(paths.cache_dir().join("wip").is_dir());
 
-        assert_eq!(paths.circuit_breaker_file(), modern_cb);
+        let gitignore = paths.root().join(".gitignore");
+        assert!(gitignore.is_file());
+        let content = std::fs::read_to_string(&gitignore).expect("read gitignore");
+        assert_eq!(content, "*\n");
 
+        drop(std::fs::remove_dir_all(paths.root()));
         drop(std::fs::remove_dir_all(&temp_dir));
     }
 }

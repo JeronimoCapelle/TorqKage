@@ -11,7 +11,7 @@ use crate::stdin::read_stdin_payload;
 /// Executes the `record-handoff` hook (`Stop`).
 ///
 /// Captures working copy changes and active agent metadata, writing a Markdown summary
-/// to `.pipeline/last_handoff.md` and structured JSON to `.pipeline/handoff.json`.
+/// to `.agy/state/last_handoff.md` and structured JSON to `.agy/state/handoff.json`.
 /// Emits `{}` on `stdout` permitting loop termination.
 pub(crate) fn execute_record_handoff() {
     let input: StopInput = read_stdin_payload();
