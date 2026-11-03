@@ -24,7 +24,21 @@ pub trait GateCheck: Send + Sync {
     fn execute(&self, workspace_root: &Path) -> GateCheckStatus;
 }
 
-/// Validates that the project compiles cleanly (`cargo check --all-targets`).
+/// Returns whether `cargo-fast` is available in the current environment `$PATH`.
+#[must_use]
+pub fn is_cargo_fast_available() -> bool {
+    if let Ok(path_var) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&path_var) {
+            let candidate = dir.join("cargo-fast");
+            if candidate.is_file() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Validates that the project compiles cleanly (`cargo check --all-targets` or `cargo fast check --all-targets`).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CargoCompilationCheck;
 
@@ -38,8 +52,14 @@ impl GateCheck for CargoCompilationCheck {
             return GateCheckStatus::Passed;
         }
 
-        let output = Command::new("cargo")
-            .args(["check", "--all-targets"])
+        let (prog, args) = if is_cargo_fast_available() {
+            ("cargo", vec!["fast", "check", "--all-targets"])
+        } else {
+            ("cargo", vec!["check", "--all-targets"])
+        };
+
+        let output = Command::new(prog)
+            .args(&args)
             .current_dir(workspace_root)
             .output();
 
@@ -53,19 +73,23 @@ impl GateCheck for CargoCompilationCheck {
                     let raw = format!("{stdout}\n{stderr}");
                     let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(25).collect();
                     let diag = truncated.join("\n");
+                    let cmd_str = if is_cargo_fast_available() { "cargo fast check --all-targets" } else { "cargo check --all-targets" };
                     GateCheckStatus::Failed(format!(
-                        "Project compilation failed (`cargo check --all-targets`).\n\
+                        "Project compilation failed (`{cmd_str}`).\n\
                          Finisher requires 100% clean compilation before review.\n\n\
                          [Compiler Output]:\n{diag}"
                     ))
                 }
             }
-            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo check': {e}")),
+            Err(e) => {
+                let cmd_str = if is_cargo_fast_available() { "cargo fast check" } else { "cargo check" };
+                GateCheckStatus::Failed(format!("Failed to execute '{cmd_str}': {e}"))
+            }
         }
     }
 }
 
-/// Validates that test harnesses compile without errors (`cargo test --no-run`).
+/// Validates that test harnesses compile without errors (`cargo test --no-run` or `cargo fast test --no-run`).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CargoTestCompilationCheck;
 
@@ -79,8 +103,14 @@ impl GateCheck for CargoTestCompilationCheck {
             return GateCheckStatus::Passed;
         }
 
-        let output = Command::new("cargo")
-            .args(["test", "--no-run"])
+        let (prog, args) = if is_cargo_fast_available() {
+            ("cargo", vec!["fast", "test", "--no-run"])
+        } else {
+            ("cargo", vec!["test", "--no-run"])
+        };
+
+        let output = Command::new(prog)
+            .args(&args)
             .current_dir(workspace_root)
             .output();
 
@@ -94,14 +124,18 @@ impl GateCheck for CargoTestCompilationCheck {
                     let raw = format!("{stdout}\n{stderr}");
                     let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(20).collect();
                     let diag = truncated.join("\n");
+                    let cmd_str = if is_cargo_fast_available() { "cargo fast test --no-run" } else { "cargo test --no-run" };
                     GateCheckStatus::Failed(format!(
-                        "Test suite compilation failed (`cargo test --no-run`).\n\
+                        "Test suite compilation failed (`{cmd_str}`).\n\
                          All tests must compile before calling finisher.\n\n\
                          [Compiler Output]:\n{diag}"
                     ))
                 }
             }
-            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo test --no-run': {e}")),
+            Err(e) => {
+                let cmd_str = if is_cargo_fast_available() { "cargo fast test --no-run" } else { "cargo test --no-run" };
+                GateCheckStatus::Failed(format!("Failed to execute '{cmd_str}': {e}"))
+            }
         }
     }
 }
@@ -276,5 +310,11 @@ pre_launch_checks: []
         let fail = MockFail;
         assert_eq!(pass.execute(Path::new(".")), GateCheckStatus::Passed);
         assert_eq!(fail.execute(Path::new(".")), GateCheckStatus::Failed("error".to_owned()));
+    }
+
+    #[test]
+    fn test_is_cargo_fast_available_check() {
+        let available = is_cargo_fast_available();
+        let _ = std::hint::black_box(available);
     }
 }

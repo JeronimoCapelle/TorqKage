@@ -99,44 +99,72 @@ allowed_dirs = ["*"]
 # --- Compilation & Compiler Diagnostics ---
 
 [tools.run_quick_check]
-description = "Runs cargo check with zero token noise. Returns exit code only."
+description = "Runs cargo fast check with zero token noise (exit code only) for maximum incremental iteration speed"
 action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "check", "--tests"]
+command = ["cargo", "fast", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
 
 [tools.run_cargo_verification]
-description = "Runs cargo check and returns filtered JSON error spans."
+description = "Runs cargo fast check and returns filtered JSON error spans with attached rustc explanations"
 action = "cargo_json_diagnostics"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "check", "--message-format=json"]
+command = ["cargo", "fast", "check", "--message-format=json"]
 output_capture = "json_spans"
 attach_rustc_explain = true
 timeout_seconds = 120
 
 [tools.run_cargo_clippy]
-description = "Runs cargo clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
+description = "Runs cargo fast clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
 action = "cargo_json_diagnostics"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
+command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
 output_capture = "json_spans"
 attach_rustc_explain = true
 timeout_seconds = 120
 
 [tools.run_cargo_clippy_fix]
-description = "Runs cargo clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
+description = "Runs cargo fast clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
 action = "static_command"
 category = "compilation"
 mutating = true
-command = ["cargo", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
+command = ["cargo", "fast", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
 output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
 require_permission_gate = true
+
+[tools.run_cargo_build]
+description = "Compiles packages and binaries using cargo fast build (Cranelift + Mold + O0 deps) for high-speed compilation"
+action = "parameterized_command"
+category = "compilation"
+tracks_circuit_breaker = true
+command = ["cargo", "fast", "build"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific package to build (defaults to workspace)" },
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Specific binary to build" },
+    { name = "all_targets", required = false, flag = "--all-targets", regex = "^true$", description = "Build all binaries, tests, benches, and examples" }
+]
+output_capture = "both"
+truncate_lines = 100
+timeout_seconds = 180
+
+[tools.run_cargo_run]
+description = "Compiles and executes a specific workspace binary via cargo fast run"
+action = "parameterized_command"
+category = "compilation"
+command = ["cargo", "fast", "run"]
+args = [
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Specific binary name to execute" },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific package containing the binary" }
+]
+output_capture = "both"
+truncate_lines = 100
+timeout_seconds = 60
 
 # --- Architectural & High-Level Introspection Tooling ---
 
@@ -282,11 +310,11 @@ timeout_seconds = 10
 # --- Test Suite & Verification Tooling ---
 
 [tools.run_cargo_test]
-description = "Executes unit and integration tests via standard cargo test with optional target/filter overrides"
+description = "Executes unit and integration tests via cargo fast test with optional target/filter overrides"
 action = "parameterized_command"
 category = "testing"
 tracks_circuit_breaker = true
-command = ["cargo", "test"]
+command = ["cargo", "fast", "test"]
 args = [
     { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
@@ -613,11 +641,11 @@ truncate_lines = 100
 timeout_seconds = 120
 
 [tools.run_cargo_check_targets]
-description = "Verifies compilation health of benches and examples (cargo check --benches --examples)"
+description = "Verifies compilation health of benches and examples (cargo fast check --benches --examples)"
 action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "check", "--benches", "--examples"]
+command = ["cargo", "fast", "check", "--benches", "--examples"]
 output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 60

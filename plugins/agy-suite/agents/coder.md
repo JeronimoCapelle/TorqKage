@@ -21,6 +21,8 @@ mcp_tools:
   - inspect_module_structure
   - run_quick_check
   - run_cargo_verification
+  - run_cargo_build
+  - run_cargo_run
   - run_cargo_test
   - run_cargo_nextest
   - run_cargo_clippy

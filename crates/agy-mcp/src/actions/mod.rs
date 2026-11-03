@@ -234,8 +234,14 @@ fn check_clippy_clean(workspace_root: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let output = Command::new("cargo")
-        .args(["clippy", "--all-targets", "--", "-D", "warnings"])
+    let (prog, args) = if agy_common::is_cargo_fast_available() {
+        ("cargo", vec!["fast", "clippy", "--all-targets", "--", "-D", "warnings"])
+    } else {
+        ("cargo", vec!["clippy", "--all-targets", "--", "-D", "warnings"])
+    };
+
+    let output = Command::new(prog)
+        .args(&args)
         .current_dir(workspace_root)
         .output()
         .map_err(|err| format!("Failed to spawn cargo clippy gate: {err}"))?;
@@ -251,8 +257,14 @@ fn check_tests_passed(workspace_root: &Path) -> Result<(), String> {
         return Ok(());
     }
 
-    let output = Command::new("cargo")
-        .args(["test", "--no-fail-fast"])
+    let (prog, args) = if agy_common::is_cargo_fast_available() {
+        ("cargo", vec!["fast", "test", "--no-fail-fast"])
+    } else {
+        ("cargo", vec!["test", "--no-fail-fast"])
+    };
+
+    let output = Command::new(prog)
+        .args(&args)
         .current_dir(workspace_root)
         .output()
         .map_err(|err| format!("Failed to spawn cargo test gate: {err}"))?;

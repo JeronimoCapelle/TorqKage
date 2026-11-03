@@ -38,6 +38,11 @@ mcp_tools:
   - inspect_revision_log
   - inspect_bookmarks
   - run_quick_check
+  - run_cargo_verification
+  - run_cargo_build
+  - run_cargo_run
+  - run_cargo_test
+  - run_cargo_clippy
   - query_rustc_explain
   - jj_absorb_working_copy
   - jj_describe_revision
