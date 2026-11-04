@@ -127,7 +127,7 @@ impl App {
             previous_tab: None,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter/l] Resume, [n] New, [1-4] Views, [?] Manual, [i] Install/Health".to_owned(), false)),
+            status_message: Some(("Press [Enter] Resume, [n] New, [1-4] Views, [?] Manual, [i] Install/Health".to_owned(), false)),
             pending_launch: None,
             active_agent_session: None,
             launch_config: LaunchConfig::default(),

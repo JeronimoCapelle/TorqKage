@@ -690,12 +690,12 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     // Dynamic context-sensitive shortcuts
     let shortcuts = match app.active_tab {
         ActiveTab::FleetOverview => Line::from(vec![
-            Span::styled(" [Enter/l Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled(" [Enter Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
             Span::styled("[n New] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
             Span::styled("[w Iso] ", Style::default().fg(Color::LightCyan)),
             Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
             Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
-            Span::styled("[k Reset CB] ", Style::default().fg(Color::LightRed)),
+            Span::styled("[c Reset CB] ", Style::default().fg(Color::LightRed)),
             Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
             Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
             Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),

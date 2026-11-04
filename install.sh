@@ -107,6 +107,7 @@ done
 # 2. Stage binaries into the workspace plugin bundle: ./plugins/agy-suite/bin/
 echo "--> Staging binaries into local workspace plugin bundle: ${PLUGIN_DIR}/bin/..."
 mkdir -p "${PLUGIN_DIR}/bin"
+rm -f "${PLUGIN_DIR}/bin/agy-mcp" "${PLUGIN_DIR}/bin/agy-hooks" "${PLUGIN_DIR}/bin/agy-ctrl"
 cp "${BIN_SOURCE_DIR}/agy-mcp" "${PLUGIN_DIR}/bin/"
 cp "${BIN_SOURCE_DIR}/agy-hooks" "${PLUGIN_DIR}/bin/"
 cp "${BIN_SOURCE_DIR}/agy-ctrl" "${PLUGIN_DIR}/bin/"
@@ -140,7 +141,8 @@ cp "${PLUGIN_DIR}/mcp_config.json" "${TARGET_PLUGIN_DIR}/"
 cp -r "${PLUGIN_DIR}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
 cp -r "${PLUGIN_DIR}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
 
-# Copy executables
+# Copy executables (unlink first to prevent ETXTBSY if daemon/agents are running)
+rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl"
 cp "${PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"
 cp "${PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/"
 cp "${PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/"

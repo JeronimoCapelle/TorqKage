@@ -188,8 +188,8 @@ fn print_cli_usage() {
          \n\
          INTERACTIVE TUI:\n\
            Run without arguments in an interactive terminal to launch the visual policy deck.\n\
-           In TUI mode, press [Enter/l] on any agent to launch agy directly.\n\
-           Shortcuts: [w] Workspace Isolation, [k] Reset CB, [p] Policy, [b] Sandbox, [g] Gate Tool\n"
+           In TUI mode, press [Enter] on any agent to launch agy directly.\n\
+           Shortcuts: [w] Workspace Isolation, [c] Reset CB, [p] Policy, [b] Sandbox, [g] Gate Tool\n"
     );
 }
 
@@ -322,10 +322,6 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
             app.should_quit = true;
             true
         }
-        KeyCode::Char('l') => {
-            app.request_launch(true);
-            true
-        }
         KeyCode::Char('n') => {
             app.request_launch(false);
             true
@@ -350,7 +346,7 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
             app.toggle_isolated_workspace();
             true
         }
-        KeyCode::Char('k') => {
+        KeyCode::Char('c' | 'C' | 'K') => {
             app.reset_circuit_breaker();
             true
         }
@@ -358,7 +354,7 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
             app.cycle_selected_agent_policy();
             true
         }
-        KeyCode::Char('g') => {
+        KeyCode::Char('g') if app.active_tab != ActiveTab::Manual => {
             app.toggle_tool_permission_gate();
             true
         }
@@ -396,8 +392,11 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
 
 fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
     match code {
-        KeyCode::Left | KeyCode::Right | KeyCode::Char('h') => {
-            app.toggle_fleet_focus();
+        KeyCode::Left | KeyCode::Char('h') => {
+            app.fleet_focus = FleetFocus::AgentList;
+        }
+        KeyCode::Right | KeyCode::Char('l') => {
+            app.fleet_focus = FleetFocus::ToolList;
         }
         KeyCode::Up | KeyCode::Char('k') => match app.fleet_focus {
             FleetFocus::AgentList => app.prev_agent(),
@@ -486,5 +485,58 @@ fn handle_manual_keys(app: &mut App, code: KeyCode) {
             app.toggle_manual();
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_k_navigates_up_and_does_not_reset_breaker() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut app = App::new(root).expect("create app");
+        assert!(!app.agents.is_empty(), "expected agents in workspace");
+
+        app.selected_agent_idx = 1;
+        let initial_status = app.status_message.clone();
+
+        handle_key_event(&mut app, KeyCode::Char('k'), KeyModifiers::NONE);
+
+        assert_eq!(app.selected_agent_idx, 0);
+        assert_eq!(app.status_message, initial_status);
+    }
+
+    #[test]
+    fn test_c_and_shift_k_reset_circuit_breaker() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut app = App::new(root).expect("create app");
+
+        handle_key_event(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
+        let status = app.status_message.as_ref().map(|(msg, _)| msg.clone());
+        assert!(status.unwrap().contains("Circuit Breaker RESET"));
+
+        handle_key_event(&mut app, KeyCode::Char('K'), KeyModifiers::NONE);
+        let status_k = app.status_message.as_ref().map(|(msg, _)| msg.clone());
+        assert!(status_k.unwrap().contains("Circuit Breaker RESET"));
+    }
+
+    #[test]
+    fn test_manual_scrolling_and_home_keys() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut app = App::new(root).expect("create app");
+        app.active_tab = ActiveTab::Manual;
+
+        handle_key_event(&mut app, KeyCode::Char('j'), KeyModifiers::NONE);
+        assert_eq!(app.manual_scroll, 1);
+
+        handle_key_event(&mut app, KeyCode::Char('k'), KeyModifiers::NONE);
+        assert_eq!(app.manual_scroll, 0);
+
+        handle_key_event(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
+        assert_eq!(app.manual_scroll, 10);
+        handle_key_event(&mut app, KeyCode::Char('g'), KeyModifiers::NONE);
+        assert_eq!(app.manual_scroll, 0);
     }
 }
