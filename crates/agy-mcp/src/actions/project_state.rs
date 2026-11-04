@@ -2,8 +2,9 @@
 
 use std::path::Path;
 use std::process::Command;
-use agy_common::AgyStatePaths;
-use agy_common::JujutsuWorkspace;
+use agy_common::{
+    AgyStatePaths, DEFAULT_VCS_QUERY_TIMEOUT_SECS, JujutsuWorkspace, SubprocessSupervisor,
+};
 
 pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
     let branch = query_current_branch(workspace_root);
@@ -21,10 +22,10 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
 
 fn query_current_branch(root: &Path) -> String {
     if JujutsuWorkspace::is_jj_repo(root) {
-        if let Ok(out) = Command::new("jj")
-            .args(["--color=never", "log", "-r", "@", "--no-graph", "-T", "bookmarks"])
-            .current_dir(root)
-            .output()
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "log", "-r", "@", "--no-graph", "-T", "bookmarks"]);
+        cmd.current_dir(root);
+        if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
             && out.status.success()
         {
             let bm = String::from_utf8_lossy(&out.stdout).trim().to_owned();
@@ -38,10 +39,10 @@ fn query_current_branch(root: &Path) -> String {
         return "@ (working copy)".to_owned();
     }
 
-    if let Ok(out) = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(root)
-        .output()
+    let mut cmd = Command::new("git");
+    cmd.args(["rev-parse", "--abbrev-ref", "HEAD"]);
+    cmd.current_dir(root);
+    if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
         && out.status.success()
     {
         let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
@@ -57,10 +58,10 @@ fn query_vcs_status(root: &Path) -> String {
         if JujutsuWorkspace::is_workspace_clean(root) {
             return "Clean".to_owned();
         }
-        if let Ok(out) = Command::new("jj")
-            .args(["--color=never", "diff", "--summary"])
-            .current_dir(root)
-            .output()
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "diff", "--summary"]);
+        cmd.current_dir(root);
+        if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
             && out.status.success()
         {
             let stdout = String::from_utf8_lossy(&out.stdout);
@@ -76,10 +77,10 @@ fn query_vcs_status(root: &Path) -> String {
         return "Unavailable".to_owned();
     }
 
-    if let Ok(out) = Command::new("git")
-        .args(["status", "-s"])
-        .current_dir(root)
-        .output()
+    let mut cmd = Command::new("git");
+    cmd.args(["status", "-s"]);
+    cmd.current_dir(root);
+    if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
         && out.status.success()
     {
         let stdout = String::from_utf8_lossy(&out.stdout);

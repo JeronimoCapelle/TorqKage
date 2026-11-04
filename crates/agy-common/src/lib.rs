@@ -18,6 +18,7 @@ pub mod error;
 pub mod frontmatter;
 pub mod gatekeeper;
 pub mod jujutsu;
+pub mod limits;
 pub mod models;
 pub mod project;
 pub mod resolver;
@@ -34,6 +35,12 @@ pub use gatekeeper::{
     find_agent_manifest_path, parse_pre_launch_checks,
 };
 pub use jujutsu::JujutsuWorkspace;
+pub use limits::{
+    DEFAULT_GATE_TIMEOUT_SECS, DEFAULT_HELP_PREVIEW_LINES, DEFAULT_MAN_PREVIEW_LINES,
+    DEFAULT_MISSING_BINARIES_PREVIEW, DEFAULT_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS,
+    DEFAULT_TEST_GATE_TIMEOUT_SECS, DEFAULT_TOOL_TIMEOUT_SECS, DEFAULT_TRUNCATE_LINES,
+    DEFAULT_VCS_QUERY_TIMEOUT_SECS, PROCESS_KILL_GRACE_WAIT,
+};
 pub use models::{
     CircuitBreakerLedger, CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision,
     InjectStep, PipelineHandoff, PostInvocationInput, PostInvocationResponse, PostToolUseInput,

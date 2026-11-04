@@ -1,6 +1,10 @@
 //! `cli_manual` action handler providing in-session help, tldr, navi recipes, and man snippets.
 
 use std::process::Command;
+use agy_common::{
+    DEFAULT_HELP_PREVIEW_LINES, DEFAULT_MAN_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS,
+    SubprocessSupervisor,
+};
 use crate::guards::truncate_output;
 use crate::models::ToolDefinition;
 
@@ -80,10 +84,9 @@ fn query_navi(name: &str, query: &str) -> Option<String> {
         format!("{name} {query}")
     };
 
-    let output = Command::new("navi")
-        .args(["--query", &search_term, "--best-match", "--print"])
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("navi");
+    cmd.args(["--query", &search_term, "--best-match", "--print"]);
+    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -95,7 +98,9 @@ fn query_navi(name: &str, query: &str) -> Option<String> {
 }
 
 fn query_tldr(name: &str) -> Option<String> {
-    let output = Command::new("tldr").arg(name).output().ok()?;
+    let mut cmd = Command::new("tldr");
+    cmd.arg(name);
+    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout).trim().to_owned();
@@ -107,13 +112,15 @@ fn query_tldr(name: &str) -> Option<String> {
 }
 
 fn query_cli_help(name: &str) -> Option<String> {
-    let output = Command::new(name).arg("--help").output().ok()?;
+    let mut cmd = Command::new(name);
+    cmd.arg("--help");
+    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
     if output.status.success() || !output.stdout.is_empty() {
         let text = String::from_utf8_lossy(&output.stdout).trim().to_owned();
         if !text.is_empty() {
-            // Cap raw --help at first 50 lines to keep token budget frugal
-            let sample: Vec<&str> = text.lines().take(50).collect();
+            // Cap raw --help preview to keep token budget frugal
+            let sample: Vec<&str> = text.lines().take(DEFAULT_HELP_PREVIEW_LINES).collect();
             return Some(sample.join("\n"));
         }
     }
@@ -121,11 +128,10 @@ fn query_cli_help(name: &str) -> Option<String> {
 }
 
 fn query_man_synopsis(name: &str) -> Option<String> {
-    let output = Command::new("man")
-        .env("MANPAGER", "cat")
-        .arg(name)
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("man");
+    cmd.env("MANPAGER", "cat");
+    cmd.arg(name);
+    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout);
@@ -142,8 +148,8 @@ fn extract_man_snippet(man_text: &str) -> Option<String> {
     for line in man_text.lines() {
         let trimmed = line.trim();
 
-        // Stop if we hit the exhaustive OPTIONS block or exceed 35 lines
-        if started && (trimmed == "OPTIONS" || count >= 35) {
+        // Stop if we hit the exhaustive OPTIONS block or exceed preview lines limit
+        if started && (trimmed == "OPTIONS" || count >= DEFAULT_MAN_PREVIEW_LINES) {
             break;
         }
 

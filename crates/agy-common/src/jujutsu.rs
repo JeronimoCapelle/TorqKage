@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use crate::error::{AgyError, Result};
+use crate::limits::DEFAULT_VCS_QUERY_TIMEOUT_SECS;
+use crate::supervisor::SubprocessSupervisor;
 
 /// Primitives for managing isolated Jujutsu workspaces.
 #[derive(Debug, Clone, Copy)]
@@ -12,22 +14,23 @@ impl JujutsuWorkspace {
     /// Checks whether the target directory or its ancestors is a Jujutsu repository.
     #[must_use]
     pub fn is_jj_repo(workspace_root: &Path) -> bool {
-        workspace_root.join(".jj").exists()
-            || Command::new("jj")
-                .args(["--color=never", "root"])
-                .current_dir(workspace_root)
-                .output()
-                .is_ok_and(|out| out.status.success())
+        if workspace_root.join(".jj").exists() {
+            return true;
+        }
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "root"]);
+        cmd.current_dir(workspace_root);
+        SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .is_ok_and(|out| out.status.success())
     }
 
     /// Returns the active workspace name (e.g., "default", "coder") for `workspace_root`.
     #[must_use]
     pub fn current_workspace_name(workspace_root: &Path) -> Option<String> {
-        let output = Command::new("jj")
-            .args(["--color=never", "workspace", "root"])
-            .current_dir(workspace_root)
-            .output()
-            .ok()?;
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "workspace", "root"]);
+        cmd.current_dir(workspace_root);
+        let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS).ok()?;
         if output.status.success() {
             let path_str = String::from_utf8_lossy(&output.stdout).trim().to_owned();
             let p = Path::new(&path_str);
@@ -39,10 +42,10 @@ impl JujutsuWorkspace {
     /// Checks if a workspace with the given name already exists in the repo.
     #[must_use]
     pub fn workspace_exists(workspace_root: &Path, name: &str) -> bool {
-        let output = Command::new("jj")
-            .args(["--color=never", "workspace", "list"])
-            .current_dir(workspace_root)
-            .output();
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "workspace", "list"]);
+        cmd.current_dir(workspace_root);
+        let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
         if let Ok(out) = output
             && out.status.success()
         {
@@ -67,11 +70,10 @@ impl JujutsuWorkspace {
             return false;
         }
 
-        let Ok(out) = Command::new("jj")
-            .args(["--color=never", "diff", "--summary"])
-            .current_dir(ws_path)
-            .output()
-        else {
+        let mut cmd = Command::new("jj");
+        cmd.args(["--color=never", "diff", "--summary"]);
+        cmd.current_dir(ws_path);
+        let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) else {
             return false;
         };
 
@@ -138,13 +140,13 @@ impl JujutsuWorkspace {
 
         if !Self::workspace_exists(&repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
-            let status = Command::new("jj")
-                .args(["--color=never", "workspace", "add", "--name", agent, dest_str])
-                .current_dir(&repo_root)
-                .status()
+            let mut cmd = Command::new("jj");
+            cmd.args(["--color=never", "workspace", "add", "--name", agent, dest_str]);
+            cmd.current_dir(&repo_root);
+            let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                 .map_err(|e| AgyError::Process(format!("Failed to execute 'jj workspace add': {e}")))?;
 
-            if !status.success() {
+            if !output.status.success() {
                 return Err(AgyError::Process(format!(
                     "Command 'jj workspace add --name {agent} {}' exited with non-zero status",
                     agent_ws_path.display()
@@ -152,15 +154,15 @@ impl JujutsuWorkspace {
             }
         } else if Self::is_workspace_clean(&agent_ws_path) {
             // Rebase clean workspace onto latest default@ commit to eliminate split-brain drift
-            match Command::new("jj")
-                .args(["--color=never", "new", "default@", "--no-edit"])
-                .current_dir(&agent_ws_path)
-                .status()
-            {
-                Ok(status) if !status.success() => {
+            let mut cmd = Command::new("jj");
+            cmd.args(["--color=never", "new", "default@", "--no-edit"]);
+            cmd.current_dir(&agent_ws_path);
+            match SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
+                Ok(out) if !out.status.success() => {
                     eprintln!(
-                        "[agy-common] warning: 'jj new default@' in {} exited with non-zero status: {status}",
-                        agent_ws_path.display()
+                        "[agy-common] warning: 'jj new default@' in {} exited with non-zero status: {}",
+                        agent_ws_path.display(),
+                        out.status
                     );
                 }
                 Err(e) => {

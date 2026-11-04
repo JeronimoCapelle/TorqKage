@@ -4,6 +4,10 @@
 
 use std::path::Path;
 use std::process::Command;
+use crate::limits::{
+    DEFAULT_GATE_TIMEOUT_SECS, DEFAULT_PREVIEW_LINES, DEFAULT_TEST_GATE_TIMEOUT_SECS,
+    DEFAULT_VCS_QUERY_TIMEOUT_SECS,
+};
 use crate::project::ProjectConfig;
 use crate::supervisor::SubprocessSupervisor;
 
@@ -76,7 +80,7 @@ impl GateCheck for ProjectGateCheck {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(25).collect();
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
                     let diag = truncated.join("\n");
                     let default_msg = format!("Gate '{}' failed (`{}`).", self.name, self.command.join(" "));
                     let msg = self.failure_message.as_deref().unwrap_or(&default_msg);
@@ -107,7 +111,7 @@ impl GateCheck for CargoCompilationCheck {
         cmd.args(["check", "--all-targets"]);
         cmd.current_dir(workspace_root);
 
-        match SubprocessSupervisor::run_supervised(cmd, 30) {
+        match SubprocessSupervisor::run_supervised(cmd, DEFAULT_GATE_TIMEOUT_SECS) {
             Ok(out) => {
                 if out.status.success() {
                     GateCheckStatus::Passed
@@ -115,7 +119,7 @@ impl GateCheck for CargoCompilationCheck {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(25).collect();
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
                     let diag = truncated.join("\n");
                     GateCheckStatus::Failed(format!(
                         "Project compilation failed (`cargo check --all-targets`).\n\
@@ -148,7 +152,7 @@ impl GateCheck for CargoTestCompilationCheck {
         cmd.args(["test", "--no-run"]);
         cmd.current_dir(workspace_root);
 
-        match SubprocessSupervisor::run_supervised(cmd, 45) {
+        match SubprocessSupervisor::run_supervised(cmd, DEFAULT_TEST_GATE_TIMEOUT_SECS) {
             Ok(out) => {
                 if out.status.success() {
                     GateCheckStatus::Passed
@@ -156,7 +160,7 @@ impl GateCheck for CargoTestCompilationCheck {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(20).collect();
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
                     let diag = truncated.join("\n");
                     GateCheckStatus::Failed(format!(
                         "Test suite compilation failed (`cargo test --no-run`).\n\
@@ -182,12 +186,11 @@ impl GateCheck for VcsConflictCheck {
     fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
         // 1. Jujutsu conflict check
         if workspace_root.join(".jj").is_dir() {
-            let output = Command::new("jj")
-                .args(["log", "-r", "conflicts() & @", "--no-graph", "-T", "change_id"])
-                .current_dir(workspace_root)
-                .output();
+            let mut cmd = Command::new("jj");
+            cmd.args(["log", "-r", "conflicts() & @", "--no-graph", "-T", "change_id"]);
+            cmd.current_dir(workspace_root);
 
-            if let Ok(out) = output
+            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                 && out.status.success()
             {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
@@ -201,12 +204,11 @@ impl GateCheck for VcsConflictCheck {
 
         // 2. Git conflict check
         if workspace_root.join(".git").is_dir() {
-            let output = Command::new("git")
-                .args(["diff", "--check"])
-                .current_dir(workspace_root)
-                .output();
+            let mut cmd = Command::new("git");
+            cmd.args(["diff", "--check"]);
+            cmd.current_dir(workspace_root);
 
-            if let Ok(out) = output {
+            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
                 let combined = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
                 if combined.contains("leftover conflict marker") || combined.contains("conflict marker") {
                     return GateCheckStatus::Failed(

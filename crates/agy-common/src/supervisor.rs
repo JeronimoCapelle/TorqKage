@@ -2,9 +2,7 @@
 
 use std::process::{Child, Command, ExitStatus};
 use crate::error::{AgyError, Result};
-
-/// Grace duration allowed for child thread completion post-SIGKILL before returning timeout error.
-const PROCESS_KILL_GRACE_WAIT: std::time::Duration = std::time::Duration::from_millis(50);
+use crate::limits::PROCESS_KILL_GRACE_WAIT;
 
 /// Drop guard ensuring child process groups are forcefully terminated if parent drops.
 pub struct ChildGuard {

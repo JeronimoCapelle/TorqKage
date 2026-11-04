@@ -1,5 +1,6 @@
 //! Validation engine verifying tool specifications and host binary prerequisites.
 
+use agy_common::DEFAULT_MISSING_BINARIES_PREVIEW;
 use crate::models::{OutputCapture, ToolAction, ToolDefinition};
 
 /// Diagnostic summary produced when inspecting the declarative toolset at boot.
@@ -25,12 +26,12 @@ impl ValidationReport {
                 .missing_binaries
                 .iter()
                 .map(|(tool, bin)| format!("{tool} ({bin})"))
-                .take(4)
+                .take(DEFAULT_MISSING_BINARIES_PREVIEW)
                 .collect();
 
             let sample = missing_names.join(", ");
-            let suffix = if self.missing_binaries.len() > 4 {
-                format!(" +{} more", self.missing_binaries.len().saturating_sub(4))
+            let suffix = if self.missing_binaries.len() > DEFAULT_MISSING_BINARIES_PREVIEW {
+                format!(" +{} more", self.missing_binaries.len().saturating_sub(DEFAULT_MISSING_BINARIES_PREVIEW))
             } else {
                 String::new()
             };

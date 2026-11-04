@@ -3,7 +3,9 @@
 use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
-use agy_common::SubprocessSupervisor;
+use agy_common::{
+    DEFAULT_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS, SubprocessSupervisor,
+};
 use crate::guards::truncate_output;
 use crate::models::ToolDefinition;
 
@@ -122,15 +124,14 @@ fn parse_cargo_json(stdout: &str) -> (Vec<String>, HashSet<String>, bool) {
 }
 
 fn fetch_rustc_explanation(code: &str) -> Option<String> {
-    let output = Command::new("rustc")
-        .args(["--explain", code])
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("rustc");
+    cmd.args(["--explain", code]);
+    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
     if output.status.success() {
         let text = String::from_utf8_lossy(&output.stdout);
-        // Take first 15 lines of explanation
-        let lines: Vec<&str> = text.lines().take(15).collect();
+        // Take first preview lines of explanation
+        let lines: Vec<&str> = text.lines().take(DEFAULT_PREVIEW_LINES).collect();
         if !lines.is_empty() {
             return Some(lines.join("\n"));
         }
