@@ -23,7 +23,9 @@
 #![allow(clippy::struct_excessive_bools, reason = "Mirrors declarative tools.toml and manifest schemas")]
 
 mod app;
+mod installer;
 mod launcher;
+mod manual;
 mod model;
 mod session;
 mod summary;
@@ -300,76 +302,8 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     }
 
     // 2. Global Shortcuts
-    match code {
-        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
-            app.should_quit = true;
-            return;
-        }
-        KeyCode::Char('q') => {
-            app.should_quit = true;
-            return;
-        }
-        KeyCode::Char('l') => {
-            app.request_launch(true);
-            return;
-        }
-        KeyCode::Char('n') => {
-            app.request_launch(false);
-            return;
-        }
-        KeyCode::F(1) | KeyCode::Char('?') => {
-            app.show_help = true;
-            return;
-        }
-        KeyCode::F(2) | KeyCode::Char('S') => {
-            app.save_and_validate();
-            return;
-        }
-        KeyCode::F(8) | KeyCode::Char('b') => {
-            app.toggle_sandbox();
-            return;
-        }
-        KeyCode::Char('w') => {
-            app.toggle_isolated_workspace();
-            return;
-        }
-        KeyCode::Char('k') => {
-            app.reset_circuit_breaker();
-            return;
-        }
-        KeyCode::Char('p') => {
-            app.cycle_selected_agent_policy();
-            return;
-        }
-        KeyCode::Char('g') => {
-            app.toggle_tool_permission_gate();
-            return;
-        }
-        KeyCode::F(4) => {
-            app.rollback();
-            return;
-        }
-        KeyCode::Tab => {
-            app.next_tab();
-            return;
-        }
-        KeyCode::BackTab => {
-            app.prev_tab();
-            return;
-        }
-        KeyCode::Char('1') => {
-            app.active_tab = ActiveTab::FleetOverview;
-            return;
-        }
-        KeyCode::Char('2') => {
-            app.active_tab = ActiveTab::ToolCatalog;
-            return;
-        }
-        KeyCode::Char('3') => {
-            app.active_tab = ActiveTab::DirectivesEditor;
-            return;
-        }
-        _ => {}
+    if handle_global_shortcuts(app, code, modifiers) {
+        return;
     }
 
     // 3. Tab-Specific Navigation
@@ -377,6 +311,89 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         ActiveTab::FleetOverview => handle_fleet_overview_keys(app, code),
         ActiveTab::ToolCatalog => handle_tool_catalog_keys(app, code),
         ActiveTab::DirectivesEditor => handle_directives_editor_keys(app, code),
+        ActiveTab::Manual => handle_manual_keys(app, code),
+    }
+}
+
+fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers) -> bool {
+    match code {
+        KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+            app.should_quit = true;
+            true
+        }
+        KeyCode::Char('q') => {
+            app.should_quit = true;
+            true
+        }
+        KeyCode::Char('l') => {
+            app.request_launch(true);
+            true
+        }
+        KeyCode::Char('n') => {
+            app.request_launch(false);
+            true
+        }
+        KeyCode::F(1) | KeyCode::Char('?') => {
+            app.toggle_manual();
+            true
+        }
+        KeyCode::Char('i') => {
+            app.run_installer_and_diagnostics();
+            true
+        }
+        KeyCode::F(2) | KeyCode::Char('S') => {
+            app.save_and_validate();
+            true
+        }
+        KeyCode::F(8) | KeyCode::Char('b') => {
+            app.toggle_sandbox();
+            true
+        }
+        KeyCode::Char('w') => {
+            app.toggle_isolated_workspace();
+            true
+        }
+        KeyCode::Char('k') => {
+            app.reset_circuit_breaker();
+            true
+        }
+        KeyCode::Char('p') => {
+            app.cycle_selected_agent_policy();
+            true
+        }
+        KeyCode::Char('g') => {
+            app.toggle_tool_permission_gate();
+            true
+        }
+        KeyCode::F(4) => {
+            app.rollback();
+            true
+        }
+        KeyCode::Tab => {
+            app.next_tab();
+            true
+        }
+        KeyCode::BackTab => {
+            app.prev_tab();
+            true
+        }
+        KeyCode::Char('1') => {
+            app.active_tab = ActiveTab::FleetOverview;
+            true
+        }
+        KeyCode::Char('2') => {
+            app.active_tab = ActiveTab::ToolCatalog;
+            true
+        }
+        KeyCode::Char('3') => {
+            app.active_tab = ActiveTab::DirectivesEditor;
+            true
+        }
+        KeyCode::Char('4') => {
+            app.active_tab = ActiveTab::Manual;
+            true
+        }
+        _ => false,
     }
 }
 
@@ -440,6 +457,36 @@ const fn handle_directives_editor_keys(app: &mut App, code: KeyCode) {
         }
         KeyCode::PageDown => {
             app.directives_scroll = app.directives_scroll.saturating_add(10);
+        }
+        _ => {}
+    }
+}
+
+fn handle_manual_keys(app: &mut App, code: KeyCode) {
+    match code {
+        KeyCode::Char('[' | 'h') | KeyCode::Left => {
+            app.prev_manual_section();
+        }
+        KeyCode::Char(']' | 'l') | KeyCode::Right => {
+            app.next_manual_section();
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.manual_scroll = app.manual_scroll.saturating_sub(1);
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            app.manual_scroll = app.manual_scroll.saturating_add(1);
+        }
+        KeyCode::PageUp => {
+            app.manual_scroll = app.manual_scroll.saturating_sub(10);
+        }
+        KeyCode::PageDown => {
+            app.manual_scroll = app.manual_scroll.saturating_add(10);
+        }
+        KeyCode::Home | KeyCode::Char('g') => {
+            app.manual_scroll = 0;
+        }
+        KeyCode::Esc | KeyCode::Enter => {
+            app.toggle_manual();
         }
         _ => {}
     }

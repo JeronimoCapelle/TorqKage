@@ -16,6 +16,8 @@ pub(crate) enum ActiveTab {
     ToolCatalog,
     /// System prompt and directives editor
     DirectivesEditor,
+    /// Integrated architecture manual and documentation
+    Manual,
 }
 
 impl ActiveTab {
@@ -25,6 +27,7 @@ impl ActiveTab {
             Self::FleetOverview => "[1] Fleet Matrix",
             Self::ToolCatalog => "[2] Tool Catalog",
             Self::DirectivesEditor => "[3] Directives Editor",
+            Self::Manual => "[4] Architecture Manual",
         }
     }
 }
@@ -57,6 +60,9 @@ pub(crate) struct App {
     pub(crate) selected_tool_idx: usize,
     pub(crate) selected_category: Option<ToolCategory>,
     pub(crate) directives_scroll: u16,
+    pub(crate) manual_section_idx: usize,
+    pub(crate) manual_scroll: u16,
+    pub(crate) previous_tab: Option<ActiveTab>,
     pub(crate) show_help: bool,
     pub(crate) validation_modal: Option<(bool, String)>,
     pub(crate) status_message: Option<(String, bool)>,
@@ -116,9 +122,12 @@ impl App {
             selected_tool_idx: 0,
             selected_category: None,
             directives_scroll: 0,
+            manual_section_idx: 0,
+            manual_scroll: 0,
+            previous_tab: None,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter/r] Resume, [n] New Session, [p] Policy, [b] Sandbox, [w] Workspace, [k] Reset CB".to_owned(), false)),
+            status_message: Some(("Press [Enter/l] Resume, [n] New, [1-4] Views, [?] Manual, [i] Install/Health".to_owned(), false)),
             pending_launch: None,
             active_agent_session: None,
             launch_config: LaunchConfig::default(),
@@ -284,7 +293,7 @@ impl App {
             ActiveTab::ToolCatalog => self
                 .selected_category
                 .map_or(self.tools.len(), |cat| self.tools.iter().filter(|t| t.category == cat).count()),
-            ActiveTab::DirectivesEditor => 0,
+            ActiveTab::DirectivesEditor | ActiveTab::Manual => 0,
         }
     }
 
@@ -297,7 +306,7 @@ impl App {
                 || self.tools.get(self.selected_tool_idx),
                 |cat| self.tools.iter().filter(|t| t.category == cat).nth(self.selected_tool_idx),
             ),
-            ActiveTab::DirectivesEditor => None,
+            ActiveTab::DirectivesEditor | ActiveTab::Manual => None,
         }
     }
 
@@ -313,7 +322,7 @@ impl App {
                     self.tools.get_mut(idx)
                 }
             }
-            ActiveTab::DirectivesEditor => None,
+            ActiveTab::DirectivesEditor | ActiveTab::Manual => None,
         }
     }
 
@@ -350,7 +359,8 @@ impl App {
         self.active_tab = match self.active_tab {
             ActiveTab::FleetOverview => ActiveTab::ToolCatalog,
             ActiveTab::ToolCatalog => ActiveTab::DirectivesEditor,
-            ActiveTab::DirectivesEditor => ActiveTab::FleetOverview,
+            ActiveTab::DirectivesEditor => ActiveTab::Manual,
+            ActiveTab::Manual => ActiveTab::FleetOverview,
         };
         self.selected_tool_idx = 0;
     }
@@ -358,11 +368,65 @@ impl App {
     /// Returns to the previous tab.
     pub(crate) const fn prev_tab(&mut self) {
         self.active_tab = match self.active_tab {
-            ActiveTab::FleetOverview => ActiveTab::DirectivesEditor,
+            ActiveTab::FleetOverview => ActiveTab::Manual,
             ActiveTab::ToolCatalog => ActiveTab::FleetOverview,
             ActiveTab::DirectivesEditor => ActiveTab::ToolCatalog,
+            ActiveTab::Manual => ActiveTab::DirectivesEditor,
         };
         self.selected_tool_idx = 0;
+    }
+
+    /// Toggles between the current tab and the Integrated Manual tab.
+    pub(crate) fn toggle_manual(&mut self) {
+        if self.active_tab == ActiveTab::Manual {
+            if let Some(prev) = self.previous_tab.take() {
+                self.active_tab = prev;
+            } else {
+                self.active_tab = ActiveTab::FleetOverview;
+            }
+        } else {
+            self.previous_tab = Some(self.active_tab);
+            self.active_tab = ActiveTab::Manual;
+        }
+    }
+
+    /// Advances to the next manual section.
+    pub(crate) const fn next_manual_section(&mut self) {
+        let total = crate::manual::ManualSection::ALL.len();
+        let next = self.manual_section_idx.saturating_add(1);
+        if next >= total {
+            self.manual_section_idx = 0;
+        } else {
+            self.manual_section_idx = next;
+        }
+        self.manual_scroll = 0;
+    }
+
+    /// Returns to the previous manual section.
+    pub(crate) const fn prev_manual_section(&mut self) {
+        let total = crate::manual::ManualSection::ALL.len();
+        if self.manual_section_idx == 0 {
+            self.manual_section_idx = total.saturating_sub(1);
+        } else {
+            self.manual_section_idx = self.manual_section_idx.saturating_sub(1);
+        }
+        self.manual_scroll = 0;
+    }
+
+    /// Runs in-deck plugin installation and system health diagnostics.
+    pub(crate) fn run_installer_and_diagnostics(&mut self) {
+        match crate::installer::install_plugin_interactive(&self.workspace_root) {
+            Ok(msg) => {
+                let diag = crate::installer::run_diagnostics(&self.workspace_root);
+                self.validation_modal = Some((true, format!("{msg}\n\n{}", diag.summary())));
+                self.status_message = Some(("✔ Plugin installed & diagnostics updated!".to_owned(), false));
+            }
+            Err(err) => {
+                let diag = crate::installer::run_diagnostics(&self.workspace_root);
+                self.validation_modal = Some((false, format!("Failed to install plugin: {err}\n\n{}", diag.summary())));
+                self.status_message = Some(("❌ Plugin installation failed! Check diagnostics.".to_owned(), true));
+            }
+        }
     }
 
     /// Executes the atomic "Save & Validate" pipeline (F2).

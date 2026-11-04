@@ -28,6 +28,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         ActiveTab::FleetOverview => draw_fleet_matrix(frame, app, chunks[1]),
         ActiveTab::ToolCatalog => draw_tool_catalog(frame, app, chunks[1]),
         ActiveTab::DirectivesEditor => draw_directives_editor(frame, app, chunks[1]),
+        ActiveTab::Manual => draw_manual_view(frame, app, chunks[1]),
     }
 
     draw_footer(frame, app, chunks[2]);
@@ -63,11 +64,13 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ActiveTab::FleetOverview.title(),
         ActiveTab::ToolCatalog.title(),
         ActiveTab::DirectivesEditor.title(),
+        ActiveTab::Manual.title(),
     ];
     let selected_tab_idx = match app.active_tab {
         ActiveTab::FleetOverview => 0,
         ActiveTab::ToolCatalog => 1,
         ActiveTab::DirectivesEditor => 2,
+        ActiveTab::Manual => 3,
     };
 
     let tabs = Tabs::new(tab_titles)
@@ -614,6 +617,64 @@ fn draw_directives_editor(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 }
 
+fn draw_manual_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(28), // Sections list
+            Constraint::Min(40),    // Section content
+        ])
+        .split(area);
+
+    // Left pane: Sections list
+    let sections: Vec<ListItem<'_>> = crate::manual::ManualSection::ALL
+        .iter()
+        .enumerate()
+        .map(|(idx, section)| {
+            let is_selected = idx == app.manual_section_idx;
+            let style = if is_selected {
+                Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let prefix = if is_selected { "▶ " } else { "  " };
+            ListItem::new(Line::from(vec![
+                Span::styled(prefix, style),
+                Span::styled(section.title(), style),
+            ]))
+        })
+        .collect();
+
+    let section_block = Block::default()
+        .title(" [Sections ( [ / ] )] ")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Cyan));
+
+    let section_list = List::new(sections).block(section_block);
+    frame.render_widget(section_list, chunks[0]);
+
+    // Right pane: Content
+    let active_section = crate::manual::ManualSection::ALL
+        .get(app.manual_section_idx)
+        .copied()
+        .unwrap_or(crate::manual::ManualSection::Keybindings);
+
+    let content_lines = active_section.lines();
+    let content_block = Block::default()
+        .title(format!(" [{}] (Scroll: j/k, PgUp/PgDn) ", active_section.title()))
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let content_para = Paragraph::new(content_lines)
+        .block(content_block)
+        .wrap(Wrap { trim: false })
+        .scroll((app.manual_scroll, 0));
+
+    frame.render_widget(content_para, chunks[1]);
+}
+
 fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let footer_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -623,21 +684,49 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         ])
         .split(area);
 
-    // Shortcuts
-    let shortcuts = Line::from(vec![
-        Span::styled(" [Enter/r Resume] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-        Span::styled("[n New] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled("[w Iso] ", Style::default().fg(Color::LightCyan)),
-        Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
-        Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
-        Span::styled("[k Reset CB] ", Style::default().fg(Color::LightRed)),
-        Span::styled("[g Gate Tool] ", Style::default().fg(Color::LightBlue)),
-        Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
-        Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
-        Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
-        Span::styled("[Tab View] ", Style::default().fg(Color::DarkGray)),
-        Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
-    ]);
+    // Dynamic context-sensitive shortcuts
+    let shortcuts = match app.active_tab {
+        ActiveTab::FleetOverview => Line::from(vec![
+            Span::styled(" [Enter/l Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled("[n New] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("[w Iso] ", Style::default().fg(Color::LightCyan)),
+            Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
+            Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
+            Span::styled("[k Reset CB] ", Style::default().fg(Color::LightRed)),
+            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
+            Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
+            Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
+            Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
+        ]),
+        ActiveTab::ToolCatalog => Line::from(vec![
+            Span::styled(" [j/k Navigate] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled("[g Toggle Gate (Ask/Allow)] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
+            Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
+            Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
+            Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
+        ]),
+        ActiveTab::DirectivesEditor => Line::from(vec![
+            Span::styled(" [j/k Scroll Prompt] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled("[PageUp/Dn] ", Style::default().fg(Color::Cyan)),
+            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
+            Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
+            Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
+            Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
+        ]),
+        ActiveTab::Manual => Line::from(vec![
+            Span::styled(" [ [ / ] Sections] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled("[j/k Scroll] ", Style::default().fg(Color::Cyan)),
+            Span::styled("[PageUp/Dn] ", Style::default().fg(Color::LightCyan)),
+            Span::styled("[g Top] ", Style::default().fg(Color::White)),
+            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled("[Esc Deck] ", Style::default().fg(Color::Yellow)),
+            Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
+        ]),
+    };
     frame.render_widget(Paragraph::new(shortcuts), footer_chunks[0]);
 
     // Live status message
