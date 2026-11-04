@@ -114,7 +114,7 @@ pub(crate) fn dispatch_action(
 
     let execution_result = match tool.action {
         ToolAction::FileRead => {
-            let content = file_read::execute(tool, workspace_root, arguments)?;
+            let content = file_read::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
         }
 

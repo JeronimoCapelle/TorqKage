@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use agy_common::ProjectSecurityConfig;
-use crate::models::AgentGuard;
+use crate::models::{AgentGuard, ToolDefinition};
 
 /// Helper checking if a path matches a wildcard pattern or glob-like expression.
 #[must_use]
@@ -392,6 +392,267 @@ pub(crate) fn check_agent_guard(
     Ok(())
 }
 
+const COMMON_ROOT_DIRS: &[&str] = &[
+    "src", "tests", "benches", "examples", "docs", "doc", "crates", "packages", "target",
+    ".git", ".jj", ".cargo", ".agy",
+];
+
+/// Helper attempting to resolve a scoped path within a multi-crate Cargo repository (`crates/` or `packages/`).
+fn resolve_in_cargo_subcrates(
+    workspace_root: &Path,
+    clean: &str,
+    scopes: &[&str],
+) -> Option<String> {
+    let containers = ["crates", "packages"];
+
+    // Case A: Path starts with "crates/<crate_name>/..." or "packages/<crate_name>/..."
+    for container in containers {
+        let prefix = format!("{container}/");
+        if let Some(sub) = clean.strip_prefix(&prefix)
+            && let Some((crate_name, rest)) = sub.split_once('/')
+        {
+            for scope in scopes {
+                let candidate = workspace_root
+                    .join(container)
+                    .join(crate_name)
+                    .join(scope)
+                    .join(rest);
+                if candidate.exists() {
+                    return Some(format!("{container}/{crate_name}/{scope}/{rest}"));
+                }
+            }
+        }
+    }
+
+    // Case B: Path starts with "<crate_name>/<rest>" where <crate_name> exists in a container
+    if let Some((possible_crate, rest)) = clean.split_once('/') {
+        for container in containers {
+            let crate_dir = workspace_root.join(container).join(possible_crate);
+            if crate_dir.is_dir() {
+                for scope in scopes {
+                    let candidate = crate_dir.join(scope).join(rest);
+                    if candidate.exists() {
+                        return Some(format!("{container}/{possible_crate}/{scope}/{rest}"));
+                    }
+                }
+            }
+        }
+    }
+
+    // Case C: Path doesn't mention crate name (e.g. "actions/file_read.rs" or "guards.rs")
+    // Find unique match across all crates in all containers
+    let mut unique_match: Option<String> = None;
+    let mut match_count = 0_usize;
+
+    for container in containers {
+        let container_dir = workspace_root.join(container);
+        let Ok(read_dir) = std::fs::read_dir(container_dir) else {
+            continue;
+        };
+
+        for entry in read_dir.flatten() {
+            let entry_path = entry.path();
+            if !entry_path.is_dir() {
+                continue;
+            }
+            let crate_name = entry.file_name().to_string_lossy().to_string();
+
+            for scope in scopes {
+                let candidate = entry_path.join(scope).join(clean);
+                if candidate.exists() {
+                    match_count = match_count.saturating_add(1);
+                    unique_match = Some(format!("{container}/{crate_name}/{scope}/{clean}"));
+                }
+            }
+        }
+    }
+
+    if match_count == 1 {
+        unique_match
+    } else {
+        None
+    }
+}
+
+fn collect_candidate_scopes(
+    tool: Option<&ToolDefinition>,
+    agent_context: Option<(&str, &BTreeMap<String, AgentGuard>)>,
+) -> Vec<String> {
+    let mut scopes = Vec::new();
+
+    if let Some(tool_def) = tool
+        && let Some(ref enforce_dir) = tool_def.enforce_dir
+    {
+        let s = enforce_dir.trim_matches(['/', '\\']).to_owned();
+        if !s.is_empty() && s != "*" && !scopes.contains(&s) {
+            scopes.push(s);
+        }
+    }
+
+    if let Some((agent_name, guards)) = agent_context
+        && let Some(guard) = guards.get(agent_name)
+    {
+        for dir in &guard.allowed_dirs {
+            let s = dir.trim_matches(['/', '\\']).to_owned();
+            if !s.is_empty() && s != "*" && !scopes.contains(&s) {
+                scopes.push(s);
+            }
+        }
+    }
+
+    if let Some(tool_def) = tool {
+        for dir in &tool_def.allowed_directories {
+            let s = dir.trim_matches(['/', '\\']).to_owned();
+            if !s.is_empty() && s != "*" && !scopes.contains(&s) {
+                scopes.push(s);
+            }
+        }
+    }
+
+    scopes
+}
+
+fn anchor_to_primary_scope(
+    workspace_root: &Path,
+    clean: &str,
+    primary_scope: &str,
+) -> String {
+    // Multi-crate new file handling: "crates/my_crate/file.rs" -> "crates/my_crate/src/file.rs"
+    for container in &["crates", "packages"] {
+        let prefix = format!("{container}/");
+        if let Some(sub) = clean.strip_prefix(&prefix)
+            && let Some((crate_name, rest)) = sub.split_once('/')
+            && workspace_root.join(container).join(crate_name).is_dir()
+        {
+            return format!("{container}/{crate_name}/{primary_scope}/{rest}");
+        }
+    }
+
+    if let Some((possible_crate, rest)) = clean.split_once('/') {
+        for container in &["crates", "packages"] {
+            if workspace_root.join(container).join(possible_crate).is_dir() {
+                return format!("{container}/{possible_crate}/{primary_scope}/{rest}");
+            }
+        }
+    }
+
+    format!("{primary_scope}/{clean}")
+}
+
+/// Resolves a path string relative to agent and tool scopes, preserving backward compatibility.
+///
+/// If an agent or tool is confined to a specific directory (e.g., `src` or `docs`), this resolves
+/// relative paths (e.g., `"auth/hasher.rs"` or `"specs/rv32.md"`) to their scoped locations
+/// without forcing the caller to supply the parent directory prefix.
+///
+/// Existing workspace paths, absolute paths, and explicit allowed files are preserved transparently.
+#[must_use]
+pub(crate) fn resolve_scoped_path_str(
+    workspace_root: &Path,
+    rel_path_str: &str,
+    tool: Option<&ToolDefinition>,
+    agent_context: Option<(&str, &BTreeMap<String, AgentGuard>)>,
+) -> String {
+    let raw_norm = rel_path_str.trim().replace('\\', "/");
+    let mut clean = raw_norm.as_str();
+    while let Some(stripped) = clean.strip_prefix("./") {
+        clean = stripped.trim();
+    }
+
+    if clean.is_empty() || Path::new(clean).is_absolute() {
+        return clean.to_owned();
+    }
+
+    // 0. If tool has enforce_file_target, check if clean matches target or its filename
+    if let Some(target) = tool.and_then(|t| t.enforce_file_target.as_deref()) {
+        let clean_target = target.trim_matches(['/', '\\']).replace('\\', "/");
+        if clean == clean_target {
+            return clean_target;
+        }
+        if let Some(fname) = Path::new(&clean_target).file_name().and_then(|f| f.to_str())
+            && clean == fname
+        {
+            return clean_target;
+        }
+    }
+
+    // 1. If explicit allowed file for this agent (e.g. "ARCHITECTURE.md" for planner), leave as-is
+    if let Some((agent_name, guards)) = agent_context
+        && let Some(guard) = guards.get(agent_name)
+        && guard.allowed_files.iter().any(|f| f == clean)
+    {
+        return clean.to_owned();
+    }
+
+    // 2. Collect candidate scopes (ordered: tool enforce_dir, agent allowed_dirs, tool allowed_directories)
+    let scopes = collect_candidate_scopes(tool, agent_context);
+    if scopes.is_empty() {
+        return clean.to_owned();
+    }
+
+    let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
+
+    // 3. If the path ALREADY matches any candidate scope, don't double-prefix it!
+    for scope in &scope_refs {
+        if matches_directory_scope(clean, scope) {
+            return clean.to_owned();
+        }
+    }
+
+    // 4. If the agent explicitly attempts to access one of its disallowed directories,
+    // do NOT anchor it into an allowed scope. Leave it intact so security checks will reject it.
+    if let Some((agent_name, guards)) = agent_context
+        && let Some(guard) = guards.get(agent_name)
+        && guard.disallowed_dirs.iter().any(|d| matches_directory_scope(clean, d))
+    {
+        return clean.to_owned();
+    }
+
+    // 5. If the path already exists directly at workspace root, leave as-is (e.g. cross-directory read)
+    if workspace_root.join(clean).exists() {
+        return clean.to_owned();
+    }
+
+    // 6. Check if the path exists inside candidate scope directly (e.g. "src/auth/hasher.rs")
+    for scope in &scope_refs {
+        let candidate = workspace_root.join(scope).join(clean);
+        if candidate.exists() {
+            return format!("{scope}/{clean}");
+        }
+    }
+
+    // 7. Check cargo workspace multi-crate structure (crates/<crate>/<scope>/<clean> or crates/<crate>/<clean>)
+    if let Some(resolved) = resolve_in_cargo_subcrates(workspace_root, clean, &scope_refs) {
+        return resolved;
+    }
+
+    // 8. If clean starts with a known top-level project directory that is NOT one of our scopes,
+    // do NOT anchor it into our scope (e.g. "tests/test.rs" when scoped to "src").
+    if let Some((first_component, _)) = clean.split_once('/')
+        && first_component != "crates"
+        && first_component != "packages"
+    {
+        let is_known_root = COMMON_ROOT_DIRS.contains(&first_component)
+            || workspace_root.join(first_component).is_dir();
+        if is_known_root && !scope_refs.contains(&first_component) {
+            return clean.to_owned();
+        }
+    }
+
+    // 9. If file does not exist yet (e.g. writing a new file via file_write), anchor to primary scope
+    let primary = tool
+        .and_then(|t| t.enforce_dir.as_deref())
+        .map(|s| s.trim_matches(['/', '\\']))
+        .filter(|s| !s.is_empty() && *s != "*")
+        .or_else(|| scope_refs.first().copied());
+
+    if let Some(primary_scope) = primary {
+        return anchor_to_primary_scope(workspace_root, clean, primary_scope);
+    }
+
+    clean.to_owned()
+}
+
 /// Truncates string output by lines and bytes safely on UTF-8 boundaries.
 pub(crate) fn truncate_output(
     text: &str,
@@ -594,5 +855,167 @@ mod tests {
             ..Default::default()
         };
         assert!(check_dangerous_files_with_security(Path::new("crates/core/internal_firmware.bin"), Some(&sec_banned)).is_err());
+    }
+
+    #[test]
+    fn test_resolve_scoped_path_str_single_crate_and_tools() {
+        let root = std::env::temp_dir().join(format!("agy_scope_test_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&root));
+        std::fs::create_dir_all(root.join("src/auth")).expect("create src/auth");
+        std::fs::create_dir_all(root.join("docs/specs")).expect("create docs/specs");
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("write root Cargo.toml");
+        std::fs::write(root.join("src/auth/hasher.rs"), "// hasher").expect("write hasher.rs");
+        std::fs::write(root.join("docs/specs/rv32.md"), "# RV32").expect("write rv32.md");
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                disallowed_dirs: vec!["tests".to_owned()],
+                allowed_files: Vec::new(),
+                disallowed_files: vec!["Cargo.toml".to_owned()],
+            },
+        );
+        guards.insert(
+            "planner".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["docs".to_owned()],
+                disallowed_dirs: vec!["src".to_owned()],
+                allowed_files: vec!["ARCHITECTURE.md".to_owned()],
+                disallowed_files: Vec::new(),
+            },
+        );
+
+        // 1. Coder scoped resolution
+        assert_eq!(
+            resolve_scoped_path_str(&root, "auth/hasher.rs", None, Some(("coder", &guards))),
+            "src/auth/hasher.rs"
+        );
+
+        // 2. Already prefixed remains unchanged
+        assert_eq!(
+            resolve_scoped_path_str(&root, "src/auth/hasher.rs", None, Some(("coder", &guards))),
+            "src/auth/hasher.rs"
+        );
+
+        // 3. Leading ./ stripped
+        assert_eq!(
+            resolve_scoped_path_str(&root, "./auth/hasher.rs", None, Some(("coder", &guards))),
+            "src/auth/hasher.rs"
+        );
+
+        // 4. Absolute path preserved
+        assert_eq!(
+            resolve_scoped_path_str(&root, "/tmp/absolute.rs", None, Some(("coder", &guards))),
+            "/tmp/absolute.rs"
+        );
+
+        // 5. Existing root file preserved for read/inspection
+        assert_eq!(
+            resolve_scoped_path_str(&root, "Cargo.toml", None, Some(("coder", &guards))),
+            "Cargo.toml"
+        );
+
+        // 6. Explicit allowed file for agent preserved
+        assert_eq!(
+            resolve_scoped_path_str(&root, "ARCHITECTURE.md", None, Some(("planner", &guards))),
+            "ARCHITECTURE.md"
+        );
+
+        // 7. Disallowed directory is NOT rewritten into allowed scope (preserves security rejection)
+        assert_eq!(
+            resolve_scoped_path_str(&root, "tests/unit_test.rs", None, Some(("coder", &guards))),
+            "tests/unit_test.rs"
+        );
+
+        // 8. Tool enforce_dir resolution
+        let tool_docs = ToolDefinition {
+            name: "read_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_scoped_path_str(&root, "specs/rv32.md", Some(&tool_docs), None),
+            "docs/specs/rv32.md"
+        );
+
+        // 9. Tool enforce_file_target resolution
+        let tool_arch = ToolDefinition {
+            name: "update_arch".to_owned(),
+            enforce_file_target: Some("docs/ARCHITECTURE.md".to_owned()),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_scoped_path_str(&root, "ARCHITECTURE.md", Some(&tool_arch), None),
+            "docs/ARCHITECTURE.md"
+        );
+
+        // 10. New file creation in scope when file does not exist yet
+        assert_eq!(
+            resolve_scoped_path_str(&root, "auth/jwt.rs", None, Some(("coder", &guards))),
+            "src/auth/jwt.rs"
+        );
+
+        drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn test_resolve_scoped_path_str_multi_crate() {
+        let root = std::env::temp_dir().join(format!("agy_multi_crate_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&root));
+        std::fs::create_dir_all(root.join("crates/core/src")).expect("create crates/core/src");
+        std::fs::create_dir_all(root.join("crates/api/src")).expect("create crates/api/src");
+
+        std::fs::write(root.join("crates/core/src/hasher.rs"), "// hasher").expect("write hasher.rs");
+        std::fs::write(root.join("crates/core/src/lib.rs"), "// core lib").expect("write core lib.rs");
+        std::fs::write(root.join("crates/api/src/lib.rs"), "// api lib").expect("write api lib.rs");
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        // 1. Scoped path with crate prefix "core/hasher.rs" -> "crates/core/src/hasher.rs"
+        assert_eq!(
+            resolve_scoped_path_str(&root, "core/hasher.rs", None, Some(("coder", &guards))),
+            "crates/core/src/hasher.rs"
+        );
+
+        // 2. Scoped path with "crates/core/hasher.rs" -> "crates/core/src/hasher.rs"
+        assert_eq!(
+            resolve_scoped_path_str(&root, "crates/core/hasher.rs", None, Some(("coder", &guards))),
+            "crates/core/src/hasher.rs"
+        );
+
+        // 3. Unique file across crates ("hasher.rs") -> "crates/core/src/hasher.rs"
+        assert_eq!(
+            resolve_scoped_path_str(&root, "hasher.rs", None, Some(("coder", &guards))),
+            "crates/core/src/hasher.rs"
+        );
+
+        // 4. Ambiguous file ("lib.rs") in multiple crates falls back without guessing
+        assert_eq!(
+            resolve_scoped_path_str(&root, "lib.rs", None, Some(("coder", &guards))),
+            "src/lib.rs"
+        );
+
+        // 5. Creating new file in crate: "core/token.rs" -> "crates/core/src/token.rs"
+        assert_eq!(
+            resolve_scoped_path_str(&root, "core/token.rs", None, Some(("coder", &guards))),
+            "crates/core/src/token.rs"
+        );
+
+        // 6. Creating new file with full crates prefix: "crates/core/token.rs" -> "crates/core/src/token.rs"
+        assert_eq!(
+            resolve_scoped_path_str(&root, "crates/core/token.rs", None, Some(("coder", &guards))),
+            "crates/core/src/token.rs"
+        );
+
+        drop(std::fs::remove_dir_all(&root));
     }
 }

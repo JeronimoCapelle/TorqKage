@@ -5,6 +5,7 @@ use std::path::Path;
 use agy_common::ProjectConfig;
 use crate::guards::{
     check_agent_guard, check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
+    resolve_scoped_path_str,
 };
 use crate::models::{AgentGuard, ToolDefinition};
 
@@ -19,10 +20,17 @@ pub(crate) fn execute(
     agent_name: Option<&str>,
     agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
-    let path_str = arguments
+    let raw_path = arguments
         .get("path")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'path'".to_owned())?;
+
+    let path_str = resolve_scoped_path_str(
+        workspace_root,
+        raw_path,
+        Some(tool),
+        agent_name.map(|name| (name, agent_guards)),
+    );
 
     let content = arguments
         .get("content")
@@ -31,12 +39,12 @@ pub(crate) fn execute(
 
     if tool.ban_dangerous_files() {
         let project = ProjectConfig::detect_or_load(workspace_root);
-        check_dangerous_files_with_security(Path::new(path_str), Some(&project.security))?;
+        check_dangerous_files_with_security(Path::new(&path_str), Some(&project.security))?;
     }
 
     let safe_path = resolve_safe_path(
         workspace_root,
-        path_str,
+        &path_str,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds(),
     )?;
@@ -218,5 +226,47 @@ mod tests {
             "content": "fn main() {}"
         });
         assert!(execute(&tool, &temp, &src_file, Some("coder"), &guards).is_ok());
+    }
+
+    #[test]
+    fn test_file_write_scoped_resolution_creates_in_scope() {
+        let temp = create_test_dir("write-scope");
+        let tool = ToolDefinition {
+            name: "write_file".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        // 1. Coder creates new file "auth/jwt.rs" without prefix -> created in src/auth/jwt.rs
+        let args = json!({
+            "path": "auth/jwt.rs",
+            "content": "pub fn verify() -> bool { true }"
+        });
+        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
+        assert!(temp.join("src/auth/jwt.rs").exists());
+        let content = std::fs::read_to_string(temp.join("src/auth/jwt.rs")).expect("read created file");
+        assert!(content.contains("pub fn verify()"));
+
+        // 2. Tool with enforce_dir "docs" creates "rfcs/001.md" -> created in docs/rfcs/001.md
+        let docs_tool = ToolDefinition {
+            name: "write_doc".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+        let doc_args = json!({
+            "path": "rfcs/001.md",
+            "content": "# RFC 001"
+        });
+        assert!(execute(&docs_tool, &temp, &doc_args, None, &guards).is_ok());
+        assert!(temp.join("docs/rfcs/001.md").exists());
     }
 }

@@ -1,11 +1,13 @@
 //! `file_read` action handler with path confinement and safe truncation.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 use agy_common::ProjectConfig;
 use crate::guards::{
-    check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path, truncate_output,
+    check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
+    resolve_scoped_path_str, truncate_output,
 };
-use crate::models::ToolDefinition;
+use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded file read action.
 ///
@@ -15,20 +17,29 @@ pub(crate) fn execute(
     tool: &ToolDefinition,
     workspace_root: &Path,
     arguments: &serde_json::Value,
+    agent_name: Option<&str>,
+    agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
-    let path_str = arguments
+    let raw_path = arguments
         .get("path")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'path'".to_owned())?;
 
+    let resolved_path = resolve_scoped_path_str(
+        workspace_root,
+        raw_path,
+        Some(tool),
+        agent_name.map(|name| (name, agent_guards)),
+    );
+
     if tool.ban_dangerous_files() {
         let project = ProjectConfig::detect_or_load(workspace_root);
-        check_dangerous_files_with_security(Path::new(path_str), Some(&project.security))?;
+        check_dangerous_files_with_security(Path::new(&resolved_path), Some(&project.security))?;
     }
 
     let safe_path = resolve_safe_path(
         workspace_root,
-        path_str,
+        &resolved_path,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds(),
     )?;
@@ -94,5 +105,57 @@ mod tests {
         let content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
         let sliced = slice_lines(content, Some(2), Some(4));
         assert_eq!(sliced, "Line 2\nLine 3\nLine 4");
+    }
+
+    #[test]
+    fn test_file_read_scoped_path_resolution() {
+        let temp = std::env::temp_dir().join(format!("agy_read_scoped_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp));
+        std::fs::create_dir_all(temp.join("src/auth")).expect("create src/auth");
+        std::fs::create_dir_all(temp.join("docs/specs")).expect("create docs/specs");
+        std::fs::write(temp.join("src/auth/hasher.rs"), "pub fn hash() {}").expect("write hasher");
+        std::fs::write(temp.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("write Cargo.toml");
+        std::fs::write(temp.join("docs/specs/rv32.md"), "# RV32 Spec").expect("write spec");
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        let default_tool = ToolDefinition {
+            name: "read_file".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        // 1. Coder reads scoped relative path "auth/hasher.rs" -> resolves to "src/auth/hasher.rs"
+        let args = serde_json::json!({ "path": "auth/hasher.rs" });
+        let res = execute(&default_tool, &temp, &args, Some("coder"), &guards).expect("read auth/hasher.rs");
+        assert!(res.contains("pub fn hash() {}"));
+
+        // 2. Read root Cargo.toml (with tool allowing workspace root)
+        let root_tool = ToolDefinition {
+            name: "read_file".to_owned(),
+            ..Default::default()
+        };
+        let root_args = serde_json::json!({ "path": "Cargo.toml" });
+        let res_root = execute(&root_tool, &temp, &root_args, Some("coder"), &guards).expect("read Cargo.toml");
+        assert!(res_root.contains("name = \"demo\""));
+
+        // 3. Tool with enforce_dir "docs" reading "specs/rv32.md" -> resolves to "docs/specs/rv32.md"
+        let docs_tool = ToolDefinition {
+            name: "read_doc".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+        let doc_args = serde_json::json!({ "path": "specs/rv32.md" });
+        let res_doc = execute(&docs_tool, &temp, &doc_args, None, &guards).expect("read doc");
+        assert!(res_doc.contains("# RV32 Spec"));
+
+        drop(std::fs::remove_dir_all(&temp));
     }
 }

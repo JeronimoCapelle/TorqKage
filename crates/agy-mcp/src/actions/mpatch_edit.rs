@@ -6,6 +6,7 @@ use agy_common::ProjectConfig;
 use mpatch::{patch_content_str, ApplyOptions};
 use crate::guards::{
     check_agent_guard, check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
+    resolve_scoped_path_str,
 };
 use crate::models::{AgentGuard, ToolDefinition};
 
@@ -20,10 +21,17 @@ pub(crate) fn execute(
     agent_name: Option<&str>,
     agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
-    let path_str = arguments
+    let raw_path = arguments
         .get("path")
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'path'".to_owned())?;
+
+    let path_str = resolve_scoped_path_str(
+        workspace_root,
+        raw_path,
+        Some(tool),
+        agent_name.map(|name| (name, agent_guards)),
+    );
 
     let patch = arguments
         .get("patch")
@@ -32,12 +40,12 @@ pub(crate) fn execute(
 
     if tool.ban_dangerous_files() {
         let project = ProjectConfig::detect_or_load(workspace_root);
-        check_dangerous_files_with_security(Path::new(path_str), Some(&project.security))?;
+        check_dangerous_files_with_security(Path::new(&path_str), Some(&project.security))?;
     }
 
     let safe_path = resolve_safe_path(
         workspace_root,
-        path_str,
+        &path_str,
         &tool.allowed_directories,
         tool.enforce_workspace_bounds(),
     )?;
@@ -249,5 +257,40 @@ mod tests {
         });
 
         assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_err());
+    }
+
+    #[test]
+    fn test_mpatch_scoped_path_resolution() {
+        let temp = create_test_dir("mpatch-scoped");
+        let src_auth = temp.join("src/auth");
+        std::fs::create_dir_all(&src_auth).unwrap();
+        let file_path = src_auth.join("hasher.rs");
+        std::fs::write(&file_path, "fn hash() -> u32 { 10 }\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "modify_code".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "coder".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        let patch = "<<<<<<< SEARCH\nfn hash() -> u32 { 10 }\n=======\nfn hash() -> u32 { 42 }\n>>>>>>> REPLACE";
+        // Coder specifies relative scoped path "auth/hasher.rs"
+        let args = json!({
+            "path": "auth/hasher.rs",
+            "patch": patch
+        });
+
+        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
+        let updated = std::fs::read_to_string(&file_path).unwrap();
+        assert!(updated.contains("42"));
     }
 }
