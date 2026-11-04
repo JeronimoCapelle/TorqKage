@@ -163,15 +163,6 @@ pub(crate) fn check_dangerous_files_with_security(
     Ok(())
 }
 
-/// Inspects a target path against dangerous files, secrets, and repository internals.
-///
-/// # Errors
-/// Returns an error if the path attempts to access sensitive files, credentials, or VCS internals (`.git/`, `.jj/`).
-#[allow(dead_code, reason = "Convenience default helper for tests and external callers")]
-pub(crate) fn check_dangerous_files(path: &Path) -> Result<(), String> {
-    check_dangerous_files_with_security(path, None)
-}
-
 /// Helper verifying if a relative path is scoped within a directory name at root or crate level.
 fn matches_directory_scope(rel_path: &str, target_dir: &str) -> bool {
     let clean = target_dir.trim_matches(['/', '\\']);
@@ -465,6 +456,10 @@ pub(crate) fn truncate_output(
 )]
 mod tests {
     use super::*;
+
+    fn check_dangerous_files(path: &Path) -> Result<(), String> {
+        check_dangerous_files_with_security(path, None)
+    }
 
     #[test]
     fn test_dangerous_files_rejected() {

@@ -2,11 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
-#[allow(unused_imports, reason = "Re-exported for tool policies and test fixtures")]
-pub(crate) use agy_common::tools::{
-    OutputCapture, ToolAction, ToolArg, ToolDefinition, ToolFormatting, ToolPreconditions,
-    ToolSafetyPolicy, ToolSandboxPolicy,
-};
+pub(crate) use agy_common::tools::{OutputCapture, ToolAction, ToolArg, ToolDefinition};
+
+#[cfg(test)]
+pub(crate) use agy_common::tools::ToolSandboxPolicy;
 
 /// Declarative path and directory guards scoped to a specific agent role.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
