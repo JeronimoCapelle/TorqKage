@@ -1,7 +1,8 @@
 //! `file_search` action handler providing fast pattern search across repository files.
 
 use std::path::Path;
-use crate::guards::{check_dangerous_files, truncate_output};
+use agy_common::{ProjectConfig, ProjectSecurityConfig};
+use crate::guards::{check_dangerous_files_with_security, truncate_output};
 use crate::models::ToolDefinition;
 
 /// Executes a bounded pattern search across files.
@@ -35,10 +36,11 @@ pub(crate) fn execute(
         ));
     }
 
+    let project = ProjectConfig::detect_or_load(workspace_root);
     let mut matches = Vec::new();
     let pattern_lower = pattern.to_lowercase();
 
-    walk_and_search(&search_dir, workspace_root, &pattern_lower, &mut matches)?;
+    walk_and_search(&search_dir, workspace_root, &pattern_lower, &project.security, &mut matches)?;
 
     if matches.is_empty() {
         let display_dir = search_dir.strip_prefix(workspace_root).unwrap_or(&search_dir);
@@ -63,6 +65,7 @@ fn walk_and_search(
     dir: &Path,
     workspace_root: &Path,
     pattern_lower: &str,
+    security: &ProjectSecurityConfig,
     matches: &mut Vec<String>,
 ) -> Result<(), String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -80,10 +83,10 @@ fn walk_and_search(
         }
 
         if path.is_dir() {
-            walk_and_search(&path, workspace_root, pattern_lower, matches)?;
+            walk_and_search(&path, workspace_root, pattern_lower, security, matches)?;
         } else if path.is_file() {
             // Guard: Never search inside sensitive files
-            if check_dangerous_files(&path).is_err() {
+            if check_dangerous_files_with_security(&path, Some(security)).is_err() {
                 continue;
             }
 

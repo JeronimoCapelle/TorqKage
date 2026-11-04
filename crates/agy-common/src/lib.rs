@@ -48,7 +48,7 @@ pub use models::{
     SessionStartResponse, SystemMessagePayload, StopInput, StopResponse, ToolCallPayload,
     extract_rustc_error_code,
 };
-pub use project::{GateDefinition, ProjectConfig, ProjectMeta, ProjectSandboxConfig};
+pub use project::{GateDefinition, ProjectConfig, ProjectMeta, ProjectSandboxConfig, ProjectSecurityConfig, SecurityCategory};
 pub use resolver::WorkspaceResolver;
 pub use sandbox::{build_bubblewrap_command, is_inside_outer_sandbox};
 pub use state::AgyStatePaths;

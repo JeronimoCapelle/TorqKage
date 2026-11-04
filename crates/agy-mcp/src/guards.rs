@@ -2,52 +2,157 @@
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
+use agy_common::ProjectSecurityConfig;
 use crate::models::AgentGuard;
 
-/// Inspects a target path against dangerous files, secrets, and repository internals.
+/// Helper checking if a path matches a wildcard pattern or glob-like expression.
+#[must_use]
+pub(crate) fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
+    let p = pattern.trim().replace('\\', "/");
+    let target = path_str.trim().replace('\\', "/");
+
+    if p == "*" || p.is_empty() {
+        return true;
+    }
+
+    // Directory wildcard e.g. "src/auth/password/**" or "src/auth/password/*"
+    if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
+        let prefix = prefix.trim_end_matches('/');
+        return target == prefix || target.starts_with(&format!("{prefix}/"));
+    }
+
+    // Suffix wildcard e.g. "*.pem" or "*_secret.json"
+    if let Some(suffix) = p.strip_prefix('*') {
+        return target.ends_with(suffix);
+    }
+
+    // Prefix wildcard e.g. ".env*"
+    if let Some(prefix) = p.strip_suffix('*') {
+        return target.starts_with(prefix);
+    }
+
+    // Exact path match
+    if target == p {
+        return true;
+    }
+
+    // Match filename component e.g. pattern "firmware_key.pem" matches "tests/fixtures/firmware_key.pem"
+    if let Some(filename) = Path::new(&target).file_name()
+        && filename.to_string_lossy() == p
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Inspects a target path against dangerous files, secrets, and repository internals,
+/// guided by optional per-project security configuration.
 ///
 /// # Errors
-/// Returns an error if the path attempts to access sensitive files, credentials, or VCS internals (`.git/`, `.jj/`).
-pub(crate) fn check_dangerous_files(path: &Path) -> Result<(), String> {
-    let lossy = path.to_string_lossy().to_lowercase();
+/// Returns an error if the path attempts to access sensitive files, credentials, or VCS internals (`.git/`, `.jj/`),
+/// unless explicitly exempted in `security.allowed_patterns`.
+pub(crate) fn check_dangerous_files_with_security(
+    path: &Path,
+    security: Option<&ProjectSecurityConfig>,
+) -> Result<(), String> {
+    let path_str = path.to_string_lossy().replace('\\', "/");
+    let lossy_lower = path_str.to_lowercase();
 
-    // Check for sensitive filenames and patterns
-    let dangerous_patterns = [
-        "id_rsa",
-        "id_ed25519",
-        "id_ecdsa",
-        ".bashrc",
-        ".zshrc",
-        ".profile",
-    ];
-
-    for pat in dangerous_patterns {
-        if lossy.contains(pat) {
-            return Err(format!(
-                "Security policy violation: Access to sensitive file pattern '{pat}' is blocked."
-            ));
+    // 1. Extra banned patterns always take precedence and reject
+    if let Some(sec) = security {
+        for banned in &sec.extra_banned_patterns {
+            if path_matches_pattern(&path_str, banned)
+                || path_matches_pattern(&lossy_lower, &banned.to_lowercase())
+            {
+                return Err(format!(
+                    "Security policy violation: Access to project-banned pattern '{banned}' is blocked."
+                ));
+            }
         }
     }
 
-    // Inspect individual path components and file names for credentials and VCS internal directories
+    // 2. Allowed patterns explicitly exempt paths from generic credential / sensitive extension blocking
+    let is_allowed = security.is_some_and(|sec| {
+        sec.allowed_patterns.iter().any(|pat| {
+            path_matches_pattern(&path_str, pat)
+                || path_matches_pattern(&lossy_lower, &pat.to_lowercase())
+        })
+    });
+
+    if is_allowed {
+        return Ok(());
+    }
+
+    // 3. Sensitive SSH key patterns
+    let block_ssh = security.is_none_or(ProjectSecurityConfig::block_ssh_keys);
+    if block_ssh {
+        let ssh_patterns = ["id_rsa", "id_ed25519", "id_ecdsa"];
+        for pat in ssh_patterns {
+            if lossy_lower.contains(pat) {
+                return Err(format!(
+                    "Security policy violation: Access to sensitive file pattern '{pat}' is blocked."
+                ));
+            }
+        }
+    }
+
+    // 4. Shell profiles
+    let block_profiles = security.is_none_or(ProjectSecurityConfig::block_shell_profiles);
+    if block_profiles {
+        let profile_patterns = [".bashrc", ".zshrc", ".profile"];
+        for pat in profile_patterns {
+            if lossy_lower.contains(pat) {
+                return Err(format!(
+                    "Security policy violation: Access to sensitive file pattern '{pat}' is blocked."
+                ));
+            }
+        }
+    }
+
+    // 5. Inspect individual path components and file names
+    let block_vcs = security.is_none_or(ProjectSecurityConfig::block_vcs_internals);
+    let block_exts = security.is_none_or(ProjectSecurityConfig::block_sensitive_extensions);
+    let block_credentials = security.is_none_or(ProjectSecurityConfig::block_generic_credentials);
+
     for comp in path.components() {
         let name = comp.as_os_str().to_string_lossy().to_lowercase();
         let p = Path::new(&name);
-        let has_sensitive_ext = p
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("key") || ext.eq_ignore_ascii_case("pem"));
 
-        if name == ".git"
-            || name == ".jj"
-            || name == ".env"
-            || name.starts_with(".env.")
-            || name == "secret"
-            || name == "secrets"
-            || name == "credential"
-            || name == "credentials"
-            || name == "password"
-            || name == "passwords"
-            || has_sensitive_ext
+        // VCS internals
+        if block_vcs && (name == ".git" || name == ".jj") {
+            return Err(format!(
+                "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
+            ));
+        }
+
+        // Environment files
+        if name == ".env" || name.starts_with(".env.") {
+            return Err(format!(
+                "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
+            ));
+        }
+
+        // Sensitive extensions (.key, .pem)
+        if block_exts {
+            let has_sensitive_ext = p
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("key") || ext.eq_ignore_ascii_case("pem"));
+            if has_sensitive_ext {
+                return Err(format!(
+                    "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
+                ));
+            }
+        }
+
+        // Generic credentials (password, credential, secret)
+        if block_credentials
+            && (name == "secret"
+                || name == "secrets"
+                || name == "credential"
+                || name == "credentials"
+                || name == "password"
+                || name == "passwords")
         {
             return Err(format!(
                 "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
@@ -56,6 +161,15 @@ pub(crate) fn check_dangerous_files(path: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+/// Inspects a target path against dangerous files, secrets, and repository internals.
+///
+/// # Errors
+/// Returns an error if the path attempts to access sensitive files, credentials, or VCS internals (`.git/`, `.jj/`).
+#[allow(dead_code, reason = "Convenience default helper for tests and external callers")]
+pub(crate) fn check_dangerous_files(path: &Path) -> Result<(), String> {
+    check_dangerous_files_with_security(path, None)
 }
 
 /// Helper verifying if a relative path is scoped within a directory name at root or crate level.
@@ -446,5 +560,44 @@ mod tests {
         // Unrestricted agent
         assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok());
         assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
+    }
+
+    #[test]
+    fn test_path_matches_pattern_wildcards() {
+        assert!(path_matches_pattern("src/auth/password/hasher.rs", "src/auth/password/**"));
+        assert!(path_matches_pattern("src/auth/password", "src/auth/password/**"));
+        assert!(path_matches_pattern("fixtures/keys/cert.pem", "*.pem"));
+        assert!(path_matches_pattern(".env.test", ".env*"));
+        assert!(path_matches_pattern("tests/secrets/token.json", "*"));
+        assert!(path_matches_pattern("deep/nested/path/firmware.bin", "firmware.bin"));
+    }
+
+    #[test]
+    fn test_modular_security_credentials_and_allowlist() {
+        let path = Path::new("src/auth/password/mod.rs");
+        // By default, generic credential "password" is blocked
+        assert!(check_dangerous_files_with_security(path, None).is_err());
+
+        // With block_generic_credentials = false, it is allowed
+        let mut sec_perm = ProjectSecurityConfig::default();
+        sec_perm.set_category_blocked(agy_common::SecurityCategory::GenericCredentials, false);
+        assert!(check_dangerous_files_with_security(path, Some(&sec_perm)).is_ok());
+
+        // With allowed_patterns, specific directory is allowed even if category blocked
+        let sec_allow = ProjectSecurityConfig {
+            allowed_patterns: vec!["src/auth/password/**".into()],
+            ..Default::default()
+        };
+        assert!(check_dangerous_files_with_security(path, Some(&sec_allow)).is_ok());
+
+        // But unrelated credentials are still blocked
+        assert!(check_dangerous_files_with_security(Path::new("src/secrets/token.txt"), Some(&sec_allow)).is_err());
+
+        // With extra_banned_patterns, custom paths are rejected
+        let sec_banned = ProjectSecurityConfig {
+            extra_banned_patterns: vec!["internal_firmware.bin".into()],
+            ..Default::default()
+        };
+        assert!(check_dangerous_files_with_security(Path::new("crates/core/internal_firmware.bin"), Some(&sec_banned)).is_err());
     }
 }

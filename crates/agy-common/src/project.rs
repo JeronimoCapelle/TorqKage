@@ -46,6 +46,91 @@ pub struct ProjectSandboxConfig {
     pub bind_mounts: Vec<String>,
 }
 
+/// Security category that can be selectively blocked or permitted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum SecurityCategory {
+    GenericCredentials,
+    VcsInternals,
+    SshKeys,
+    ShellProfiles,
+    SensitiveExtensions,
+}
+
+/// Declarative security & sensitive file protection configuration for the project.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectSecurityConfig {
+    /// Categories of sensitive files explicitly disabled/permitted.
+    #[serde(default)]
+    pub disabled_categories: Vec<String>,
+    /// Additional banned patterns or filenames specified per project.
+    #[serde(default)]
+    pub extra_banned_patterns: Vec<String>,
+    /// Patterns explicitly allowed to bypass generic credential or extension blocks.
+    #[serde(default)]
+    pub allowed_patterns: Vec<String>,
+}
+
+impl ProjectSecurityConfig {
+    /// Returns whether the specified security category is currently blocked.
+    #[must_use]
+    pub fn is_category_blocked(&self, category: SecurityCategory) -> bool {
+        let name = match category {
+            SecurityCategory::GenericCredentials => "generic_credentials",
+            SecurityCategory::VcsInternals => "vcs_internals",
+            SecurityCategory::SshKeys => "ssh_keys",
+            SecurityCategory::ShellProfiles => "shell_profiles",
+            SecurityCategory::SensitiveExtensions => "sensitive_extensions",
+        };
+        !self.disabled_categories.iter().any(|c| c.eq_ignore_ascii_case(name))
+    }
+
+    /// Whether generic words like "password", "credential", "secret" are blocked. Default: true.
+    #[must_use]
+    pub fn block_generic_credentials(&self) -> bool {
+        self.is_category_blocked(SecurityCategory::GenericCredentials)
+    }
+
+    /// Whether VCS internals like ".git", ".jj" are blocked. Default: true.
+    #[must_use]
+    pub fn block_vcs_internals(&self) -> bool {
+        self.is_category_blocked(SecurityCategory::VcsInternals)
+    }
+
+    /// Whether SSH keys like `id_rsa`, `id_ed25519` are blocked. Default: true.
+    #[must_use]
+    pub fn block_ssh_keys(&self) -> bool {
+        self.is_category_blocked(SecurityCategory::SshKeys)
+    }
+
+    /// Whether shell profiles like ".bashrc", ".zshrc", ".profile" are blocked. Default: true.
+    #[must_use]
+    pub fn block_shell_profiles(&self) -> bool {
+        self.is_category_blocked(SecurityCategory::ShellProfiles)
+    }
+
+    /// Whether file extensions like ".key", ".pem" are blocked. Default: true.
+    #[must_use]
+    pub fn block_sensitive_extensions(&self) -> bool {
+        self.is_category_blocked(SecurityCategory::SensitiveExtensions)
+    }
+
+    /// Updates the blocked status for a specific category.
+    pub fn set_category_blocked(&mut self, category: SecurityCategory, blocked: bool) {
+        let name = match category {
+            SecurityCategory::GenericCredentials => "generic_credentials",
+            SecurityCategory::VcsInternals => "vcs_internals",
+            SecurityCategory::SshKeys => "ssh_keys",
+            SecurityCategory::ShellProfiles => "shell_profiles",
+            SecurityCategory::SensitiveExtensions => "sensitive_extensions",
+        };
+        if blocked {
+            self.disabled_categories.retain(|c| !c.eq_ignore_ascii_case(name));
+        } else if !self.disabled_categories.iter().any(|c| c.eq_ignore_ascii_case(name)) {
+            self.disabled_categories.push(name.to_owned());
+        }
+    }
+}
+
 /// Root project descriptor parsed from `project.toml` or dynamically synthesized.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -57,6 +142,8 @@ pub struct ProjectConfig {
     pub sandbox: ProjectSandboxConfig,
     #[serde(default)]
     pub environment: BTreeMap<String, String>,
+    #[serde(default)]
+    pub security: ProjectSecurityConfig,
     #[serde(default)]
     pub extra_banned_files: Vec<String>,
 }
@@ -158,6 +245,7 @@ impl ProjectConfig {
                 bind_mounts: vec!["target".into()],
             },
             environment,
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -192,6 +280,7 @@ impl ProjectConfig {
                 bind_mounts: vec![".zig-cache".into(), "zig-out".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -226,6 +315,7 @@ impl ProjectConfig {
                 bind_mounts: vec![".cache/go-build".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -252,6 +342,7 @@ impl ProjectConfig {
                 bind_mounts: vec![".turbo".into(), "node_modules/.cache".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -278,6 +369,7 @@ impl ProjectConfig {
                 bind_mounts: vec![".pytest_cache".into(), ".mypy_cache".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -304,6 +396,7 @@ impl ProjectConfig {
                 bind_mounts: vec!["build".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -330,6 +423,7 @@ impl ProjectConfig {
                 bind_mounts: vec!["build".into()],
             },
             environment: BTreeMap::new(),
+            security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
         }
     }
@@ -470,12 +564,23 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
         }
     } else if section == "environment" {
         config.environment.insert(key.to_owned(), clean_str.to_owned());
+    } else if section == "security" {
+        let is_true = clean_str == "true";
+        match key {
+            "block_generic_credentials" => config.security.set_category_blocked(SecurityCategory::GenericCredentials, is_true),
+            "block_vcs_internals" => config.security.set_category_blocked(SecurityCategory::VcsInternals, is_true),
+            "block_ssh_keys" => config.security.set_category_blocked(SecurityCategory::SshKeys, is_true),
+            "block_shell_profiles" => config.security.set_category_blocked(SecurityCategory::ShellProfiles, is_true),
+            "block_sensitive_extensions" => config.security.set_category_blocked(SecurityCategory::SensitiveExtensions, is_true),
+            _ => {}
+        }
     }
 }
 
 fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items: &[String]) {
     if key == "extra_banned_files" {
         config.extra_banned_files = items.to_vec();
+        config.security.extra_banned_patterns.extend(items.to_vec());
     } else if let Some(gate_name) = section.strip_prefix("gates.") {
         let gate = config.gates.entry(gate_name.to_owned()).or_insert_with(|| GateDefinition {
             command: Vec::new(),
@@ -488,6 +593,14 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
         }
     } else if section == "sandbox" && key == "bind_mounts" {
         config.sandbox.bind_mounts = items.to_vec();
+    } else if section == "security" {
+        if key == "extra_banned_patterns" || key == "extra_banned_files" {
+            config.security.extra_banned_patterns = items.to_vec();
+        } else if key == "allowed_patterns" {
+            config.security.allowed_patterns = items.to_vec();
+        } else if key == "disabled_categories" {
+            config.security.disabled_categories = items.to_vec();
+        }
     }
 }
 
@@ -584,5 +697,33 @@ extra_banned_files = ["firmware_key.pem", ".secret_payload"]
         assert_eq!(cfg.sandbox.bind_mounts, vec![".zig-cache", "zig-out"]);
 
         drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_parse_security_config() {
+        let sample = r#"
+[project]
+name = "auth-service"
+
+[security]
+block_generic_credentials = false
+block_sensitive_extensions = false
+block_ssh_keys = true
+allowed_patterns = ["src/auth/password/**", "tests/fixtures/*.pem"]
+extra_banned_patterns = ["confidential_leak.bin"]
+"#;
+
+        let parsed = parse_project_toml(sample).unwrap();
+        assert!(!parsed.security.block_generic_credentials());
+        assert!(!parsed.security.block_sensitive_extensions());
+        assert!(parsed.security.block_ssh_keys());
+        assert_eq!(
+            parsed.security.allowed_patterns,
+            vec!["src/auth/password/**", "tests/fixtures/*.pem"]
+        );
+        assert_eq!(
+            parsed.security.extra_banned_patterns,
+            vec!["confidential_leak.bin"]
+        );
     }
 }

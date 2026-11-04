@@ -2,7 +2,10 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use crate::guards::{check_agent_guard, check_dangerous_files, check_enforce_boundaries, resolve_safe_path};
+use agy_common::ProjectConfig;
+use crate::guards::{
+    check_agent_guard, check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
+};
 use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded file write action.
@@ -27,7 +30,8 @@ pub(crate) fn execute(
         .ok_or_else(|| "Missing required parameter 'content'".to_owned())?;
 
     if tool.ban_dangerous_files() {
-        check_dangerous_files(Path::new(path_str))?;
+        let project = ProjectConfig::detect_or_load(workspace_root);
+        check_dangerous_files_with_security(Path::new(path_str), Some(&project.security))?;
     }
 
     let safe_path = resolve_safe_path(
