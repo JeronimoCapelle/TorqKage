@@ -17,6 +17,8 @@ mcpServers:
     args: ["--agent", "sysadmin"]
 mcp_tools:
   - query_tool_help
+  - query_project_spec
+  - read_project_file
 ---
 
 # Directives

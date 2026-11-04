@@ -1,6 +1,6 @@
 //! # installer
 //!
-//! In-deck plugin installation, symlink management, and host system prerequisite diagnostics.
+//! In-deck plugin installation, directory copying, and host system prerequisite diagnostics.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -33,10 +33,20 @@ impl DiagnosticsReport {
 
         // Plugin status
         if self.plugin_installed {
-            let link_note = if self.is_symlink { " (live symlink)" } else { "" };
-            out.push_str(&format!("✔ Plugin Status: Installed at {}{link_note}\n\n", self.plugin_path.display()));
+            let link_note = if self.is_symlink {
+                " (legacy symlink - press 'i' to copy standalone bundle)"
+            } else {
+                " (standalone copy)"
+            };
+            out.push_str(&format!(
+                "✔ Plugin Status: Installed at {}{link_note}\n\n",
+                self.plugin_path.display()
+            ));
         } else {
-            out.push_str(&format!("✖ Plugin Status: NOT INSTALLED at {}\n  Press 'i' to install/link now.\n\n", self.plugin_path.display()));
+            out.push_str(&format!(
+                "✖ Plugin Status: NOT INSTALLED at {}\n  Press 'i' to copy and install now.\n\n",
+                self.plugin_path.display()
+            ));
         }
 
         // Host binaries
@@ -44,7 +54,10 @@ impl DiagnosticsReport {
         for check in &self.binary_checks {
             let icon = if check.installed { "✔" } else if check.required { "✖" } else { "○" };
             let req_tag = if check.required { "[Required]" } else { "[Optional]" };
-            out.push_str(&format!("{icon} {req_tag:<10} {:<16} — {}\n", check.name, check.description));
+            out.push_str(&format!(
+                "{icon} {req_tag:<10} {:<16} — {}\n",
+                check.name, check.description
+            ));
         }
 
         out
@@ -140,18 +153,66 @@ pub(crate) fn run_diagnostics(_workspace_root: &Path) -> DiagnosticsReport {
     }
 }
 
-/// Installs or symlinks the `plugins/agy-suite` directory into `~/.gemini/config/plugins/agy-suite`.
+/// Recursively copies all directories and files from `src` to `dst`.
+pub(crate) fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let dest_child = dst.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_all(&path, &dest_child)?;
+        } else if path.is_file() {
+            std::fs::copy(&path, &dest_child)?;
+        }
+    }
+    Ok(())
+}
+
+/// Ensures binary executables in `dest_bin` have executable bits set on Unix.
+#[cfg(unix)]
+fn ensure_binaries_executable(dest_bin: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    if dest_bin.is_dir()
+        && let Ok(entries) = std::fs::read_dir(dest_bin)
+    {
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata()
+                && meta.is_file()
+            {
+                let mut perms = meta.permissions();
+                perms.set_mode(0o755);
+                drop(std::fs::set_permissions(entry.path(), perms));
+            }
+        }
+    }
+}
+
+/// Discovers the local plugin source bundle either in `<workspace>/plugins/agy-suite`
+/// or directly in `<workspace>` if executed inside an extracted plugin release bundle.
+fn resolve_source_plugin(workspace_root: &Path) -> Result<PathBuf, String> {
+    if workspace_root.join("plugins/agy-suite/plugin.json").is_file() {
+        Ok(workspace_root.join("plugins/agy-suite"))
+    } else if workspace_root.join("plugin.json").is_file() {
+        Ok(workspace_root.to_path_buf())
+    } else if workspace_root.join("plugins/agy-suite").is_dir() {
+        Ok(workspace_root.join("plugins/agy-suite"))
+    } else {
+        Err(format!(
+            "Source plugin bundle not found at '{}' or '{}'",
+            workspace_root.join("plugins/agy-suite").display(),
+            workspace_root.display()
+        ))
+    }
+}
+
+/// Installs the plugin bundle by copying all declarative files, agents, and binaries
+/// directly into `~/.gemini/config/plugins/agy-suite`.
 ///
 /// # Errors
-/// Returns an error string if directory creation or linking fails.
+/// Returns an error string if source resolution, directory creation, or file copying fails.
 pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String, String> {
-    let local_plugin = workspace_root.join("plugins/agy-suite");
-    if !local_plugin.is_dir() {
-        return Err(format!(
-            "Source plugin directory not found at: {}",
-            local_plugin.display()
-        ));
-    }
+    let local_plugin = resolve_source_plugin(workspace_root)?;
 
     let home = std::env::var("HOME").map_err(|e| format!("HOME environment variable error: {e}"))?;
     let target_dir = PathBuf::from(home).join(".gemini/config/plugins");
@@ -160,25 +221,39 @@ pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String
 
     let dest = target_dir.join("agy-suite");
 
-    // Remove existing target if it's already a symlink or directory
-    if dest.symlink_metadata().is_ok() {
-        if dest.is_dir() && !dest.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
-            std::fs::remove_dir_all(&dest)
-                .map_err(|e| format!("Failed to remove old plugin dir: {e}"))?;
-        } else {
+    // Remove existing target whether it's an old symlink or directory
+    if let Ok(meta) = dest.symlink_metadata() {
+        if meta.file_type().is_symlink() || !dest.is_dir() {
             std::fs::remove_file(&dest)
-                .map_err(|e| format!("Failed to remove existing symlink: {e}"))?;
+                .map_err(|e| format!("Failed to remove existing file or symlink {}: {e}", dest.display()))?;
+        } else {
+            std::fs::remove_dir_all(&dest)
+                .map_err(|e| format!("Failed to remove old plugin directory {}: {e}", dest.display()))?;
         }
     }
 
-    // Create relative or absolute symlink
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(&local_plugin, &dest)
-            .map_err(|e| format!("Failed to symlink plugin: {e}"))?;
+    // Recursively copy all plugin files and subdirectories directly
+    copy_dir_all(&local_plugin, &dest)
+        .map_err(|e| format!("Failed to copy plugin files from {} to {}: {e}", local_plugin.display(), dest.display()))?;
+
+    // Stage fresh compiled binaries if they exist in workspace target directories
+    let dest_bin = dest.join("bin");
+    drop(std::fs::create_dir_all(&dest_bin));
+    for profile in ["release", "fast", "debug"] {
+        let target_profile = workspace_root.join("target").join(profile);
+        for bin_name in ["agy-mcp", "agy-hooks", "agy-ctrl"] {
+            let candidate_bin = target_profile.join(bin_name);
+            let target_file = dest_bin.join(bin_name);
+            if candidate_bin.is_file() && !target_file.is_file() {
+                drop(std::fs::copy(&candidate_bin, &target_file));
+            }
+        }
     }
 
-    // Run agy plugin validate
+    #[cfg(unix)]
+    ensure_binaries_executable(&dest_bin);
+
+    // Run agy plugin validate if agy is installed
     let mut validate_cmd = Command::new("agy");
     validate_cmd.args(["plugin", "validate", &dest.to_string_lossy()]);
     validate_cmd.current_dir(workspace_root);
@@ -191,8 +266,57 @@ pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String
     };
 
     Ok(format!(
-        "✔ Plugin successfully linked to: {}\n  Target: {}\n  Status: {val_status}",
+        "✔ Plugin bundle successfully copied to: {}\n  Source: {}\n  Status: {val_status}",
         dest.display(),
         local_plugin.display()
     ))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_copy_dir_all_recursive() {
+        let temp_base = std::env::temp_dir().join(format!("agy_copy_test_{}", std::process::id()));
+        let src = temp_base.join("src");
+        let dst = temp_base.join("dst");
+        drop(std::fs::remove_dir_all(&temp_base));
+
+        drop(std::fs::create_dir_all(src.join("sub")));
+        std::fs::write(src.join("a.txt"), "hello a").expect("write a");
+        std::fs::write(src.join("sub/b.txt"), "hello b").expect("write b");
+
+        copy_dir_all(&src, &dst).expect("copy_dir_all");
+
+        assert!(dst.join("a.txt").is_file());
+        assert!(dst.join("sub/b.txt").is_file());
+        assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "hello b");
+
+        drop(std::fs::remove_dir_all(&temp_base));
+    }
+
+    #[test]
+    fn test_resolve_source_plugin() {
+        let temp = std::env::temp_dir().join(format!("agy_src_test_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp));
+
+        // Case 1: unzipped plugin root containing plugin.json directly
+        drop(std::fs::create_dir_all(&temp));
+        std::fs::write(temp.join("plugin.json"), "{}").expect("write plugin.json");
+        let resolved = resolve_source_plugin(&temp).expect("resolve directly");
+        assert_eq!(resolved, temp);
+
+        // Case 2: repo workspace with plugins/agy-suite/plugin.json
+        let temp_ws = std::env::temp_dir().join(format!("agy_ws_test_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp_ws));
+        drop(std::fs::create_dir_all(temp_ws.join("plugins/agy-suite")));
+        std::fs::write(temp_ws.join("plugins/agy-suite/plugin.json"), "{}").expect("write");
+        let resolved_ws = resolve_source_plugin(&temp_ws).expect("resolve in workspace");
+        assert_eq!(resolved_ws, temp_ws.join("plugins/agy-suite"));
+
+        drop(std::fs::remove_dir_all(&temp));
+        drop(std::fs::remove_dir_all(&temp_ws));
+    }
 }

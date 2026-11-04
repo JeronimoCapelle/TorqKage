@@ -46,10 +46,21 @@ impl McpServer {
             None => (tools, None),
         };
 
-        let mcp_tools = tools.iter().map(McpTool::from_definition).collect();
+        let project = agy_common::ProjectConfig::detect_or_load(&workspace_root);
+        let mut enriched_tools = tools;
+        for t in &mut enriched_tools {
+            if t.name == "query_project_spec" && !project.docs.paths.is_empty() {
+                t.description = format!(
+                    "Searches project documentation and specifications across [{}] for grep-ready specs, opcodes, and ABI definitions",
+                    project.docs.paths.join(", ")
+                );
+            }
+        }
+
+        let mcp_tools = enriched_tools.iter().map(McpTool::from_definition).collect();
 
         Self {
-            tools,
+            tools: enriched_tools,
             mcp_tools,
             workspace_root,
             agent,

@@ -37,14 +37,17 @@ truncate_bytes = 46080
 emit_truncation_notice = true
 
 [tools.query_project_spec]
-description = "Searches the in-repo docs/ directory for grep-ready specs, opcodes, and ABI definitions"
+description = "Searches project documentation and specifications across configured doc paths (docs/, ARCHITECTURE.md, etc.) for grep-ready specs, opcodes, and ABI definitions"
 action = "file_search"
-category = "filesystem"
-enforce_dir = "docs"
+category = "documentation"
 enforce_workspace_bounds = true
 ban_dangerous_files = true
 truncate_lines = 150
 timeout_seconds = 10
+args = [
+    { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or pattern to search across documentation" },
+    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" }
+]
 
 [tools.search_codebase]
 description = "Searches the codebase for a text or regex pattern using ripgrep (bounded to project root)"

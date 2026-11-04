@@ -10,8 +10,14 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
     let branch = query_current_branch(workspace_root);
     let git_status = query_vcs_status(workspace_root);
     let handoff = read_last_handoff(workspace_root);
+    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
 
     let mut out = format!("# Project State: Ready\n- Branch: {branch}\n- Working Copy: {git_status}\n");
+    if !project.docs.paths.is_empty() {
+        out.push_str("- Documentation & Specs: ");
+        out.push_str(&project.docs.paths.join(", "));
+        out.push_str(" (grep via 'query_project_spec')\n");
+    }
     if let Some(h) = handoff {
         out.push_str("- Last Handoff: ");
         out.push_str(&h);
@@ -110,6 +116,7 @@ fn read_last_handoff(root: &Path) -> Option<String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
 mod tests {
     use super::*;
 
@@ -121,5 +128,23 @@ mod tests {
         assert!(output.contains("# Project State: Ready"));
         assert!(output.contains("- Branch:"));
         assert!(output.contains("- Working Copy:"));
+    }
+
+    #[test]
+    fn test_project_state_includes_docs_when_configured() {
+        let temp = std::env::temp_dir().join(format!("agy_state_docs_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp));
+        std::fs::create_dir_all(&temp).expect("create temp dir");
+        std::fs::write(
+            temp.join("project.toml"),
+            "[project]\nname = \"test\"\n\n[docs]\npaths = [\"docs\", \"specs/rv32.md\"]\n",
+        )
+        .expect("write project.toml");
+
+        let (output, is_error) = execute(&temp);
+        assert!(!is_error);
+        assert!(output.contains("- Documentation & Specs: docs, specs/rv32.md (grep via 'query_project_spec')"));
+
+        drop(std::fs::remove_dir_all(&temp));
     }
 }

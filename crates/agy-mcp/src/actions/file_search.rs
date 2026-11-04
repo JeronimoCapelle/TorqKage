@@ -7,6 +7,9 @@ use crate::models::ToolDefinition;
 
 /// Executes a bounded pattern search across files.
 ///
+/// If no explicit path is given, searches across all configured documentation paths
+/// in `project.toml` (e.g. `docs/`, `specs/`, `ARCHITECTURE.md`), or falls back to `tool.enforce_dir`.
+///
 /// # Errors
 /// Returns an error message if parameters are invalid or search fails.
 pub(crate) fn execute(
@@ -24,29 +27,57 @@ pub(crate) fn execute(
         return Err("Search pattern cannot be empty".to_owned());
     }
 
-    let search_dir = tool
-        .enforce_dir
-        .as_ref()
-        .map_or_else(|| workspace_root.to_path_buf(), |sub| workspace_root.join(sub));
+    let project = ProjectConfig::detect_or_load(workspace_root);
+    let pattern_lower = pattern.to_lowercase();
+    let mut matches = Vec::new();
 
-    if !search_dir.exists() {
+    let path_arg = arguments
+        .get("path")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let (targets, is_docs_query) = resolve_search_targets(tool, workspace_root, &project, path_arg);
+
+    let mut searched_targets = Vec::new();
+    for target in &targets {
+        if !target.exists() {
+            continue;
+        }
+
+        let rel_display = target
+            .strip_prefix(workspace_root)
+            .unwrap_or(target)
+            .display()
+            .to_string();
+        searched_targets.push(rel_display);
+
+        if target.is_dir() {
+            walk_and_search(target, workspace_root, &pattern_lower, &project.security, &mut matches)?;
+        } else if target.is_file() {
+            search_single_file(target, workspace_root, &pattern_lower, &project.security, &mut matches);
+        }
+    }
+
+    if searched_targets.is_empty() {
+        if is_docs_query {
+            return Ok(format!(
+                "No documentation or specification paths found on disk (configured: [{}]). Configure valid paths in project.toml under [docs] paths = [...].",
+                project.docs.display_summary()
+            ));
+        }
+        let fallback_display = targets
+            .first()
+            .map_or_else(|| ".".to_owned(), |p| p.strip_prefix(workspace_root).unwrap_or(p).display().to_string());
         return Ok(format!(
-            "Search target directory '{}' does not exist in repository.",
-            search_dir.strip_prefix(workspace_root).unwrap_or(&search_dir).display()
+            "Search target directory '{fallback_display}' does not exist in repository."
         ));
     }
 
-    let project = ProjectConfig::detect_or_load(workspace_root);
-    let mut matches = Vec::new();
-    let pattern_lower = pattern.to_lowercase();
-
-    walk_and_search(&search_dir, workspace_root, &pattern_lower, &project.security, &mut matches)?;
-
     if matches.is_empty() {
-        let display_dir = search_dir.strip_prefix(workspace_root).unwrap_or(&search_dir);
+        let searched_summary = searched_targets.join(", ");
         return Ok(format!(
-            "No occurrences found for pattern '{pattern}' in '{}'.",
-            display_dir.display()
+            "No occurrences found for pattern '{pattern}' in: {searched_summary}."
         ));
     }
 
@@ -59,6 +90,65 @@ pub(crate) fn execute(
     );
 
     Ok(truncated)
+}
+
+fn resolve_search_targets(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    project: &ProjectConfig,
+    path_arg: Option<&str>,
+) -> (Vec<std::path::PathBuf>, bool) {
+    if let Some(custom) = path_arg {
+        return (vec![workspace_root.join(custom)], false);
+    }
+
+    if !project.docs.paths.is_empty()
+        && (tool.name == "query_project_spec" || tool.enforce_dir.as_deref() == Some("docs"))
+    {
+        let targets = project
+            .docs
+            .paths
+            .iter()
+            .map(|p| workspace_root.join(p))
+            .collect();
+        return (targets, true);
+    }
+
+    if let Some(ref sub) = tool.enforce_dir {
+        return (vec![workspace_root.join(sub)], false);
+    }
+
+    (vec![workspace_root.to_path_buf()], false)
+}
+
+fn search_single_file(
+    file_path: &Path,
+    workspace_root: &Path,
+    pattern_lower: &str,
+    security: &ProjectSecurityConfig,
+    matches: &mut Vec<String>,
+) {
+    if check_dangerous_files_with_security(file_path, Some(security)).is_err() {
+        return;
+    }
+
+    if let Ok(content) = std::fs::read_to_string(file_path) {
+        let rel_path = file_path
+            .strip_prefix(workspace_root)
+            .unwrap_or(file_path)
+            .display()
+            .to_string();
+
+        for (idx, line) in content.lines().enumerate() {
+            if line.to_lowercase().contains(pattern_lower) {
+                let line_num = idx.saturating_add(1);
+                matches.push(format!("{rel_path}:{line_num}: {line}"));
+                if matches.len() >= 500 {
+                    return;
+                }
+            }
+        }
+    }
 }
 
 fn walk_and_search(
@@ -85,28 +175,9 @@ fn walk_and_search(
         if path.is_dir() {
             walk_and_search(&path, workspace_root, pattern_lower, security, matches)?;
         } else if path.is_file() {
-            // Guard: Never search inside sensitive files
-            if check_dangerous_files_with_security(&path, Some(security)).is_err() {
-                continue;
-            }
-
-            // Inspect file if text
-            if let Ok(content) = std::fs::read_to_string(&path) {
-                let rel_path = path
-                    .strip_prefix(workspace_root)
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string();
-
-                for (idx, line) in content.lines().enumerate() {
-                    if line.to_lowercase().contains(pattern_lower) {
-                        let line_num = idx.saturating_add(1);
-                        matches.push(format!("{rel_path}:{line_num}: {line}"));
-                        if matches.len() >= 500 {
-                            return Ok(());
-                        }
-                    }
-                }
+            search_single_file(&path, workspace_root, pattern_lower, security, matches);
+            if matches.len() >= 500 {
+                return Ok(());
             }
         }
     }
@@ -183,5 +254,51 @@ mod tests {
 
         let result = execute(&tool, &temp, &args).unwrap();
         assert!(result.contains("No occurrences found"));
+    }
+
+    #[test]
+    fn test_file_search_across_multiple_configured_doc_paths() {
+        let temp = create_test_dir("multi-docs");
+        std::fs::create_dir_all(temp.join("docs")).unwrap();
+        std::fs::write(
+            temp.join("project.toml"),
+            "[project]\nname = \"demo\"\n\n[docs]\npaths = [\"docs\", \"ARCHITECTURE.md\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            temp.join("docs/specs.md"),
+            "# Specs\nCACHE_LINE_SIZE = 64;\n",
+        )
+        .unwrap();
+        std::fs::write(
+            temp.join("ARCHITECTURE.md"),
+            "# Architecture\nCACHE_LINE_SIZE is tuned for x86_64 and aarch64.\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            ..Default::default()
+        };
+
+        // 1. Search without explicit path -> searches all configured doc paths
+        let args_all = json!({ "pattern": "CACHE_LINE_SIZE" });
+        let result_all = execute(&tool, &temp, &args_all).expect("search all docs");
+        assert!(result_all.contains("docs/specs.md:2: CACHE_LINE_SIZE = 64;"));
+        assert!(result_all.contains("ARCHITECTURE.md:2: CACHE_LINE_SIZE is tuned"));
+
+        // 2. Search specific subpath "docs"
+        let args_docs = json!({ "pattern": "CACHE_LINE_SIZE", "path": "docs" });
+        let result_docs = execute(&tool, &temp, &args_docs).expect("search docs only");
+        assert!(result_docs.contains("docs/specs.md:2: CACHE_LINE_SIZE = 64;"));
+        assert!(!result_docs.contains("ARCHITECTURE.md"));
+
+        // 3. Search specific file "ARCHITECTURE.md"
+        let args_arch = json!({ "pattern": "CACHE_LINE_SIZE", "path": "ARCHITECTURE.md" });
+        let result_arch = execute(&tool, &temp, &args_arch).expect("search architecture only");
+        assert!(result_arch.contains("ARCHITECTURE.md:2: CACHE_LINE_SIZE is tuned"));
+        assert!(!result_arch.contains("docs/specs.md"));
+
+        drop(std::fs::remove_dir_all(&temp));
     }
 }

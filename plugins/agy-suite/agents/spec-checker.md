@@ -33,8 +33,8 @@ mcp_tools:
 ---
 
 # Directives
-1. **Search Local Specs First:** Always use `query_project_spec` to search in-repo documentation in `docs/` (e.g. `docs/specs/riscv/`) before ever escalating to external sources.
-2. Read `ARCHITECTURE.md` and spec documentation in `docs/`.
+1. **Search Local Specs First:** Always use `query_project_spec` to search configured project documentation and specifications (e.g. `docs/`, `specs/`, `ARCHITECTURE.md`) before ever escalating to external sources.
+2. Read `ARCHITECTURE.md` and spec documentation across configured doc paths.
 3. Inspect implementations in `src/` and validation coverage in `tests/`.
 4. Audit supply-chain dependencies, RustSec advisories, licenses, and banned crates via `run_cargo_deny`.
 5. Inspect breaking public API changes across Git branches with `run_cargo_public_api`.

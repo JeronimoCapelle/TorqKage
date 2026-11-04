@@ -123,6 +123,10 @@ fi
 
 # 3. Synchronize plugin bundle to ~/.gemini/config/plugins/agy-suite/
 echo "--> Synchronizing bundle to Gemini plugin root: ${TARGET_PLUGIN_DIR}..."
+if [[ -L "${TARGET_PLUGIN_DIR}" ]]; then
+    echo "--> Removing existing legacy symlink at ${TARGET_PLUGIN_DIR}..."
+    rm -f "${TARGET_PLUGIN_DIR}"
+fi
 mkdir -p "${TARGET_PLUGIN_DIR}/bin"
 mkdir -p "${TARGET_PLUGIN_DIR}/agents"
 mkdir -p "${TARGET_PLUGIN_DIR}/assets"

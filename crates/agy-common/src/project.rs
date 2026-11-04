@@ -131,6 +131,35 @@ impl ProjectSecurityConfig {
     }
 }
 
+/// Declarative documentation and specification paths for the project.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectDocsConfig {
+    /// List of paths (directories or files) containing project documentation and specifications.
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// Optional description or instructions for agents on how to use the documentation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+impl ProjectDocsConfig {
+    /// Returns the configured documentation paths.
+    #[must_use]
+    pub fn resolved_paths(&self) -> &[String] {
+        &self.paths
+    }
+
+    /// Formats a human-readable list of documentation paths for agent awareness.
+    #[must_use]
+    pub fn display_summary(&self) -> String {
+        if self.paths.is_empty() {
+            "None configured".to_owned()
+        } else {
+            self.paths.join(", ")
+        }
+    }
+}
+
 /// Root project descriptor parsed from `project.toml` or dynamically synthesized.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -146,9 +175,28 @@ pub struct ProjectConfig {
     pub security: ProjectSecurityConfig,
     #[serde(default)]
     pub extra_banned_files: Vec<String>,
+    #[serde(default)]
+    pub docs: ProjectDocsConfig,
 }
 
 impl ProjectConfig {
+    /// Auto-detects standard documentation directories and architecture files in the workspace.
+    #[must_use]
+    pub fn detect_default_docs_paths(workspace_root: &Path) -> Vec<String> {
+        let mut paths = Vec::new();
+        for candidate in ["docs", "doc", "specs", "spec", "documentation"] {
+            if workspace_root.join(candidate).is_dir() {
+                paths.push(candidate.to_owned());
+            }
+        }
+        for file_candidate in ["ARCHITECTURE.md", "SPEC.md"] {
+            if workspace_root.join(file_candidate).is_file() {
+                paths.push(file_candidate.to_owned());
+            }
+        }
+        paths
+    }
+
     /// Loads `<root>/.agy/project.toml` or `<root>/project.toml`.
     /// If no explicit descriptor is found, dynamically infers the matching ecosystem profile
     /// based on root indicator files (`Cargo.toml`, `build.zig`, `go.mod`, etc.).
@@ -161,13 +209,18 @@ impl ProjectConfig {
 
         for path in &candidates {
             if let Ok(content) = std::fs::read_to_string(path)
-                && let Ok(cfg) = parse_project_toml(&content)
+                && let Ok(mut cfg) = parse_project_toml(&content)
             {
+                if cfg.docs.paths.is_empty() {
+                    cfg.docs.paths = Self::detect_default_docs_paths(workspace_root);
+                }
                 return cfg;
             }
         }
 
-        Self::infer_from_workspace(workspace_root)
+        let mut cfg = Self::infer_from_workspace(workspace_root);
+        cfg.docs.paths = Self::detect_default_docs_paths(workspace_root);
+        cfg
     }
 
     /// Infers default compiler gates, cache bind-mounts, and environment variables
@@ -247,6 +300,7 @@ impl ProjectConfig {
             environment,
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -282,6 +336,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -317,6 +372,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -344,6 +400,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -371,6 +428,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -398,6 +456,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -425,6 +484,7 @@ impl ProjectConfig {
             environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
+            docs: ProjectDocsConfig::default(),
         }
     }
 
@@ -574,6 +634,14 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
             "block_sensitive_extensions" => config.security.set_category_blocked(SecurityCategory::SensitiveExtensions, is_true),
             _ => {}
         }
+    } else if section == "docs" {
+        match key {
+            "description" => config.docs.description = Some(clean_str.to_owned()),
+            "path" | "paths" => config.docs.paths = vec![clean_str.to_owned()],
+            _ => {}
+        }
+    } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths") {
+        config.docs.paths = vec![clean_str.to_owned()];
     }
 }
 
@@ -581,6 +649,11 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
     if key == "extra_banned_files" {
         config.extra_banned_files = items.to_vec();
         config.security.extra_banned_patterns.extend(items.to_vec());
+    } else if (section == "docs" && (key == "paths" || key == "dirs"))
+        || ((section == "project" || section.is_empty())
+            && (key == "docs" || key == "docs_paths" || key == "paths"))
+    {
+        config.docs.paths = items.to_vec();
     } else if let Some(gate_name) = section.strip_prefix("gates.") {
         let gate = config.gates.entry(gate_name.to_owned()).or_insert_with(|| GateDefinition {
             command: Vec::new(),
@@ -725,5 +798,54 @@ extra_banned_patterns = ["confidential_leak.bin"]
             parsed.security.extra_banned_patterns,
             vec!["confidential_leak.bin"]
         );
+    }
+
+    #[test]
+    fn test_parse_and_detect_docs_config() {
+        let sample = r#"
+[project]
+name = "emulator"
+
+[docs]
+paths = ["docs", "ARCHITECTURE.md", "specs/abi"]
+description = "RISC-V architecture specifications and ISA manuals"
+"#;
+        let parsed = parse_project_toml(sample).unwrap();
+        assert_eq!(
+            parsed.docs.paths,
+            vec!["docs", "ARCHITECTURE.md", "specs/abi"]
+        );
+        assert_eq!(
+            parsed.docs.description.as_deref(),
+            Some("RISC-V architecture specifications and ISA manuals")
+        );
+        assert_eq!(parsed.docs.display_summary(), "docs, ARCHITECTURE.md, specs/abi");
+
+        // Compact top-level docs declaration
+        let compact = r#"
+docs = ["specs", "ARCHITECTURE.md"]
+"#;
+        let parsed_compact = parse_project_toml(compact).unwrap();
+        assert_eq!(
+            parsed_compact.docs.paths,
+            vec!["specs", "ARCHITECTURE.md"]
+        );
+
+        // Auto-detection on filesystem
+        let temp = std::env::temp_dir().join(format!("agy_docs_detect_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir_all(temp.join("docs")).unwrap();
+        std::fs::create_dir_all(temp.join("specs")).unwrap();
+        std::fs::write(temp.join("ARCHITECTURE.md"), "# Architecture\n").unwrap();
+
+        let detected = ProjectConfig::detect_default_docs_paths(&temp);
+        assert!(detected.contains(&"docs".to_owned()));
+        assert!(detected.contains(&"specs".to_owned()));
+        assert!(detected.contains(&"ARCHITECTURE.md".to_owned()));
+
+        let cfg = ProjectConfig::detect_or_load(&temp);
+        assert!(cfg.docs.paths.contains(&"docs".to_owned()));
+        assert!(cfg.docs.paths.contains(&"ARCHITECTURE.md".to_owned()));
+
+        drop(std::fs::remove_dir_all(&temp));
     }
 }

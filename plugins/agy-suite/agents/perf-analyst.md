@@ -17,6 +17,7 @@ mcpServers:
 mcp_tools:
   - read_project_file
   - search_codebase
+  - query_project_spec
   - run_cargo_asm
   - run_cargo_bench
   - run_cargo_careful

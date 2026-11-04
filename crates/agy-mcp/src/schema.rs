@@ -84,6 +84,10 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
                 "pattern": {
                     "type": "string",
                     "description": "Text pattern or regex to search across repository files"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional specific directory or file path to search (defaults to all configured documentation paths)"
                 }
             },
             "required": ["pattern"]

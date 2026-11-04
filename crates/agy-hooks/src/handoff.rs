@@ -59,6 +59,7 @@ pub(crate) fn execute_record_handoff() {
 ///
 /// Reads `.agy/state/handoff.json` (or `.agy/state/last_handoff.md`) if present and emits a `systemMessage` step
 /// providing immediate continuity context for the starting conversation session.
+#[allow(clippy::format_push_string, reason = "Building injection prompt message")]
 pub(crate) fn execute_inject_wake() {
     let input: SessionStartInput = read_stdin_payload();
 
@@ -66,13 +67,21 @@ pub(crate) fn execute_inject_wake() {
     let paths = agy_common::AgyStatePaths::new(&root);
     let json_handoff = paths.handoff_json_file();
     let md_handoff = paths.handoff_md_file();
+    let project = agy_common::ProjectConfig::detect_or_load(&root);
 
     let resp = if json_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&json_handoff)
         && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
     {
+        let mut msg = handoff.to_injection_message();
+        if !project.docs.paths.is_empty() {
+            msg.push_str(&format!(
+                "\n\n[DOCUMENTATION]: Available in [{}]. Use 'query_project_spec' to search specifications.",
+                project.docs.paths.join(", ")
+            ));
+        }
         SessionStartResponse {
-            inject_steps: vec![InjectStep::system(handoff.to_injection_message())],
+            inject_steps: vec![InjectStep::system(msg)],
         }
     } else if md_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&md_handoff)
@@ -84,11 +93,25 @@ pub(crate) fn execute_inject_wake() {
             format!("Modified files: {}.", record.modified_files.join(", "))
         };
 
-        let msg = format!(
+        let mut msg = format!(
             "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
             record.previous_agent, files_str, record.status
         );
+        if !project.docs.paths.is_empty() {
+            msg.push_str(&format!(
+                " Documentation paths: [{}]. Use 'query_project_spec' to search.",
+                project.docs.paths.join(", ")
+            ));
+        }
 
+        SessionStartResponse {
+            inject_steps: vec![InjectStep::system(msg)],
+        }
+    } else if !project.docs.paths.is_empty() {
+        let msg = format!(
+            "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. Use 'query_project_spec' to search them.",
+            project.docs.paths.join(", ")
+        );
         SessionStartResponse {
             inject_steps: vec![InjectStep::system(msg)],
         }

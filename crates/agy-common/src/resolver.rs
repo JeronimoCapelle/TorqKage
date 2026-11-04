@@ -17,7 +17,7 @@ impl WorkspaceResolver {
     /// Returns `AgyError::Io` if querying current directory or canonicalization fails.
     pub fn find_root(start_dir: Option<&Path>) -> Result<PathBuf> {
         let current = match start_dir {
-            Some(p) => p.to_path_buf(),
+            Some(p) => p.canonicalize().unwrap_or_else(|_| p.to_path_buf()),
             None => std::env::current_dir()?,
         };
 

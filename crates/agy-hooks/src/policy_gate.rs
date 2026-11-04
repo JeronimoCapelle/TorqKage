@@ -81,9 +81,12 @@ pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
 
 /// Inspects tools.toml files across workspace and plugin installations for a boolean flag.
 fn check_tool_attribute_in_config(tool_name: &str, root: &Path, attribute: &str) -> bool {
+    let ws_root = WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
     let mut candidates = vec![
         root.join("tools.toml"),
         root.join("plugins/agy-suite/tools.toml"),
+        ws_root.join("tools.toml"),
+        ws_root.join("plugins/agy-suite/tools.toml"),
     ];
 
     if let Ok(home) = std::env::var("HOME") {
@@ -191,6 +194,10 @@ mod tests {
     fn test_circuit_breaker_tripped_triggers_ask() {
         let temp_dir = std::env::temp_dir().join(format!("hook_cb_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         drop(std::fs::create_dir_all(&temp_dir));
+        drop(std::fs::write(
+            temp_dir.join("tools.toml"),
+            "[tools.modify_code]\nmutating = true\n",
+        ));
 
         let mut ledger = CircuitBreakerLedger::new("coder");
         drop(ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("borrow error")));

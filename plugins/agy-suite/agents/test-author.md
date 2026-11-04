@@ -14,6 +14,7 @@ mcpServers:
 mcp_tools:
   - read_project_file
   - search_codebase
+  - query_project_spec
   - write_file
   - modify_code
   - inspect_workspace_diff
@@ -34,6 +35,7 @@ mcp_tools:
 
 # Directives
 - Confine all test generation and modifications strictly to `tests/` and `benches/` using `write_file` and `modify_code` (powered by `mpatch`). Per-agent guards prevent modifications to `src/`.
+- Query project specifications and invariants using `query_project_spec` across configured documentation paths (e.g. `docs/`, `specs/`, `ARCHITECTURE.md`) to write rigorous behavioral assertions.
 - Synthesize unit tests, integration harnesses, generative `proptest` property suites, and `cargo-insta` golden snapshot tests.
 - Use `run_coverage_summary` (`cargo llvm-cov`) to identify uncovered branch conditions and untested edge cases.
 - Execute unit and targeted integration suites via parameterized `run_cargo_test` or parallel `run_cargo_nextest`.
