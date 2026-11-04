@@ -23,6 +23,7 @@ mod config;
 mod conflicts;
 mod finisher_gate;
 mod handoff;
+mod manifest_guard;
 mod policy_gate;
 mod pre_tool_use;
 mod stdin;

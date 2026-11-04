@@ -29,6 +29,7 @@ impl Default for PreToolUseConfig {
         Self {
             pipeline: vec![
                 "circuit_breaker".to_owned(),
+                "manifest_guard".to_owned(),
                 "subagent_admission".to_owned(),
                 "vcs_conflicts".to_owned(),
                 "tool_policy".to_owned(),
@@ -53,11 +54,37 @@ impl Default for CircuitBreakerConfig {
     }
 }
 
+/// Manifest mutation guard configuration protecting build files against host proc-macro execution escape.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ManifestGuardConfig {
+    pub(crate) enabled: bool,
+    pub(crate) protected_patterns: Vec<String>,
+}
+
+impl Default for ManifestGuardConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            protected_patterns: vec![
+                "Cargo.toml".into(),
+                "Cargo.lock".into(),
+                "build.rs".into(),
+                "CMakeLists.txt".into(),
+                "meson.build".into(),
+                "package.json".into(),
+                "build.zig".into(),
+                "Makefile".into(),
+            ],
+        }
+    }
+}
+
 /// Root configuration parsed from `hooks.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HooksConfig {
     pub(crate) pre_tool_use: PreToolUseConfig,
     pub(crate) circuit_breaker: CircuitBreakerConfig,
+    pub(crate) manifest_guard: ManifestGuardConfig,
 }
 
 impl HooksConfig {
@@ -238,6 +265,8 @@ fn apply_array_field(
 ) {
     if section == "pre_tool_use" && key == "pipeline" {
         config.pre_tool_use.pipeline = items.to_vec();
+    } else if section == "manifest_guard" && key == "protected_patterns" {
+        config.manifest_guard.protected_patterns = items.to_vec();
     } else if section == "custom_check"
         && key == "command"
         && let Some(check) = current_check
@@ -259,6 +288,8 @@ fn apply_string_field(
         if let Ok(m) = val.parse::<usize>() {
             config.circuit_breaker.max_strikes = m;
         }
+    } else if section == "manifest_guard" && key == "enabled" {
+        config.manifest_guard.enabled = val.parse::<bool>().unwrap_or(true);
     } else if section == "custom_check"
         && let Some(check) = current_check
     {

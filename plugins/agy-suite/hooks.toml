@@ -9,15 +9,33 @@
 # Execution halts on the first non-allow decision (first 'deny' or 'ask').
 #
 # Available native primitives:
-# - "circuit_breaker": Halts mutating tools if 2 consecutive compiler failures occurred.
+# - "circuit_breaker": Halts mutating tools if consecutive compiler failures exceed threshold.
+# - "manifest_guard": Protects Cargo.toml/build.rs from unauthorized mutation (proc-macro escape defense).
 # - "subagent_admission": Dynamically evaluates target agent's frontmatter pre_launch_checks.
 # - "vcs_conflicts": Blocks execution when Jujutsu or Git conflict markers exist.
 # - "tool_policy": Asks for operator confirmation [y/n] for mutating or permission-gated tools.
 pipeline = [
     "circuit_breaker",
+    "manifest_guard",
     "subagent_admission",
     "vcs_conflicts",
     "tool_policy",
+]
+
+# Circuit breaker settings: consecutive compiler failures before tripping mutating tools.
+[circuit_breaker]
+max_strikes = 2
+
+# Manifest mutation guard: neutralizes host IDE procedural-macro / build.rs execution escape vectors.
+[manifest_guard]
+enabled = true
+protected_patterns = [
+    "Cargo.toml",
+    "build.rs",
+    "CMakeLists.txt",
+    "meson.build",
+    "package.json",
+    "go.mod",
 ]
 
 # Matcher pattern for tools that trigger the vcs_conflicts check before running.

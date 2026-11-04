@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use agy_common::{CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput, WorkspaceResolver};
 use crate::config::{CustomCheck, HooksConfig, matches_pattern};
-use crate::{conflicts, finisher_gate, policy_gate, stdin};
+use crate::{conflicts, finisher_gate, manifest_guard, policy_gate, stdin};
 
 /// Executes the unified `pre-tool-use` hook.
 pub(crate) fn execute() {
@@ -56,6 +56,11 @@ pub(crate) fn evaluate_pre_tool_use(
                         ledger.consecutive_failures,
                         ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
                     ));
+                }
+            }
+            "manifest_guard" => {
+                if let Some(resp) = manifest_guard::evaluate_manifest_guard(input, config) {
+                    return resp;
                 }
             }
             "subagent_admission" => {
