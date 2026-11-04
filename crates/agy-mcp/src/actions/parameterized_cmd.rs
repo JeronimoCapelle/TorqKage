@@ -1,7 +1,7 @@
 //! `parameterized_cmd` action handler executing bounded host binaries with argument regex validation.
 
 use std::path::Path;
-use crate::actions::execute_supervised_command;
+use crate::actions::execute_supervised_command_with_detector;
 use crate::guards::truncate_output;
 use crate::models::{OutputCapture, ToolDefinition};
 
@@ -107,6 +107,24 @@ pub(crate) fn execute(
     workspace_root: &Path,
     arguments: &serde_json::Value,
 ) -> Result<(String, bool), String> {
+    execute_with_detector(
+        tool,
+        workspace_root,
+        arguments,
+        agy_common::sandbox::is_inside_outer_sandbox,
+    )
+}
+
+/// Executes a parameterized CLI command with configurable sandbox detection.
+pub(crate) fn execute_with_detector<F>(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    arguments: &serde_json::Value,
+    is_outer_sandbox: F,
+) -> Result<(String, bool), String>
+where
+    F: Fn() -> bool,
+{
     if tool.command.is_empty() {
         return Err(format!("Tool '{}' has no command configured", tool.name));
     }
@@ -116,14 +134,14 @@ pub(crate) fn execute(
     let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
     let base_args = tool.command.get(1..).unwrap_or(&[]);
 
-    let output = execute_supervised_command(
+    let output = execute_supervised_command_with_detector(
         binary,
-        base_args,
-        &dynamic_args,
+        (base_args, &dynamic_args),
         workspace_root,
         tool.timeout_seconds,
         tool.enforce_sandbox(),
         &tool.name,
+        is_outer_sandbox,
     )?;
 
     let is_error = if let Some(code) = output.status.code() {
@@ -395,10 +413,6 @@ mod tests {
     #[test]
     fn test_enforce_sandbox_in_outer_sandbox() {
         let temp = create_test_dir("sandbox_outer");
-        // SAFETY: Setting test environment variable for isolated unit test.
-        unsafe {
-            std::env::set_var("AGY_OUTER_SANDBOX", "1");
-        }
         let tool = ToolDefinition {
             name: "test_sandboxed_echo".to_owned(),
             command: vec!["echo".to_owned()],
@@ -420,11 +434,7 @@ mod tests {
             "msg": "sandboxed_payload"
         });
 
-        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
-        // SAFETY: Cleaning up test environment variable after isolated unit test.
-        unsafe {
-            std::env::remove_var("AGY_OUTER_SANDBOX");
-        }
+        let (out, is_err) = execute_with_detector(&tool, &temp, &args, || true).unwrap();
         assert!(!is_err);
         assert!(out.contains("sandboxed_payload"));
     }

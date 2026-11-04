@@ -3,6 +3,9 @@
 use std::process::{Child, Command, ExitStatus};
 use crate::error::{AgyError, Result};
 
+/// Grace duration allowed for child thread completion post-SIGKILL before returning timeout error.
+const PROCESS_KILL_GRACE_WAIT: std::time::Duration = std::time::Duration::from_millis(50);
+
 /// Drop guard ensuring child process groups are forcefully terminated if parent drops.
 pub struct ChildGuard {
     child: Child,
@@ -35,10 +38,22 @@ impl Drop for ChildGuard {
     fn drop(&mut self) {
         // If child is still running, kill entire process group with SIGKILL
         if matches!(self.child.try_wait(), Ok(None)) {
-            let target_pgid = self.pgid.saturating_neg();
-            // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
-            unsafe {
-                libc::kill(target_pgid, libc::SIGKILL);
+            #[cfg(unix)]
+            {
+                if self.pgid > 0 {
+                    let target_pgid = self.pgid.saturating_neg();
+                    // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
+                    unsafe {
+                        libc::kill(target_pgid, libc::SIGKILL);
+                    }
+                } else if let Ok(raw_pid) = i32::try_from(self.child.id())
+                    && raw_pid > 0
+                {
+                    // SAFETY: Fallback sending SIGKILL directly to child PID when process group id is non-positive
+                    unsafe {
+                        libc::kill(raw_pid, libc::SIGKILL);
+                    }
+                }
             }
             if self.child.wait().is_ok() {}
         }
@@ -129,19 +144,23 @@ impl SubprocessSupervisor {
                 // Timeout expired: kill process group with SIGKILL
                 #[cfg(unix)]
                 {
-                    let target_pgid = process_group_id.saturating_neg();
-                    // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
-                    unsafe {
-                        libc::kill(target_pgid, libc::SIGKILL);
+                    if process_group_id > 0 {
+                        let target_pgid = process_group_id.saturating_neg();
+                        // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
+                        unsafe {
+                            libc::kill(target_pgid, libc::SIGKILL);
+                        }
                     }
                     let raw_pid = i32::try_from(child_pid).unwrap_or(0);
-                    // SAFETY: Sending SIGKILL directly to process id ensures termination
-                    unsafe {
-                        libc::kill(raw_pid, libc::SIGKILL);
+                    if raw_pid > 0 {
+                        // SAFETY: Sending SIGKILL directly to process id ensures termination
+                        unsafe {
+                            libc::kill(raw_pid, libc::SIGKILL);
+                        }
                     }
                 }
-                // Allow up to 50ms for worker to unblock post-kill; avoid indefinite deadlock
-                if rx.recv_timeout(std::time::Duration::from_millis(50)).is_ok() {
+                // Allow grace duration for worker to unblock post-kill; avoid indefinite deadlock
+                if rx.recv_timeout(PROCESS_KILL_GRACE_WAIT).is_ok() {
                     drop(worker.join());
                 }
                 Err(format!(

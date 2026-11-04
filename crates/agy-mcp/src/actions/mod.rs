@@ -30,8 +30,33 @@ pub(crate) fn execute_supervised_command(
     enforce_sandbox: bool,
     tool_name: &str,
 ) -> Result<std::process::Output, String> {
+    execute_supervised_command_with_detector(
+        program,
+        (base_args, dynamic_args),
+        workspace_root,
+        timeout_seconds,
+        enforce_sandbox,
+        tool_name,
+        agy_common::sandbox::is_inside_outer_sandbox,
+    )
+}
+
+/// Executes a command with configurable sandbox detection (useful for dependency injection in tests).
+pub(crate) fn execute_supervised_command_with_detector<F>(
+    program: &str,
+    args: (&[String], &[String]),
+    workspace_root: &Path,
+    timeout_seconds: u64,
+    enforce_sandbox: bool,
+    tool_name: &str,
+    is_outer_sandbox: F,
+) -> Result<std::process::Output, String>
+where
+    F: Fn() -> bool,
+{
+    let (base_args, dynamic_args) = args;
     if enforce_sandbox {
-        if agy_common::sandbox::is_inside_outer_sandbox() {
+        if is_outer_sandbox() {
             let mut cmd = Command::new(program);
             cmd.args(base_args);
             cmd.args(dynamic_args);
