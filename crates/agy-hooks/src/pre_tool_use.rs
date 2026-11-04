@@ -41,8 +41,13 @@ pub(crate) fn evaluate_pre_tool_use(
     for stage in &config.pre_tool_use.pipeline {
         match stage.as_str() {
             "circuit_breaker" => {
-                let ledger = CircuitBreakerLedger::load(root);
-                if ledger.tripped && policy_gate::is_mutating_tool(tool_name, root) {
+                let mut ledger = CircuitBreakerLedger::load(root);
+                if config.circuit_breaker.max_strikes > 0 {
+                    ledger.max_strikes = config.circuit_breaker.max_strikes;
+                }
+                if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
+                    && policy_gate::is_mutating_tool(tool_name, root)
+                {
                     return PreToolResponse::ask(format!(
                         "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
                          Last Error: {}\n\

@@ -73,7 +73,7 @@ pub struct ToolSandboxPolicy {
 }
 
 /// Preconditions required before tool execution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ToolPreconditions {
     #[serde(default)]
     pub require_git_clean: bool,
@@ -81,6 +81,8 @@ pub struct ToolPreconditions {
     pub require_clippy_clean: bool,
     #[serde(default)]
     pub require_tests_passed: bool,
+    #[serde(default)]
+    pub require_gates: Vec<String>,
 }
 
 /// Output truncation and formatting directives.
@@ -126,6 +128,7 @@ pub struct RawTool {
     pub require_workspace_clean: Option<bool>,
     pub require_clippy_clean: Option<bool>,
     pub require_tests_passed: Option<bool>,
+    pub require_gates: Option<Vec<String>>,
     pub error_fallback: Option<String>,
     pub empty_fallback: Option<String>,
     pub success_exit_codes: Option<Vec<i32>>,
@@ -230,6 +233,20 @@ impl ToolDefinition {
         self.preconditions.require_tests_passed
     }
 
+    /// Resolves the list of quality gates required prior to tool execution,
+    /// synthesizing backwards-compatible `"linter"` and `"tests"` gates if legacy flags are set.
+    #[must_use]
+    pub fn required_gates(&self) -> Vec<String> {
+        let mut gates = self.preconditions.require_gates.clone();
+        if self.preconditions.require_clippy_clean && !gates.iter().any(|g| g == "linter") {
+            gates.push("linter".to_owned());
+        }
+        if self.preconditions.require_tests_passed && !gates.iter().any(|g| g == "tests") {
+            gates.push("tests".to_owned());
+        }
+        gates
+    }
+
     #[must_use]
     pub const fn emit_truncation_notice(&self) -> bool {
         self.formatting.emit_truncation_notice
@@ -265,6 +282,7 @@ pub fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDe
         require_git_clean: raw.require_git_clean.or(raw.require_workspace_clean).or_else(|| base?.require_git_clean.or(base?.require_workspace_clean)).unwrap_or(false),
         require_clippy_clean: raw.require_clippy_clean.or_else(|| base?.require_clippy_clean).unwrap_or(false),
         require_tests_passed: raw.require_tests_passed.or_else(|| base?.require_tests_passed).unwrap_or(false),
+        require_gates: raw.require_gates.clone().or_else(|| base?.require_gates.clone()).unwrap_or_default(),
     };
 
     let formatting = ToolFormatting {

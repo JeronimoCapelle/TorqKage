@@ -33,8 +33,22 @@ impl Default for PreToolUseConfig {
                 "vcs_conflicts".to_owned(),
                 "tool_policy".to_owned(),
             ],
-            vcs_conflicts_matcher: "run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check".to_owned(),
+            vcs_conflicts_matcher: ".*compile.*|.*build.*|.*test.*|.*check.*|run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check".to_owned(),
             custom_checks: Vec::new(),
+        }
+    }
+}
+
+/// Circuit breaker configuration from `hooks.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CircuitBreakerConfig {
+    pub(crate) max_strikes: usize,
+}
+
+impl Default for CircuitBreakerConfig {
+    fn default() -> Self {
+        Self {
+            max_strikes: agy_common::CircuitBreakerLedger::DEFAULT_MAX_STRIKES,
         }
     }
 }
@@ -43,6 +57,7 @@ impl Default for PreToolUseConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HooksConfig {
     pub(crate) pre_tool_use: PreToolUseConfig,
+    pub(crate) circuit_breaker: CircuitBreakerConfig,
 }
 
 impl HooksConfig {
@@ -240,6 +255,10 @@ fn apply_string_field(
 ) {
     if section == "pre_tool_use" && key == "vcs_conflicts_matcher" {
         val.clone_into(&mut config.pre_tool_use.vcs_conflicts_matcher);
+    } else if section == "circuit_breaker" && key == "max_strikes" {
+        if let Ok(m) = val.parse::<usize>() {
+            config.circuit_breaker.max_strikes = m;
+        }
     } else if section == "custom_check"
         && let Some(check) = current_check
     {

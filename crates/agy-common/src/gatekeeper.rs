@@ -4,6 +4,8 @@
 
 use std::path::Path;
 use std::process::Command;
+use crate::project::ProjectConfig;
+use crate::supervisor::SubprocessSupervisor;
 
 /// Validation check outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -19,9 +21,71 @@ pub enum GateCheckStatus {
 /// A modular validation rule.
 pub trait GateCheck: Send + Sync {
     /// Human-readable identifier of the check.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> &str;
     /// Executes the check against the given workspace root directory.
     fn execute(&self, workspace_root: &Path) -> GateCheckStatus;
+}
+
+/// A declarative gate check backed by a command defined in `project.toml`.
+#[derive(Debug, Clone)]
+pub struct ProjectGateCheck {
+    name: String,
+    command: Vec<String>,
+    timeout_seconds: u64,
+    failure_message: Option<String>,
+}
+
+impl ProjectGateCheck {
+    /// Constructs a new `ProjectGateCheck`.
+    #[must_use]
+    pub fn new(
+        name: impl Into<String>,
+        command: Vec<String>,
+        timeout_seconds: u64,
+        failure_message: Option<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            command,
+            timeout_seconds,
+            failure_message,
+        }
+    }
+}
+
+impl GateCheck for ProjectGateCheck {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
+        let Some(binary) = self.command.first() else {
+            return GateCheckStatus::Passed;
+        };
+        let args = self.command.get(1..).unwrap_or(&[]);
+
+        let mut cmd = Command::new(binary);
+        cmd.args(args);
+        cmd.current_dir(workspace_root);
+
+        match SubprocessSupervisor::run_supervised(cmd, self.timeout_seconds) {
+            Ok(out) => {
+                if out.status.success() {
+                    GateCheckStatus::Passed
+                } else {
+                    let stderr = String::from_utf8_lossy(&out.stderr);
+                    let stdout = String::from_utf8_lossy(&out.stdout);
+                    let raw = format!("{stdout}\n{stderr}");
+                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(25).collect();
+                    let diag = truncated.join("\n");
+                    let default_msg = format!("Gate '{}' failed (`{}`).", self.name, self.command.join(" "));
+                    let msg = self.failure_message.as_deref().unwrap_or(&default_msg);
+                    GateCheckStatus::Failed(format!("{msg}\n\n[Diagnostic Output]:\n{diag}"))
+                }
+            }
+            Err(e) => GateCheckStatus::Failed(format!("Failed to execute gate '{}': {e}", self.name)),
+        }
+    }
 }
 
 /// Validates that the project compiles cleanly (`cargo check --all-targets`).
@@ -29,7 +93,8 @@ pub trait GateCheck: Send + Sync {
 pub struct CargoCompilationCheck;
 
 impl GateCheck for CargoCompilationCheck {
-    fn name(&self) -> &'static str {
+    #[allow(clippy::unnecessary_literal_bound, reason = "Fulfills GateCheck trait returning &str")]
+    fn name(&self) -> &str {
         "Cargo Compilation Check"
     }
 
@@ -38,12 +103,11 @@ impl GateCheck for CargoCompilationCheck {
             return GateCheckStatus::Passed;
         }
 
-        let output = Command::new("cargo")
-            .args(["check", "--all-targets"])
-            .current_dir(workspace_root)
-            .output();
+        let mut cmd = Command::new("cargo");
+        cmd.args(["check", "--all-targets"]);
+        cmd.current_dir(workspace_root);
 
-        match output {
+        match SubprocessSupervisor::run_supervised(cmd, 30) {
             Ok(out) => {
                 if out.status.success() {
                     GateCheckStatus::Passed
@@ -70,7 +134,8 @@ impl GateCheck for CargoCompilationCheck {
 pub struct CargoTestCompilationCheck;
 
 impl GateCheck for CargoTestCompilationCheck {
-    fn name(&self) -> &'static str {
+    #[allow(clippy::unnecessary_literal_bound, reason = "Fulfills GateCheck trait returning &str")]
+    fn name(&self) -> &str {
         "Cargo Test Harness Compilation Check"
     }
 
@@ -79,12 +144,11 @@ impl GateCheck for CargoTestCompilationCheck {
             return GateCheckStatus::Passed;
         }
 
-        let output = Command::new("cargo")
-            .args(["test", "--no-run"])
-            .current_dir(workspace_root)
-            .output();
+        let mut cmd = Command::new("cargo");
+        cmd.args(["test", "--no-run"]);
+        cmd.current_dir(workspace_root);
 
-        match output {
+        match SubprocessSupervisor::run_supervised(cmd, 45) {
             Ok(out) => {
                 if out.status.success() {
                     GateCheckStatus::Passed
@@ -159,20 +223,65 @@ impl GateCheck for VcsConflictCheck {
 /// Evaluates pre-flight admission checks specified by name.
 ///
 /// Recognized check names:
-/// - `"cargo_compilation"` | `"cargo_check"` -> `CargoCompilationCheck`
-/// - `"test_compilation"` | `"cargo_test_compilation"` -> `CargoTestCompilationCheck`
+/// - `"cargo_compilation"` | `"cargo_check"` | `"compilation"` -> `ProjectGateCheck` (or `CargoCompilationCheck`)
+/// - `"test_compilation"` | `"cargo_test_compilation"` | `"tests"` -> `ProjectGateCheck` (or `CargoTestCompilationCheck`)
 /// - `"vcs_conflicts"` | `"conflicts"` -> `VcsConflictCheck`
+/// - `"linter"` | `"clippy"` -> `ProjectGateCheck` (linter gate)
+/// - Any custom gate name defined in `project.toml [gates.<name>]`
 ///
 /// # Errors
 /// Returns a list of blocking failure diagnostics if any mandatory check fails.
 pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -> Result<Vec<String>, Vec<String>> {
+    let project = ProjectConfig::detect_or_load(workspace_root);
     let mut checks: Vec<Box<dyn GateCheck>> = Vec::new();
+
     for name in check_names {
         match *name {
-            "cargo_compilation" | "cargo_check" => checks.push(Box::new(CargoCompilationCheck)),
-            "test_compilation" | "cargo_test_compilation" => checks.push(Box::new(CargoTestCompilationCheck)),
             "vcs_conflicts" | "conflicts" => checks.push(Box::new(VcsConflictCheck)),
-            _ => {}
+            "cargo_compilation" | "cargo_check" | "compilation" => {
+                if let Some(gate) = project.gates.get("compilation") {
+                    checks.push(Box::new(ProjectGateCheck::new(
+                        "Compilation Check",
+                        gate.command.clone(),
+                        gate.timeout_seconds,
+                        gate.failure_message.clone(),
+                    )));
+                } else {
+                    checks.push(Box::new(CargoCompilationCheck));
+                }
+            }
+            "test_compilation" | "cargo_test_compilation" | "tests" => {
+                if let Some(gate) = project.gates.get("tests") {
+                    checks.push(Box::new(ProjectGateCheck::new(
+                        "Test Compilation Check",
+                        gate.command.clone(),
+                        gate.timeout_seconds,
+                        gate.failure_message.clone(),
+                    )));
+                } else {
+                    checks.push(Box::new(CargoTestCompilationCheck));
+                }
+            }
+            "linter" | "clippy" => {
+                if let Some(gate) = project.gates.get("linter") {
+                    checks.push(Box::new(ProjectGateCheck::new(
+                        "Linter Check",
+                        gate.command.clone(),
+                        gate.timeout_seconds,
+                        gate.failure_message.clone(),
+                    )));
+                }
+            }
+            custom => {
+                if let Some(gate) = project.gates.get(custom) {
+                    checks.push(Box::new(ProjectGateCheck::new(
+                        custom.to_owned(),
+                        gate.command.clone(),
+                        gate.timeout_seconds,
+                        gate.failure_message.clone(),
+                    )));
+                }
+            }
         }
     }
 

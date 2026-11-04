@@ -32,9 +32,15 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
 
     let tool_name = tc.name.as_str();
 
-    // 0. Circuit Breaker Sentry: If 2 consecutive failures occurred, all mutating tools require explicit confirmation
-    let ledger = CircuitBreakerLedger::load(root);
-    if ledger.tripped && is_mutating_tool(tool_name, root) {
+    // 0. Circuit Breaker Sentry: If consecutive failures exceed threshold, all mutating tools require explicit confirmation
+    let mut ledger = CircuitBreakerLedger::load(root);
+    let hooks_cfg = crate::config::HooksConfig::load(root);
+    if hooks_cfg.circuit_breaker.max_strikes > 0 {
+        ledger.max_strikes = hooks_cfg.circuit_breaker.max_strikes;
+    }
+    if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
+        && is_mutating_tool(tool_name, root)
+    {
         return PreToolResponse::ask(format!(
             "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
              Last Error: {}\n\

@@ -138,7 +138,7 @@ pub fn build_bubblewrap_command(
     cmd.args(["--proc", "/proc", "--dev", "/dev"]);
 
     // If workspace_root is an isolated subagent workspace (e.g. .agy/workspaces/<agent>),
-    // mount the repo root and shared target cache so symlinks resolve correctly in bwrap
+    // mount the repo root and shared build caches so symlinks resolve correctly in bwrap
     let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
         .unwrap_or_else(|_| workspace_root.to_path_buf());
 
@@ -147,11 +147,11 @@ pub fn build_bubblewrap_command(
         cmd.arg(&repo_root);
         cmd.arg(&repo_root);
 
-        let shared_target = repo_root.join("target");
-        if shared_target.is_dir() {
+        let project = crate::project::ProjectConfig::detect_or_load(&repo_root);
+        for cache_bind in project.resolved_cache_binds(&repo_root) {
             cmd.args(["--bind"]);
-            cmd.arg(&shared_target);
-            cmd.arg(&shared_target);
+            cmd.arg(&cache_bind);
+            cmd.arg(&cache_bind);
         }
     }
 

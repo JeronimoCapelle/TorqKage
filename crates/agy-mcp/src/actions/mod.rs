@@ -220,12 +220,22 @@ fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> R
     if tool.require_git_clean() {
         check_git_clean(workspace_root)?;
     }
-    if tool.require_clippy_clean() {
-        check_clippy_clean(workspace_root)?;
+
+    let required_gates = tool.required_gates();
+    if !required_gates.is_empty() {
+        let gate_names: Vec<&str> = required_gates.iter().map(String::as_str).collect();
+        match agy_common::gatekeeper::evaluate_pre_flight_checks(workspace_root, &gate_names) {
+            Ok(_warnings) => {}
+            Err(errors) => {
+                return Err(format!(
+                    "Pre-flight gate check failed for tool '{}':\n{}",
+                    tool.name,
+                    errors.join("\n\n")
+                ));
+            }
+        }
     }
-    if tool.require_tests_passed() {
-        check_tests_passed(workspace_root)?;
-    }
+
     Ok(())
 }
 
@@ -238,10 +248,10 @@ fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
     }
 
     if workspace_root.join(".git").exists() {
-        let git_out = Command::new("git")
-            .args(["status", "--porcelain"])
-            .current_dir(workspace_root)
-            .output();
+        let mut cmd = Command::new("git");
+        cmd.args(["status", "--porcelain"]);
+        cmd.current_dir(workspace_root);
+        let git_out = SubprocessSupervisor::run_supervised(cmd, 10);
 
         if let Ok(gout) = git_out
             && gout.status.success()
@@ -251,40 +261,6 @@ fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
         }
     }
 
-    Ok(())
-}
-
-fn check_clippy_clean(workspace_root: &Path) -> Result<(), String> {
-    if !workspace_root.join("Cargo.toml").is_file() {
-        return Ok(());
-    }
-
-    let output = Command::new("cargo")
-        .args(["clippy", "--all-targets", "--", "-D", "warnings"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|err| format!("Failed to spawn cargo clippy gate: {err}"))?;
-
-    if !output.status.success() {
-        return Err("Pre-flight gate failed: 'require_clippy_clean' is enabled, but cargo clippy reported warnings or errors.".to_owned());
-    }
-    Ok(())
-}
-
-fn check_tests_passed(workspace_root: &Path) -> Result<(), String> {
-    if !workspace_root.join("Cargo.toml").is_file() {
-        return Ok(());
-    }
-
-    let output = Command::new("cargo")
-        .args(["test", "--no-fail-fast"])
-        .current_dir(workspace_root)
-        .output()
-        .map_err(|err| format!("Failed to spawn cargo test gate: {err}"))?;
-
-    if !output.status.success() {
-        return Err("Pre-flight gate failed: 'require_tests_passed' is enabled, but test suites reported failures.".to_owned());
-    }
     Ok(())
 }
 
@@ -360,6 +336,7 @@ mod tests {
                 require_git_clean: true,
                 require_clippy_clean: true,
                 require_tests_passed: true,
+                ..Default::default()
             },
             ..Default::default()
         };

@@ -485,16 +485,29 @@ impl CircuitBreakerLedger {
 
     #[must_use]
     pub fn new(agent: impl Into<String>) -> Self {
+        Self::new_with_max_strikes(agent, Self::DEFAULT_MAX_STRIKES)
+    }
+
+    /// Constructs a new ledger with a custom maximum strike threshold.
+    #[must_use]
+    pub fn new_with_max_strikes(agent: impl Into<String>, max_strikes: usize) -> Self {
         Self {
             agent: agent.into(),
             consecutive_failures: 0,
-            max_strikes: Self::DEFAULT_MAX_STRIKES,
+            max_strikes,
             tripped: false,
             last_error_signature: None,
             last_error_details: None,
             last_tool: None,
             last_updated: format!("{}", jiff::Timestamp::now()),
         }
+    }
+
+    /// Sets a custom maximum strike threshold on the ledger.
+    #[must_use]
+    pub const fn with_max_strikes(mut self, max_strikes: usize) -> Self {
+        self.max_strikes = max_strikes;
+        self
     }
 
     /// Loads the circuit breaker state from `.agy/state/circuit_breaker.json`.
