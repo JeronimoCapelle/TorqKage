@@ -280,8 +280,10 @@ pub(crate) fn update_tool_permission_gate_in_file(
 
     if let Some(gate_idx) = found_gate_line {
         if require_gate {
-            "require_permission_gate = true".clone_into(&mut lines[gate_idx]);
-        } else {
+            if let Some(line) = lines.get_mut(gate_idx) {
+                "require_permission_gate = true".clone_into(line);
+            }
+        } else if gate_idx < lines.len() {
             lines.remove(gate_idx);
         }
     } else if require_gate

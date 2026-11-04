@@ -1,5 +1,8 @@
 //! Ratatui terminal rendering routines for the agy-ctrl control deck.
 
+#![allow(clippy::indexing_slicing, reason = "Ratatui layout splits produce fixed-length chunk slices")]
+#![allow(clippy::too_many_lines, reason = "Terminal UI rendering pipelines for multi-pane layouts")]
+
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};

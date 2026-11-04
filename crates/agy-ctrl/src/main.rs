@@ -17,10 +17,7 @@
 
 #![allow(clippy::print_stdout, reason = "CLI summary flags emit output to stdout")]
 #![allow(clippy::print_stderr, reason = "CLI error diagnostics emit output to stderr")]
-#![allow(clippy::indexing_slicing, reason = "Ratatui layout splits produce fixed-length chunk slices")]
-#![allow(clippy::too_many_lines, reason = "Ratatui rendering pipelines for multi-pane terminal views")]
 #![allow(clippy::format_push_string, reason = "Convenient markdown and diagnostic generation")]
-#![allow(clippy::struct_excessive_bools, reason = "Mirrors declarative tools.toml and manifest schemas")]
 
 mod app;
 mod installer;
