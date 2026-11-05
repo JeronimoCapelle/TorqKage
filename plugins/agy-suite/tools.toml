@@ -81,6 +81,62 @@
 # ==============================================================================
 
 # ==============================================================================
+# CATEGORY DEFAULTS (Shared defaults applied to all tools declaring a category)
+# ==============================================================================
+# The Category System provides multi-tier declarative inheritance:
+#   [categories.<name>]  -->  [base_tools.<name>]  -->  [tools.<name>]
+#
+# Rules:
+#   1. Tools declaring `category = "<name>"` inherit all category attributes
+#      (e.g. `tracks_circuit_breaker`, `require_gates`, `timeout_seconds`).
+#   2. Gate Accumulation & Selective Opt-Out:
+#      - Category `require_gates` are automatically inherited by all member tools.
+#      - Concrete tools can add extra gates: `require_gates = ["extra_gate"]`.
+#      - Concrete tools can selectively opt out: `skip_gates = ["vcs_conflicts"]`.
+#      - Concrete tools can bypass all gates: `skip_gates = ["*"]` or `["all"]`.
+#   3. Attribute Precedence:
+#      - Concrete tool > Base tool template > Category defaults.
+
+[categories.compilation]
+category = "compilation"
+tracks_circuit_breaker = true
+require_gates = ["vcs_conflicts"]
+timeout_seconds = 120
+
+[categories.testing]
+category = "testing"
+tracks_circuit_breaker = true
+require_gates = ["vcs_conflicts"]
+timeout_seconds = 180
+
+[categories.release]
+category = "release"
+tracks_circuit_breaker = true
+require_gates = ["vcs_conflicts"]
+timeout_seconds = 300
+
+[categories.filesystem]
+category = "filesystem"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+timeout_seconds = 15
+
+[categories.diagnostics]
+category = "diagnostics"
+timeout_seconds = 30
+
+[categories.documentation]
+category = "documentation"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+timeout_seconds = 15
+
+[categories.profiling]
+category = "profiling"
+timeout_seconds = 180
+
+
+# ==============================================================================
 # BASE TOOL TEMPLATES (Abstract engines inherited by concrete scoped tools)
 # ==============================================================================
 

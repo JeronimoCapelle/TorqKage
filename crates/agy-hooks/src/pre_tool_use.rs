@@ -74,7 +74,11 @@ pub(crate) fn evaluate_pre_tool_use(
                 }
             }
             "vcs_conflicts" => {
-                if matches_pattern(tool_name, &config.pre_tool_use.vcs_conflicts_matcher)
+                let requires_conflict_check = policy_gate::tool_requires_gate(tool_name, root, "vcs_conflicts")
+                    || (!config.pre_tool_use.vcs_conflicts_matcher.is_empty()
+                        && matches_pattern(tool_name, &config.pre_tool_use.vcs_conflicts_matcher));
+
+                if requires_conflict_check
                     && let Some(reason) = conflicts::detect_conflicts(root)
                 {
                     return PreToolResponse::deny(reason);
@@ -100,7 +104,10 @@ pub(crate) fn evaluate_pre_tool_use(
 
     // 2. Evaluate declarative custom checks
     for check in &config.pre_tool_use.custom_checks {
-        if matches_pattern(tool_name, &check.matcher)
+        let matches = policy_gate::tool_requires_gate(tool_name, root, &check.name)
+            || (!check.matcher.is_empty() && matches_pattern(tool_name, &check.matcher));
+
+        if matches
             && let Some(resp) = execute_custom_check(check, root)
         {
             return resp;
@@ -201,5 +208,68 @@ mod tests {
         let res = evaluate_pre_tool_use(&input, Path::new("."), &config);
         assert_eq!(res.decision, HookDecision::Deny);
         assert!(res.reason.unwrap().contains("Simulated custom check failure"));
+    }
+
+    #[test]
+    fn test_explicit_category_gate_triggers_vcs_conflicts_with_empty_matcher() {
+        let temp_dir = std::env::temp_dir().join(format!("gate_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        drop(std::fs::create_dir_all(&temp_dir));
+        drop(std::fs::write(
+            temp_dir.join("tools.toml"),
+            r#"
+[categories.compilation]
+require_gates = ["vcs_conflicts", "custom_sentinel"]
+
+[tools.my_compiler]
+category = "compilation"
+
+[tools.my_unfettered_tool]
+category = "compilation"
+skip_gates = ["vcs_conflicts", "custom_sentinel"]
+"#,
+        ));
+
+        // Verify policy_gate resolves category gates & skip_gates from tools.toml on disk
+        assert!(policy_gate::tool_requires_gate("my_compiler", &temp_dir, "vcs_conflicts"));
+        assert!(policy_gate::tool_requires_gate("my_compiler", &temp_dir, "custom_sentinel"));
+        assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "vcs_conflicts"));
+        assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "custom_sentinel"));
+
+        // PreToolUse custom check with EMPTY matcher triggers purely via require_gates
+        let mut config = HooksConfig::default();
+        config.pre_tool_use.vcs_conflicts_matcher = String::new();
+        config.pre_tool_use.custom_checks.push(CustomCheck {
+            name: "custom_sentinel".to_owned(),
+            matcher: String::new(),
+            command: vec!["echo".to_owned(), "GATE_TRIGGERED".to_owned()],
+            fail_if_output_contains: Some("GATE_TRIGGERED".to_owned()),
+            decision: HookDecision::Deny,
+            reason: "Custom sentinel gate blocked execution".to_owned(),
+        });
+
+        let input_gated = PreToolUseInput {
+            tool_call: Some(ToolCallPayload {
+                name: "my_compiler".to_owned(),
+                args: json!({}),
+            }),
+            ..Default::default()
+        };
+
+        let res_gated = evaluate_pre_tool_use(&input_gated, &temp_dir, &config);
+        assert_eq!(res_gated.decision, HookDecision::Deny);
+        assert!(res_gated.reason.unwrap().contains("Custom sentinel gate blocked execution"));
+
+        let input_skipped = PreToolUseInput {
+            tool_call: Some(ToolCallPayload {
+                name: "my_unfettered_tool".to_owned(),
+                args: json!({}),
+            }),
+            ..Default::default()
+        };
+
+        let res_skipped = evaluate_pre_tool_use(&input_skipped, &temp_dir, &config);
+        assert_eq!(res_skipped.decision, HookDecision::Allow);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }

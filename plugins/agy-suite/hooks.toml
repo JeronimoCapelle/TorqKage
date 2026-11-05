@@ -68,10 +68,27 @@ pipeline = [
     "tool_policy",
 ]
 
-# Matcher regex pattern for tools that trigger the `vcs_conflicts` guard.
-# Tools matching this pattern will be blocked if conflict markers exist on disk.
-# Supports regex syntax, pipe separation '|', and wildcard prefixes.
-vcs_conflicts_matcher = ".*compile.*|.*build.*|.*test.*|.*check.*|run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check"
+# Gate Requirements & VCS Conflicts Matcher:
+# ------------------------------------------
+# Tools now explicitly declare their required gates in `tools.toml` (e.g.
+# `require_gates = ["vcs_conflicts"]`), either at the category level
+# (e.g. `[categories.compilation]`, `[categories.testing]`, `[categories.release]`)
+# or directly on individual tool declarations.
+#
+# Available Native Gates:
+#   - "vcs_conflicts":     Blocks execution if Git or Jujutsu merge conflict markers exist.
+#   - "circuit_breaker":   Blocks mutating tools when strike threshold is exceeded.
+#   - "manifest_guard":    Blocks mutations to protected project manifests/build scripts.
+#   - "subagent_admission": Validates admission gates before launching subagents.
+#   - "tool_policy":       Requires interactive confirmation for mutating or gated tools.
+#
+# Available Custom Gates:
+#   - Any custom check name declared below in `[[pre_tool_use.custom_checks]]`.
+#   - Any compiler gate defined in `project.toml` (`[gates.<name>]`).
+#
+# `vcs_conflicts_matcher` is preserved as an optional legacy fallback regex pattern.
+# Leaving it empty `""` delegates gate enforcement directly and declaratively to `tools.toml`.
+vcs_conflicts_matcher = ""
 
 
 # ------------------------------------------------------------------------------

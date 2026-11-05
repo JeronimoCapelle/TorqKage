@@ -1,5 +1,6 @@
 //! Granular tool-level permission policy enforcement (`enforce-tool-policy`).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use agy_common::{CircuitBreakerLedger, PreToolResponse, PreToolUseInput, WorkspaceResolver};
 
@@ -69,18 +70,245 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     PreToolResponse::allow()
 }
 
-/// Checks whether a tool is declared as a mutating tool in declarative configuration.
-pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
-    check_tool_attribute_in_config(tool_name, root, "mutating")
+/// Raw representation of a tool, base tool, or category entry parsed from `tools.toml`.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ParsedToolEntry {
+    pub(crate) inherit: Option<String>,
+    pub(crate) category: Option<String>,
+    pub(crate) mutating: Option<bool>,
+    pub(crate) tracks_circuit_breaker: Option<bool>,
+    pub(crate) require_permission_gate: Option<bool>,
+    pub(crate) require_gates: Vec<String>,
+    pub(crate) skip_gates: Vec<String>,
 }
 
-/// Inspects tools.toml (if present) for `require_permission_gate = true`.
-pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
-    check_tool_attribute_in_config(tool_name, root, "require_permission_gate")
+/// Lightweight container for tools, base tools, and category templates parsed from `tools.toml`.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ParsedToolsConfig {
+    pub(crate) tools: HashMap<String, ParsedToolEntry>,
+    pub(crate) base_tools: HashMap<String, ParsedToolEntry>,
+    pub(crate) categories: HashMap<String, ParsedToolEntry>,
 }
 
-/// Inspects tools.toml files across workspace and plugin installations for a boolean flag.
-fn check_tool_attribute_in_config(tool_name: &str, root: &Path, attribute: &str) -> bool {
+impl ParsedToolsConfig {
+    /// Parses a `tools.toml` content string into structured tool and category definitions.
+    #[must_use]
+    pub(crate) fn from_str(content: &str) -> Self {
+        let mut config = Self::default();
+        let mut current_section: Option<(&str, String)> = None;
+        let mut lines = content.lines();
+
+        while let Some(line) = lines.next() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+
+            if let Some(inside) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
+                if let Some((kind, name)) = inside.split_once('.') {
+                    let k = kind.trim();
+                    let n = name.trim().to_owned();
+                    match k {
+                        "tools" => current_section = Some(("tools", n)),
+                        "base_tools" => current_section = Some(("base_tools", n)),
+                        "categories" => current_section = Some(("categories", n)),
+                        _ => current_section = None,
+                    }
+                } else {
+                    current_section = None;
+                }
+                continue;
+            }
+
+            let Some((kind, ref section_name)) = current_section else {
+                continue;
+            };
+
+            let Some((key_part, val_part)) = trimmed.split_once('=') else {
+                continue;
+            };
+
+            let key = key_part.trim();
+            let mut val_str = val_part.trim().to_owned();
+
+            if val_str.starts_with('[') && !val_str.contains(']') {
+                for next_line in lines.by_ref() {
+                    let next_trimmed = next_line.trim();
+                    val_str.push(' ');
+                    val_str.push_str(next_trimmed);
+                    if next_trimmed.contains(']') {
+                        break;
+                    }
+                }
+            }
+
+            let clean_val = strip_trailing_comment(&val_str);
+
+            let entry = match kind {
+                "tools" => config.tools.entry(section_name.clone()).or_default(),
+                "base_tools" => config.base_tools.entry(section_name.clone()).or_default(),
+                "categories" => config.categories.entry(section_name.clone()).or_default(),
+                _ => continue,
+            };
+
+            match key {
+                "inherit" => {
+                    let clean = clean_val.trim().trim_matches(['"', '\'']);
+                    let target = clean.strip_prefix("base_tools.").unwrap_or(clean);
+                    entry.inherit = Some(target.to_owned());
+                }
+                "category" => {
+                    let clean = clean_val.trim().trim_matches(['"', '\'']);
+                    let target = clean.strip_prefix("categories.").unwrap_or(clean);
+                    entry.category = Some(target.to_owned());
+                }
+                "mutating" => {
+                    entry.mutating = Some(clean_val.trim() == "true");
+                }
+                "tracks_circuit_breaker" => {
+                    entry.tracks_circuit_breaker = Some(clean_val.trim() == "true");
+                }
+                "require_permission_gate" => {
+                    entry.require_permission_gate = Some(clean_val.trim() == "true");
+                }
+                "require_gates" => {
+                    entry.require_gates = parse_string_array(&clean_val);
+                }
+                "skip_gates" => {
+                    entry.skip_gates = parse_string_array(&clean_val);
+                }
+                _ => {}
+            }
+        }
+
+        config
+    }
+
+    /// Checks if a tool resolves a boolean attribute to true across concrete, base, and category tiers.
+    #[must_use]
+    pub(crate) fn is_tool_attribute(&self, tool_name: &str, attr: &str) -> bool {
+        let Some(tool) = self.tools.get(tool_name) else {
+            return false;
+        };
+
+        let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
+        let cat_name = tool.category.as_deref().or_else(|| base?.category.as_deref());
+        let category = cat_name.and_then(|c| self.categories.get(c));
+
+        match attr {
+            "mutating" => tool.mutating
+                .or_else(|| base?.mutating)
+                .or_else(|| category?.mutating)
+                .unwrap_or(false),
+            "tracks_circuit_breaker" => tool.tracks_circuit_breaker
+                .or_else(|| base?.tracks_circuit_breaker)
+                .or_else(|| category?.tracks_circuit_breaker)
+                .unwrap_or(false),
+            "require_permission_gate" => tool.require_permission_gate
+                .or_else(|| base?.require_permission_gate)
+                .or_else(|| category?.require_permission_gate)
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+
+    /// Evaluates whether a tool requires a specific gate after category inheritance and skip filtering.
+    #[must_use]
+    pub(crate) fn tool_requires_gate(&self, tool_name: &str, gate_name: &str) -> bool {
+        let Some(tool) = self.tools.get(tool_name) else {
+            return false;
+        };
+
+        let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
+        let cat_name = tool.category.as_deref().or_else(|| base?.category.as_deref());
+        let category = cat_name.and_then(|c| self.categories.get(c));
+
+        let mut gates = Vec::new();
+        if let Some(cat) = category {
+            for g in &cat.require_gates {
+                if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+                    gates.push(g.clone());
+                }
+            }
+        }
+        if let Some(b) = base {
+            for g in &b.require_gates {
+                if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+                    gates.push(g.clone());
+                }
+            }
+        }
+        for g in &tool.require_gates {
+            if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+                gates.push(g.clone());
+            }
+        }
+
+        let mut skip_gates = Vec::new();
+        if let Some(cat) = category {
+            skip_gates.extend(cat.skip_gates.clone());
+        }
+        if let Some(b) = base {
+            skip_gates.extend(b.skip_gates.clone());
+        }
+        skip_gates.extend(tool.skip_gates.clone());
+
+        if skip_gates.iter().any(|s| s == "*" || s.eq_ignore_ascii_case("all")) {
+            return false;
+        }
+
+        gates.retain(|g| !skip_gates.iter().any(|s| s.eq_ignore_ascii_case(g)));
+
+        gates.iter().any(|g| g.eq_ignore_ascii_case(gate_name))
+    }
+}
+
+fn strip_trailing_comment(s: &str) -> String {
+    let mut in_quote = false;
+    let mut quote_char = '"';
+    let mut out = String::new();
+    for c in s.chars() {
+        if in_quote {
+            if c == quote_char {
+                in_quote = false;
+            }
+            out.push(c);
+        } else if c == '"' || c == '\'' {
+            in_quote = true;
+            quote_char = c;
+            out.push(c);
+        } else if c == '#' {
+            break;
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+fn parse_string_array(s: &str) -> Vec<String> {
+    let mut items = Vec::new();
+    let mut in_quote = false;
+    let mut quote_char = '"';
+    let mut current = String::new();
+
+    for c in s.chars() {
+        if in_quote {
+            if c == quote_char {
+                in_quote = false;
+                items.push(std::mem::take(&mut current));
+            } else {
+                current.push(c);
+            }
+        } else if c == '"' || c == '\'' {
+            in_quote = true;
+            quote_char = c;
+        }
+    }
+    items
+}
+
+fn find_config_for_tool(tool_name: &str, root: &Path) -> Option<ParsedToolsConfig> {
     let ws_root = WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
     let mut candidates = vec![
         root.join("tools.toml"),
@@ -96,48 +324,77 @@ fn check_tool_attribute_in_config(tool_name: &str, root: &Path, attribute: &str)
     for path in candidates {
         if path.is_file()
             && let Ok(content) = std::fs::read_to_string(&path)
-            && check_section_attribute(&content, &format!("[tools.{tool_name}]"), attribute)
         {
-            return true;
+            let parsed = ParsedToolsConfig::from_str(&content);
+            if parsed.tools.contains_key(tool_name) {
+                return Some(parsed);
+            }
         }
     }
 
-    false
+    None
 }
 
-fn check_section_attribute(content: &str, section_header: &str, attribute: &str) -> bool {
-    let mut in_section = false;
-    let mut inherit_target = None;
+/// Checks whether a tool is declared as a mutating tool in declarative configuration.
+pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
+    find_config_for_tool(tool_name, root)
+        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "mutating"))
+}
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed == section_header {
-            in_section = true;
-            continue;
-        }
-        if in_section {
-            if trimmed.starts_with('[') {
-                break;
-            }
-            if let Some((key, val)) = trimmed.split_once('=') {
-                let k = key.trim();
-                let v = val.trim().trim_matches(['"', '\'']);
-                if k == attribute && v == "true" {
-                    return true;
+/// Inspects tools.toml (if present) for `require_permission_gate = true`.
+pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
+    find_config_for_tool(tool_name, root)
+        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "require_permission_gate"))
+}
+
+/// Evaluates whether a tool requires a specific gate before execution.
+#[must_use]
+pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) -> bool {
+    find_config_for_tool(tool_name, root)
+        .is_some_and(|cfg| cfg.tool_requires_gate(tool_name, gate_name))
+}
+
+/// Evaluates whether a tool failure tracks strikes against the circuit breaker ledger.
+#[must_use]
+#[allow(dead_code, reason = "Declarative query utility for circuit breaker policy")]
+pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool {
+    find_config_for_tool(tool_name, root)
+        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "tracks_circuit_breaker"))
+}
+
+/// Checks an attribute for a section header string in raw TOML content (helper & test compatibility).
+#[must_use]
+#[allow(dead_code, reason = "Legacy attribute checker preserved for tests and backward compatibility")]
+pub(crate) fn check_section_attribute(content: &str, section_header: &str, attribute: &str) -> bool {
+    let clean = section_header.trim().trim_start_matches('[').trim_end_matches(']');
+    let config = ParsedToolsConfig::from_str(content);
+    if let Some((kind, name)) = clean.split_once('.') {
+        match kind {
+            "tools" => config.is_tool_attribute(name, attribute),
+            "base_tools" => {
+                let entry = config.base_tools.get(name);
+                let cat = entry.and_then(|e| e.category.as_deref()).and_then(|c| config.categories.get(c));
+                match attribute {
+                    "mutating" => entry.and_then(|e| e.mutating).or_else(|| cat?.mutating).unwrap_or(false),
+                    "tracks_circuit_breaker" => entry.and_then(|e| e.tracks_circuit_breaker).or_else(|| cat?.tracks_circuit_breaker).unwrap_or(false),
+                    "require_permission_gate" => entry.and_then(|e| e.require_permission_gate).or_else(|| cat?.require_permission_gate).unwrap_or(false),
+                    _ => false,
                 }
-                if k == "inherit" {
-                    let clean_target = v.strip_prefix("base_tools.").unwrap_or(v);
-                    inherit_target = Some(clean_target.to_owned());
+            }
+            "categories" => {
+                let entry = config.categories.get(name);
+                match attribute {
+                    "mutating" => entry.and_then(|e| e.mutating).unwrap_or(false),
+                    "tracks_circuit_breaker" => entry.and_then(|e| e.tracks_circuit_breaker).unwrap_or(false),
+                    "require_permission_gate" => entry.and_then(|e| e.require_permission_gate).unwrap_or(false),
+                    _ => false,
                 }
             }
+            _ => false,
         }
+    } else {
+        false
     }
-
-    if let Some(base_name) = inherit_target {
-        return check_section_attribute(content, &format!("[base_tools.{base_name}]"), attribute);
-    }
-
-    false
 }
 
 #[cfg(test)]
@@ -255,5 +512,50 @@ action = "static_command"
 "#;
         assert!(check_section_attribute(sample, "[tools.child_tool]", "mutating"));
         assert!(!check_section_attribute(sample, "[tools.child_tool]", "require_permission_gate"));
+    }
+
+    #[test]
+    fn test_category_inheritance_and_gates() {
+        let sample = r#"
+[categories.compilation]
+tracks_circuit_breaker = true
+require_gates = ["vcs_conflicts"]
+
+[base_tools.cargo_runner]
+category = "compilation"
+action = "static_command"
+
+[tools.clippy]
+inherit = "base_tools.cargo_runner"
+require_gates = ["custom_lint"]
+
+[tools.special_check]
+inherit = "base_tools.cargo_runner"
+skip_gates = ["vcs_conflicts"]
+
+[tools.skip_all]
+category = "compilation"
+skip_gates = ["*"]
+
+[tools.unrelated]
+action = "file_read"
+"#;
+        let config = ParsedToolsConfig::from_str(sample);
+
+        // Tool 1: clippy inherits category "compilation" from base_tools.cargo_runner
+        assert!(config.is_tool_attribute("clippy", "tracks_circuit_breaker"));
+        assert!(config.tool_requires_gate("clippy", "vcs_conflicts"));
+        assert!(config.tool_requires_gate("clippy", "custom_lint"));
+        assert!(!config.tool_requires_gate("clippy", "other_gate"));
+
+        // Tool 2: special_check skips vcs_conflicts
+        assert!(config.is_tool_attribute("special_check", "tracks_circuit_breaker"));
+        assert!(!config.tool_requires_gate("special_check", "vcs_conflicts"));
+
+        // Tool 3: skip_all skips all gates
+        assert!(!config.tool_requires_gate("skip_all", "vcs_conflicts"));
+
+        // Tool 4: unrelated has no gates
+        assert!(!config.tool_requires_gate("unrelated", "vcs_conflicts"));
     }
 }

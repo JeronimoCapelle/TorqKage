@@ -129,16 +129,19 @@ pub struct RawTool {
     pub require_clippy_clean: Option<bool>,
     pub require_tests_passed: Option<bool>,
     pub require_gates: Option<Vec<String>>,
+    pub skip_gates: Option<Vec<String>>,
     pub error_fallback: Option<String>,
     pub empty_fallback: Option<String>,
     pub success_exit_codes: Option<Vec<i32>>,
 }
 
-/// Configuration container holding base tools and resolved tools.
+/// Configuration container holding base tools, category defaults, and resolved tools.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct RawToolsConfig {
     #[serde(default)]
     pub base_tools: BTreeMap<String, RawTool>,
+    #[serde(default)]
+    pub categories: BTreeMap<String, RawTool>,
     #[serde(default)]
     pub tools: BTreeMap<String, RawTool>,
 }
@@ -263,59 +266,114 @@ impl ToolDefinition {
     }
 }
 
-/// Merges a raw tool definition with its optional base definition.
+/// Merges a raw tool definition with its optional category defaults and base definition.
 #[must_use]
-pub fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDefinition {
+pub fn merge_tool_with_category(
+    name: String,
+    category: Option<&RawTool>,
+    base: Option<&RawTool>,
+    raw: &RawTool,
+) -> ToolDefinition {
     let safety = ToolSafetyPolicy {
-        mutating: raw.mutating.or_else(|| base?.mutating).unwrap_or(false),
-        tracks_circuit_breaker: raw.tracks_circuit_breaker.or_else(|| base?.tracks_circuit_breaker).unwrap_or(false),
-        require_permission_gate: raw.require_permission_gate.or_else(|| base?.require_permission_gate).unwrap_or(false),
+        mutating: raw.mutating.or_else(|| base?.mutating).or_else(|| category?.mutating).unwrap_or(false),
+        tracks_circuit_breaker: raw.tracks_circuit_breaker.or_else(|| base?.tracks_circuit_breaker).or_else(|| category?.tracks_circuit_breaker).unwrap_or(false),
+        require_permission_gate: raw.require_permission_gate.or_else(|| base?.require_permission_gate).or_else(|| category?.require_permission_gate).unwrap_or(false),
     };
 
     let sandbox = ToolSandboxPolicy {
-        enforce_sandbox: raw.enforce_sandbox.or(raw.sandbox).or_else(|| base?.enforce_sandbox.or(base?.sandbox)).unwrap_or(false),
-        enforce_workspace_bounds: raw.enforce_workspace_bounds.or_else(|| base?.enforce_workspace_bounds).unwrap_or(false),
-        ban_dangerous_files: raw.ban_dangerous_files.or_else(|| base?.ban_dangerous_files).unwrap_or(false),
+        enforce_sandbox: raw.enforce_sandbox.or(raw.sandbox).or_else(|| base?.enforce_sandbox.or(base?.sandbox)).or_else(|| category?.enforce_sandbox.or(category?.sandbox)).unwrap_or(false),
+        enforce_workspace_bounds: raw.enforce_workspace_bounds.or_else(|| base?.enforce_workspace_bounds).or_else(|| category?.enforce_workspace_bounds).unwrap_or(false),
+        ban_dangerous_files: raw.ban_dangerous_files.or_else(|| base?.ban_dangerous_files).or_else(|| category?.ban_dangerous_files).unwrap_or(false),
     };
 
+    let mut gates = Vec::new();
+    if let Some(cat) = category
+        && let Some(ref cat_gates) = cat.require_gates
+    {
+        for g in cat_gates {
+            if !gates.contains(g) {
+                gates.push(g.clone());
+            }
+        }
+    }
+    if let Some(b) = base
+        && let Some(ref base_gates) = b.require_gates
+    {
+        for g in base_gates {
+            if !gates.contains(g) {
+                gates.push(g.clone());
+            }
+        }
+    }
+    if let Some(ref raw_gates) = raw.require_gates {
+        for g in raw_gates {
+            if !gates.contains(g) {
+                gates.push(g.clone());
+            }
+        }
+    }
+
+    let mut skip_set = Vec::new();
+    if let Some(b) = base
+        && let Some(ref base_skips) = b.skip_gates
+    {
+        skip_set.extend(base_skips.clone());
+    }
+    if let Some(ref raw_skips) = raw.skip_gates {
+        skip_set.extend(raw_skips.clone());
+    }
+
+    if skip_set.iter().any(|s| s == "*" || s.eq_ignore_ascii_case("all")) {
+        gates.clear();
+    } else {
+        gates.retain(|g| !skip_set.iter().any(|s| s.eq_ignore_ascii_case(g)));
+    }
+
     let preconditions = ToolPreconditions {
-        require_git_clean: raw.require_git_clean.or(raw.require_workspace_clean).or_else(|| base?.require_git_clean.or(base?.require_workspace_clean)).unwrap_or(false),
-        require_clippy_clean: raw.require_clippy_clean.or_else(|| base?.require_clippy_clean).unwrap_or(false),
-        require_tests_passed: raw.require_tests_passed.or_else(|| base?.require_tests_passed).unwrap_or(false),
-        require_gates: raw.require_gates.clone().or_else(|| base?.require_gates.clone()).unwrap_or_default(),
+        require_git_clean: raw.require_git_clean.or(raw.require_workspace_clean).or_else(|| base?.require_git_clean.or(base?.require_workspace_clean)).or_else(|| category?.require_git_clean.or(category?.require_workspace_clean)).unwrap_or(false),
+        require_clippy_clean: raw.require_clippy_clean.or_else(|| base?.require_clippy_clean).or_else(|| category?.require_clippy_clean).unwrap_or(false),
+        require_tests_passed: raw.require_tests_passed.or_else(|| base?.require_tests_passed).or_else(|| category?.require_tests_passed).unwrap_or(false),
+        require_gates: gates,
     };
 
     let formatting = ToolFormatting {
-        emit_truncation_notice: raw.emit_truncation_notice.or_else(|| base?.emit_truncation_notice).unwrap_or(false),
-        attach_rustc_explain: raw.attach_rustc_explain.or_else(|| base?.attach_rustc_explain).unwrap_or(false),
+        emit_truncation_notice: raw.emit_truncation_notice.or_else(|| base?.emit_truncation_notice).or_else(|| category?.emit_truncation_notice).unwrap_or(false),
+        attach_rustc_explain: raw.attach_rustc_explain.or_else(|| base?.attach_rustc_explain).or_else(|| category?.attach_rustc_explain).unwrap_or(false),
     };
 
     ToolDefinition {
         name,
-        description: raw.description.clone().or_else(|| base?.description.clone()).unwrap_or_default(),
-        action: raw.action.clone().or_else(|| base?.action.clone()).unwrap_or_default(),
+        description: raw.description.clone().or_else(|| base?.description.clone()).or_else(|| category?.description.clone()).unwrap_or_default(),
+        action: raw.action.clone().or_else(|| base?.action.clone()).or_else(|| category?.action.clone()).unwrap_or_default(),
         category: raw.category.clone().or_else(|| base?.category.clone()),
         safety,
         sandbox,
         preconditions,
         formatting,
-        command: raw.command.clone().or_else(|| base?.command.clone()).unwrap_or_default(),
-        args: raw.args.clone().or_else(|| base?.args.clone()).unwrap_or_default(),
-        output_capture: raw.output_capture.or_else(|| base?.output_capture).unwrap_or_default(),
-        allowed_directories: raw.allowed_directories.clone().or_else(|| base?.allowed_directories.clone()).unwrap_or_default(),
-        enforce_dir: raw.enforce_dir.clone().or_else(|| base?.enforce_dir.clone()),
-        enforce_file_target: raw.enforce_file_target.clone().or_else(|| base?.enforce_file_target.clone()),
-        sanitize_input: raw.sanitize_input.clone().or_else(|| base?.sanitize_input.clone()),
-        truncate_lines: raw.truncate_lines.or_else(|| base?.truncate_lines),
-        truncate_bytes: raw.truncate_bytes.or_else(|| base?.truncate_bytes),
-        timeout_seconds: raw.timeout_seconds.or_else(|| base?.timeout_seconds).unwrap_or(15),
-        error_fallback: raw.error_fallback.clone().or_else(|| base?.error_fallback.clone()),
-        empty_fallback: raw.empty_fallback.clone().or_else(|| base?.empty_fallback.clone()),
-        success_exit_codes: raw.success_exit_codes.clone().or_else(|| base?.success_exit_codes.clone()).unwrap_or_default(),
+        command: raw.command.clone().or_else(|| base?.command.clone()).or_else(|| category?.command.clone()).unwrap_or_default(),
+        args: raw.args.clone().or_else(|| base?.args.clone()).or_else(|| category?.args.clone()).unwrap_or_default(),
+        output_capture: raw.output_capture.or_else(|| base?.output_capture).or_else(|| category?.output_capture).unwrap_or_default(),
+        allowed_directories: raw.allowed_directories.clone().or_else(|| base?.allowed_directories.clone()).or_else(|| category?.allowed_directories.clone()).unwrap_or_default(),
+        enforce_dir: raw.enforce_dir.clone().or_else(|| base?.enforce_dir.clone()).or_else(|| category?.enforce_dir.clone()),
+        enforce_file_target: raw.enforce_file_target.clone().or_else(|| base?.enforce_file_target.clone()).or_else(|| category?.enforce_file_target.clone()),
+        sanitize_input: raw.sanitize_input.clone().or_else(|| base?.sanitize_input.clone()).or_else(|| category?.sanitize_input.clone()),
+        truncate_lines: raw.truncate_lines.or_else(|| base?.truncate_lines).or_else(|| category?.truncate_lines),
+        truncate_bytes: raw.truncate_bytes.or_else(|| base?.truncate_bytes).or_else(|| category?.truncate_bytes),
+        timeout_seconds: raw.timeout_seconds.or_else(|| base?.timeout_seconds).or_else(|| category?.timeout_seconds).unwrap_or(15),
+        error_fallback: raw.error_fallback.clone().or_else(|| base?.error_fallback.clone()).or_else(|| category?.error_fallback.clone()),
+        empty_fallback: raw.empty_fallback.clone().or_else(|| base?.empty_fallback.clone()).or_else(|| category?.empty_fallback.clone()),
+        success_exit_codes: raw.success_exit_codes.clone().or_else(|| base?.success_exit_codes.clone()).or_else(|| category?.success_exit_codes.clone()).unwrap_or_default(),
     }
 }
 
-/// Resolves inheritance for all tools defined in `RawToolsConfig`.
+/// Merges a raw tool definition with its optional base definition.
+#[must_use]
+pub fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDefinition {
+    merge_tool_with_category(name, None, base, raw)
+}
+
+/// Resolves inheritance for all tools defined in `RawToolsConfig`, merging category defaults,
+/// base tool templates, and concrete tool declarations.
 #[must_use]
 #[allow(clippy::module_name_repetitions, reason = "Explicit function name for clarity when imported unqualified")]
 pub fn resolve_tools(config: &RawToolsConfig) -> Vec<ToolDefinition> {
@@ -325,7 +383,12 @@ pub fn resolve_tools(config: &RawToolsConfig) -> Vec<ToolDefinition> {
             let clean = key.strip_prefix("base_tools.").unwrap_or(key);
             config.base_tools.get(clean)
         });
-        resolved.push(merge_tool(name.clone(), base, raw_tool));
+        let category_name = raw_tool
+            .category
+            .as_deref()
+            .or_else(|| base?.category.as_deref());
+        let category = category_name.and_then(|cat| config.categories.get(cat));
+        resolved.push(merge_tool_with_category(name.clone(), category, base, raw_tool));
     }
     resolved
 }
@@ -359,5 +422,59 @@ mod tests {
         assert!(merged.mutating());
         assert!(merged.enforce_sandbox());
         assert!(!merged.require_git_clean());
+    }
+
+    #[test]
+    fn test_merge_category_inheritance_and_gates() {
+        let mut categories = BTreeMap::new();
+        categories.insert(
+            "compilation".to_owned(),
+            RawTool {
+                tracks_circuit_breaker: Some(true),
+                require_gates: Some(vec!["vcs_conflicts".to_owned()]),
+                timeout_seconds: Some(60),
+                ..Default::default()
+            },
+        );
+
+        let mut tools = BTreeMap::new();
+        // Tool 1: inherits category gates and adds extra gate
+        tools.insert(
+            "run_cargo_clippy".to_owned(),
+            RawTool {
+                category: Some("compilation".to_owned()),
+                require_gates: Some(vec!["compilation".to_owned()]),
+                ..Default::default()
+            },
+        );
+        // Tool 2: inherits category gates but opts out via skip_gates
+        tools.insert(
+            "run_special_check".to_owned(),
+            RawTool {
+                category: Some("compilation".to_owned()),
+                skip_gates: Some(vec!["vcs_conflicts".to_owned()]),
+                ..Default::default()
+            },
+        );
+
+        let config = RawToolsConfig {
+            base_tools: BTreeMap::new(),
+            categories,
+            tools,
+        };
+
+        let resolved = resolve_tools(&config);
+        assert_eq!(resolved.len(), 2);
+
+        let clippy = resolved.iter().find(|t| t.name == "run_cargo_clippy").unwrap();
+        assert!(clippy.tracks_circuit_breaker());
+        assert_eq!(clippy.timeout_seconds, 60);
+        // Has both category gate and tool-added gate
+        assert_eq!(clippy.preconditions.require_gates, vec!["vcs_conflicts".to_owned(), "compilation".to_owned()]);
+
+        let special = resolved.iter().find(|t| t.name == "run_special_check").unwrap();
+        assert!(special.tracks_circuit_breaker());
+        // vcs_conflicts was skipped!
+        assert_eq!(special.preconditions.require_gates, Vec::<String>::new());
     }
 }
