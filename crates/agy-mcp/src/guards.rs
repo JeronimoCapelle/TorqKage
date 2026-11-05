@@ -393,19 +393,21 @@ pub(crate) fn check_agent_guard(
 }
 
 const COMMON_ROOT_DIRS: &[&str] = &[
-    "src", "tests", "benches", "examples", "docs", "doc", "crates", "packages", "target",
-    ".git", ".jj", ".cargo", ".agy",
+    "src", "tests", "benches", "examples", "docs", "doc", ".git", ".jj", ".agy",
 ];
 
-/// Helper attempting to resolve a scoped path within a multi-crate Cargo repository (`crates/` or `packages/`).
-fn resolve_in_cargo_subcrates(
+/// Helper attempting to resolve a scoped path within declared monorepo subcrate containers.
+fn resolve_in_subcrates(
     workspace_root: &Path,
     clean: &str,
     scopes: &[&str],
+    containers: &[String],
 ) -> Option<String> {
-    let containers = ["crates", "packages"];
+    if containers.is_empty() {
+        return None;
+    }
 
-    // Case A: Path starts with "crates/<crate_name>/..." or "packages/<crate_name>/..."
+    // Case A: Path starts with "<container>/<crate_name>/..."
     for container in containers {
         let prefix = format!("{container}/");
         if let Some(sub) = clean.strip_prefix(&prefix)
@@ -516,9 +518,9 @@ fn anchor_to_primary_scope(
     workspace_root: &Path,
     clean: &str,
     primary_scope: &str,
+    containers: &[String],
 ) -> String {
-    // Multi-crate new file handling: "crates/my_crate/file.rs" -> "crates/my_crate/src/file.rs"
-    for container in &["crates", "packages"] {
+    for container in containers {
         let prefix = format!("{container}/");
         if let Some(sub) = clean.strip_prefix(&prefix)
             && let Some((crate_name, rest)) = sub.split_once('/')
@@ -529,7 +531,7 @@ fn anchor_to_primary_scope(
     }
 
     if let Some((possible_crate, rest)) = clean.split_once('/') {
-        for container in &["crates", "packages"] {
+        for container in containers {
             if workspace_root.join(container).join(possible_crate).is_dir() {
                 return format!("{container}/{possible_crate}/{primary_scope}/{rest}");
             }
@@ -621,18 +623,20 @@ pub(crate) fn resolve_scoped_path_str(
         }
     }
 
-    // 7. Check cargo workspace multi-crate structure (crates/<crate>/<scope>/<clean> or crates/<crate>/<clean>)
-    if let Some(resolved) = resolve_in_cargo_subcrates(workspace_root, clean, &scope_refs) {
+    // 7. Check workspace multi-crate structure using declared containers
+    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+    let containers = project.resolved_containers(workspace_root);
+    if let Some(resolved) = resolve_in_subcrates(workspace_root, clean, &scope_refs, &containers) {
         return resolved;
     }
 
     // 8. If clean starts with a known top-level project directory that is NOT one of our scopes,
     // do NOT anchor it into our scope (e.g. "tests/test.rs" when scoped to "src").
     if let Some((first_component, _)) = clean.split_once('/')
-        && first_component != "crates"
-        && first_component != "packages"
+        && !containers.iter().any(|c| c == first_component)
     {
         let is_known_root = COMMON_ROOT_DIRS.contains(&first_component)
+            || project.docs.paths.iter().any(|d| d == first_component)
             || workspace_root.join(first_component).is_dir();
         if is_known_root && !scope_refs.contains(&first_component) {
             return clean.to_owned();
@@ -647,7 +651,7 @@ pub(crate) fn resolve_scoped_path_str(
         .or_else(|| scope_refs.first().copied());
 
     if let Some(primary_scope) = primary {
-        return anchor_to_primary_scope(workspace_root, clean, primary_scope);
+        return anchor_to_primary_scope(workspace_root, clean, primary_scope, &containers);
     }
 
     clean.to_owned()

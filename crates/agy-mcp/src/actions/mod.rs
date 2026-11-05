@@ -14,7 +14,9 @@ pub(crate) mod workspace_ensure;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
-use agy_common::{CircuitBreakerLedger, SubprocessSupervisor, extract_rustc_error_code};
+use agy_common::{
+    CircuitBreakerLedger, SubprocessSupervisor, extract_compiler_error_signature,
+};
 use crate::models::{AgentGuard, ToolAction, ToolDefinition};
 
 /// Executes a command either sandboxed via Bubblewrap or directly with supervisor hygiene.
@@ -171,11 +173,13 @@ fn update_circuit_breaker(
     }
 
     let mut ledger = CircuitBreakerLedger::load(workspace_root);
+    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+    let custom_pattern = project.gates.values().find_map(|g| g.error_regex.as_deref());
 
     match result {
         Ok((mut output, is_error)) => {
             if is_error {
-                let error_sig = extract_rustc_error_code(&output);
+                let error_sig = extract_compiler_error_signature(&output, custom_pattern);
                 drop(ledger.record_failure(
                     workspace_root,
                     agent_name,
@@ -203,7 +207,7 @@ fn update_circuit_breaker(
             Ok((output, is_error))
         }
         Err(err) => {
-            let error_sig = extract_rustc_error_code(&err);
+            let error_sig = extract_compiler_error_signature(&err, custom_pattern);
             drop(ledger.record_failure(
                 workspace_root,
                 agent_name,

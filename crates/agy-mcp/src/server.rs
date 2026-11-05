@@ -49,7 +49,10 @@ impl McpServer {
         let project = agy_common::ProjectConfig::detect_or_load(&workspace_root);
         let mut enriched_tools = tools;
         for t in &mut enriched_tools {
-            if t.name == "query_project_spec" && !project.docs.paths.is_empty() {
+            let is_doc_tool = t.category.as_deref() == Some("documentation")
+                || project.docs.tool_name.as_deref() == Some(&t.name)
+                || t.name == "query_project_spec";
+            if is_doc_tool && !project.docs.paths.is_empty() {
                 t.description = format!(
                     "Searches project documentation and specifications across [{}] for grep-ready specs, opcodes, and ABI definitions",
                     project.docs.paths.join(", ")

@@ -46,9 +46,12 @@ pub use models::{
     InjectStep, PipelineHandoff, PostInvocationInput, PostInvocationResponse, PostToolUseInput,
     PreInvocationInput, PreInvocationResponse, PreToolResponse, PreToolUseInput, SessionStartInput,
     SessionStartResponse, SystemMessagePayload, StopInput, StopResponse, ToolCallPayload,
-    extract_rustc_error_code,
+    extract_compiler_error_signature, extract_rustc_error_code,
 };
-pub use project::{GateDefinition, ProjectConfig, ProjectMeta, ProjectSandboxConfig, ProjectSecurityConfig, SecurityCategory};
+pub use project::{
+    GateDefinition, ProjectConfig, ProjectDocsConfig, ProjectMeta, ProjectSandboxConfig,
+    ProjectSecurityConfig, ProjectWorkspaceConfig, SecurityCategory,
+};
 pub use resolver::WorkspaceResolver;
 pub use sandbox::{build_bubblewrap_command, is_inside_outer_sandbox};
 pub use state::AgyStatePaths;

@@ -23,20 +23,50 @@ pipeline = [
 ]
 
 # Circuit breaker settings: consecutive compiler failures before tripping mutating tools.
+# Set enabled = false or max_strikes = 0 to disable circuit breaker protection.
 [circuit_breaker]
+enabled = true
 max_strikes = 2
 
 # Manifest mutation guard: neutralizes host IDE procedural-macro / build.rs execution escape vectors.
+# Set enabled = false to disable manifest interception.
 [manifest_guard]
 enabled = true
 protected_patterns = [
     "Cargo.toml",
+    "Cargo.lock",
     "build.rs",
     "CMakeLists.txt",
     "meson.build",
     "package.json",
+    "build.zig",
     "go.mod",
+    "Makefile",
 ]
+# Explicit tool names to protect. If left empty, automatically protects any tool with mutating = true.
+protected_tools = []
+# Argument keys inspected in the tool payload for target file paths.
+target_keys = ["path", "file_path", "filePath", "Path", "target_file", "file"]
+
+# Work-In-Progress (WIP) turn-by-turn change detector (PreInvocation hook).
+# Set enabled = false to disable diff hashing and ephemeral disk modification notices.
+[wip]
+enabled = true
+max_preview_files = 4
+
+# Session start context & wake-up injection (SessionStart hook).
+# Set enabled = false to disable turn-1 prompt injection.
+[session_start]
+enabled = true
+inject_wake_state = true
+inject_documentation = true
+
+# Session stop handoff recording (Stop hook).
+# Set enabled = false to disable writing .agy/state/handoff.json and last_handoff.md on session exit.
+[stop]
+enabled = true
+record_handoff = true
+max_modified_files = 10
 
 # Matcher pattern for tools that trigger the vcs_conflicts check before running.
 # Supports exact names, wildcard prefix (e.g. 'run_cargo_.*'), or pipe separation '|'.

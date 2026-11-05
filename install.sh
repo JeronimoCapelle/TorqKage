@@ -138,6 +138,9 @@ cp "${PLUGIN_DIR}/tools.toml" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/hooks.toml" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/hooks.json" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/mcp_config.json" "${TARGET_PLUGIN_DIR}/"
+if [[ -f "${PLUGIN_DIR}/project.toml" ]]; then
+    cp "${PLUGIN_DIR}/project.toml" "${TARGET_PLUGIN_DIR}/"
+fi
 cp -r "${PLUGIN_DIR}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
 cp -r "${PLUGIN_DIR}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
 

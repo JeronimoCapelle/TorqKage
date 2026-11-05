@@ -17,8 +17,17 @@ pub(crate) fn execute_record_handoff() {
     let input: StopInput = read_stdin_payload();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
+    let config = crate::config::HooksConfig::load(&root);
 
-    let modified_files = collect_modified_files(&root);
+    if !config.stop.enabled || !config.stop.record_handoff {
+        let resp = StopResponse::allow();
+        if let Ok(json) = serde_json::to_string(&resp) {
+            println!("{json}");
+        }
+        return;
+    }
+
+    let modified_files = collect_modified_files(&root, config.stop.max_modified_files);
     let agent_name = std::env::var("AGY_AGENT")
         .or_else(|_| input.common.model_name.clone().ok_or(()))
         .unwrap_or_else(|()| "agent".to_owned());
@@ -64,26 +73,39 @@ pub(crate) fn execute_inject_wake() {
     let input: SessionStartInput = read_stdin_payload();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
+    let config = crate::config::HooksConfig::load(&root);
+
+    if !config.session_start.enabled {
+        let resp = SessionStartResponse::default();
+        if let Ok(json) = serde_json::to_string(&resp) {
+            println!("{json}");
+        }
+        return;
+    }
+
     let paths = agy_common::AgyStatePaths::new(&root);
     let json_handoff = paths.handoff_json_file();
     let md_handoff = paths.handoff_md_file();
     let project = agy_common::ProjectConfig::detect_or_load(&root);
+    let tool_name = project.docs.tool_name.as_deref().unwrap_or("query_project_spec");
 
-    let resp = if json_handoff.exists()
+    let resp = if config.session_start.inject_wake_state
+        && json_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&json_handoff)
         && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
     {
         let mut msg = handoff.to_injection_message();
-        if !project.docs.paths.is_empty() {
+        if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
             msg.push_str(&format!(
-                "\n\n[DOCUMENTATION]: Available in [{}]. Use 'query_project_spec' to search specifications.",
+                "\n\n[DOCUMENTATION]: Available in [{}]. Use '{tool_name}' to search specifications.",
                 project.docs.paths.join(", ")
             ));
         }
         SessionStartResponse {
             inject_steps: vec![InjectStep::system(msg)],
         }
-    } else if md_handoff.exists()
+    } else if config.session_start.inject_wake_state
+        && md_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&md_handoff)
         && let Some(record) = HandoffRecord::from_markdown(&content)
     {
@@ -97,9 +119,9 @@ pub(crate) fn execute_inject_wake() {
             "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
             record.previous_agent, files_str, record.status
         );
-        if !project.docs.paths.is_empty() {
+        if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
             msg.push_str(&format!(
-                " Documentation paths: [{}]. Use 'query_project_spec' to search.",
+                " Documentation paths: [{}]. Use '{tool_name}' to search.",
                 project.docs.paths.join(", ")
             ));
         }
@@ -107,9 +129,9 @@ pub(crate) fn execute_inject_wake() {
         SessionStartResponse {
             inject_steps: vec![InjectStep::system(msg)],
         }
-    } else if !project.docs.paths.is_empty() {
+    } else if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
         let msg = format!(
-            "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. Use 'query_project_spec' to search them.",
+            "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. Use '{tool_name}' to search them.",
             project.docs.paths.join(", ")
         );
         SessionStartResponse {
@@ -134,7 +156,8 @@ fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
     WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn collect_modified_files(root: &Path) -> Vec<String> {
+fn collect_modified_files(root: &Path, max_files: usize) -> Vec<String> {
+    let project = agy_common::ProjectConfig::detect_or_load(root);
     let raw_output = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
         Command::new("jj")
             .args(["--color=never", "diff", "--summary"])
@@ -152,15 +175,22 @@ fn collect_modified_files(root: &Path) -> Vec<String> {
         && out.status.success()
     {
         let s = String::from_utf8_lossy(&out.stdout);
-        for line in s.lines().take(10) {
+        for line in s.lines() {
             let trimmed = line.trim();
-            if trimmed == "A target" || trimmed == "M target" {
+            if trimmed.is_empty() {
                 continue;
             }
-            if let Some((_, path)) = trimmed.split_once(' ') {
-                files.push(path.trim().to_owned());
-            } else if !trimmed.is_empty() {
-                files.push(trimmed.to_owned());
+            let (path, file_str) = if let Some((_, p)) = trimmed.split_once(' ') {
+                (p.trim(), p.trim().to_owned())
+            } else {
+                (trimmed, trimmed.to_owned())
+            };
+            if project.is_ignored_or_cache_path(path) {
+                continue;
+            }
+            files.push(file_str);
+            if files.len() >= max_files {
+                break;
             }
         }
     }

@@ -15,8 +15,13 @@ pub(crate) fn execute() {
     let input: PreInvocationInput = read_stdin_payload();
 
     let root = resolve_workspace_root(&input);
+    let config = crate::config::HooksConfig::load(&root);
 
-    let resp = detect_wip_changes(&root, input.common.conversation_id.as_deref());
+    let resp = if config.wip.enabled {
+        detect_wip_changes(&root, input.common.conversation_id.as_deref(), &config)
+    } else {
+        PreInvocationResponse::empty()
+    };
 
     if let Ok(json) = serde_json::to_string(&resp) {
         println!("{json}");
@@ -33,7 +38,13 @@ fn resolve_workspace_root(input: &PreInvocationInput) -> PathBuf {
     WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocationResponse {
+fn detect_wip_changes(
+    root: &Path,
+    conversation_id: Option<&str>,
+    config: &crate::config::HooksConfig,
+) -> PreInvocationResponse {
+    let project = agy_common::ProjectConfig::detect_or_load(root);
+
     let status_str = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
         let jj_status = Command::new("jj")
             .args(["--color=never", "diff", "--summary"])
@@ -47,7 +58,15 @@ fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocati
                     .lines()
                     .filter(|l| {
                         let t = l.trim();
-                        !t.is_empty() && t != "A target" && t != "M target"
+                        if t.is_empty() {
+                            return false;
+                        }
+                        let path_to_check = if let Some((_op, rest)) = t.split_once(' ') {
+                            rest.trim()
+                        } else {
+                            t
+                        };
+                        !project.is_ignored_or_cache_path(path_to_check)
                     })
                     .collect();
                 filtered.join("\n")
@@ -61,7 +80,25 @@ fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocati
             .output();
 
         match git_status {
-            Ok(output) if output.status.success() => String::from_utf8_lossy(&output.stdout).into_owned(),
+            Ok(output) if output.status.success() => {
+                let s = String::from_utf8_lossy(&output.stdout);
+                let filtered: Vec<&str> = s
+                    .lines()
+                    .filter(|l| {
+                        let t = l.trim();
+                        if t.is_empty() {
+                            return false;
+                        }
+                        let path_to_check = if let Some((_op, rest)) = t.split_once(' ') {
+                            rest.trim()
+                        } else {
+                            t
+                        };
+                        !project.is_ignored_or_cache_path(path_to_check)
+                    })
+                    .collect();
+                filtered.join("\n")
+            }
             _ => String::new(),
         }
     };
@@ -91,14 +128,14 @@ fn detect_wip_changes(root: &Path, conversation_id: Option<&str>) -> PreInvocati
     }
     drop(std::fs::write(&cache_file, format!("{current_hash}")));
 
-    let modified_files = extract_modified_files(trimmed);
+    let modified_files = extract_modified_files(trimmed, config.wip.max_preview_files);
     let notice = format!("[Notice: Files modified on disk: {modified_files}]");
     PreInvocationResponse::ephemeral(notice)
 }
 
-fn extract_modified_files(status_output: &str) -> String {
+fn extract_modified_files(status_output: &str, max_preview: usize) -> String {
     let mut files = Vec::new();
-    for line in status_output.lines().take(4) {
+    for line in status_output.lines().take(max_preview) {
         let trimmed = line.trim();
         // Format: 'XY path' -> extract path
         if let Some((_, path)) = trimmed.split_once(' ') {
@@ -122,7 +159,7 @@ mod tests {
     #[test]
     fn test_extract_modified_files() {
         let sample = " M src/lib.rs\n?? tests/test.rs\n M Cargo.toml";
-        let extracted = extract_modified_files(sample);
+        let extracted = extract_modified_files(sample, 4);
         assert_eq!(extracted, "src/lib.rs, tests/test.rs, Cargo.toml");
     }
 

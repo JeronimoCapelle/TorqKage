@@ -165,59 +165,58 @@ impl ToolItem {
         self.formatting.attach_rustc_explain
     }
 
-    /// Infers the logical category based on the tool name and action.
+    /// Infers the logical category based on the tool name and action using generic semantic keywords.
     #[must_use]
     pub(crate) fn infer_category(name: &str) -> ToolCategory {
-        if name.starts_with("run_cargo_clippy")
-            || name.starts_with("run_cargo_verification")
-            || name == "run_quick_check"
-            || name == "run_cargo_fmt"
-            || name == "run_cargo_check_targets"
-            || name == "run_cargo_expand"
-        {
-            ToolCategory::Compilation
-        } else if name.starts_with("run_cargo_test")
-            || name.starts_with("run_cargo_nextest")
-            || name.starts_with("run_coverage")
-            || name.starts_with("run_mutation")
-            || name.starts_with("run_cargo_insta")
-            || name.starts_with("run_cargo_fuzz")
-        {
+        let n = name.to_ascii_lowercase();
+        if n.contains("test") || n.contains("fuzz") || n.contains("mutation") || n.contains("insta") {
             ToolCategory::Testing
-        } else if name.starts_with("run_cargo_bench")
-            || name.starts_with("run_cargo_asm")
-            || name.starts_with("run_flamegraph")
-            || name.starts_with("run_cargo_perf")
-            || name.starts_with("run_cargo_bloat")
-            || name.starts_with("run_hyperfine")
-            || name.starts_with("analyze_llvm")
-            || name.starts_with("inspect_binary")
-            || name.starts_with("inspect_symbol")
-            || name == "run_cargo_careful"
-            || name == "run_cargo_miri"
+        } else if n.contains("bench")
+            || n.contains("profile")
+            || n.contains("perf")
+            || n.contains("bloat")
+            || n.contains("flamegraph")
+            || n.contains("hyperfine")
+            || n.contains("asm")
+            || n.contains("llvm")
+            || n.contains("miri")
+            || n.contains("careful")
         {
             ToolCategory::Profiling
-        } else if name == "write_file"
-            || name == "modify_code"
-            || name == "read_project_file"
-            || name == "search_codebase"
+        } else if n.contains("check")
+            || n.contains("build")
+            || n.contains("compile")
+            || n.contains("clippy")
+            || n.contains("lint")
+            || n.contains("fmt")
+            || n.contains("expand")
+            || n.contains("verification")
         {
-            ToolCategory::Filesystem
-        } else if name.starts_with("run_cargo_deny")
-            || name.starts_with("run_cargo_machete")
-            || name.starts_with("run_cargo_semver")
-            || name.starts_with("run_cargo_public_api")
-            || name.starts_with("run_cargo_hack")
-            || name.starts_with("run_cargo_outdated")
-            || name.starts_with("run_cargo_doc")
-            || name.starts_with("run_git_cliff")
+            ToolCategory::Compilation
+        } else if n.contains("release")
+            || n.contains("deny")
+            || n.contains("semver")
+            || n.contains("cliff")
+            || n.contains("publish")
+            || n.contains("machete")
+            || n.contains("outdated")
+            || n.contains("public_api")
+            || n.contains("hack")
         {
             ToolCategory::Release
-        } else if name.starts_with("inspect_")
-            || name.starts_with("query_")
-            || name == "eval_symbolic_math"
-            || name == "run_ast_grep"
-            || name == "run_nasm_check"
+        } else if n.contains("search") || n.contains("read") || n.contains("write") || n.contains("modify") || n.contains("patch") {
+            ToolCategory::Filesystem
+        } else if n.contains("inspect")
+            || n.contains("query")
+            || n.contains("explain")
+            || n.contains("status")
+            || n.contains("math")
+            || n.contains("grep")
+            || n.contains("diff")
+            || n.contains("log")
+            || n.contains("bookmark")
+            || n.contains("absorb")
+            || n.contains("describe")
         {
             ToolCategory::Diagnostics
         } else {

@@ -33,10 +33,25 @@ pub struct GateDefinition {
     pub timeout_seconds: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error_regex: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub explain_command: Option<Vec<String>>,
 }
 
 const fn default_gate_timeout() -> u64 {
     DEFAULT_GATE_TIMEOUT_SECS
+}
+
+/// Declarative workspace layout and ignored cache directories.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectWorkspaceConfig {
+    /// Monorepo container directory names (e.g. `["crates", "packages", "apps", "libs"]`).
+    #[serde(default)]
+    pub containers: Vec<String>,
+    /// Additional build cache or ignored paths for VCS and diff checks (e.g. `["target", ".zig-cache", "build"]`).
+    #[serde(default)]
+    pub ignored_paths: Vec<String>,
 }
 
 /// Declarative sandboxing configuration for Bubblewrap jail mounts.
@@ -140,6 +155,9 @@ pub struct ProjectDocsConfig {
     /// Optional description or instructions for agents on how to use the documentation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// Optional tool name recommended to agents for searching documentation (e.g. "`query_project_spec`").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_name: Option<String>,
 }
 
 impl ProjectDocsConfig {
@@ -166,6 +184,8 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub project: ProjectMeta,
     #[serde(default)]
+    pub workspace: ProjectWorkspaceConfig,
+    #[serde(default)]
     pub gates: BTreeMap<String, GateDefinition>,
     #[serde(default)]
     pub sandbox: ProjectSandboxConfig,
@@ -180,6 +200,51 @@ pub struct ProjectConfig {
 }
 
 impl ProjectConfig {
+    /// Returns all build cache and ignored directory paths across `sandbox.bind_mounts` and `workspace.ignored_paths`.
+    #[must_use]
+    pub fn all_ignored_or_cache_paths(&self) -> Vec<String> {
+        let mut paths = self.sandbox.bind_mounts.clone();
+        for p in &self.workspace.ignored_paths {
+            if !paths.contains(p) {
+                paths.push(p.clone());
+            }
+        }
+        paths
+    }
+
+    /// Checks if a relative path component or prefix matches any declared ignored or build cache directory.
+    #[must_use]
+    pub fn is_ignored_or_cache_path(&self, rel_path: &str) -> bool {
+        let clean = rel_path.trim().replace('\\', "/");
+        let all = self.all_ignored_or_cache_paths();
+        for p in all {
+            let p_clean = p.trim_matches(['/', '\\']).replace('\\', "/");
+            if clean == p_clean
+                || clean.starts_with(&format!("{p_clean}/"))
+                || clean.ends_with(&format!("/{p_clean}"))
+            {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Returns the resolved monorepo containers, using explicit configuration from `project.toml`
+    /// or detecting existing directory indicators on disk (`crates`, `packages`).
+    #[must_use]
+    pub fn resolved_containers(&self, workspace_root: &Path) -> Vec<String> {
+        if !self.workspace.containers.is_empty() {
+            return self.workspace.containers.clone();
+        }
+        let mut detected = Vec::new();
+        for dir in ["crates", "packages"] {
+            if workspace_root.join(dir).is_dir() {
+                detected.push(dir.to_owned());
+            }
+        }
+        detected
+    }
+
     /// Auto-detects standard documentation directories and architecture files in the workspace.
     #[must_use]
     pub fn detect_default_docs_paths(workspace_root: &Path) -> Vec<String> {
@@ -197,15 +262,20 @@ impl ProjectConfig {
         paths
     }
 
-    /// Loads `<root>/.agy/project.toml` or `<root>/project.toml`.
-    /// If no explicit descriptor is found, dynamically infers the matching ecosystem profile
-    /// based on root indicator files (`Cargo.toml`, `build.zig`, `go.mod`, etc.).
+    /// Loads `<root>/.agy/project.toml`, `<root>/project.toml`, or `<root>/plugins/agy-suite/project.toml`.
+    /// If no explicit descriptor is found, falls back to a blank/restrictive default configuration
+    /// with auto-detected documentation paths.
     #[must_use]
     pub fn detect_or_load(workspace_root: &Path) -> Self {
-        let candidates = [
+        let mut candidates = vec![
             workspace_root.join(".agy/project.toml"),
             workspace_root.join("project.toml"),
+            workspace_root.join("plugins/agy-suite/project.toml"),
         ];
+
+        if let Ok(home) = std::env::var("HOME") {
+            candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/project.toml"));
+        }
 
         for path in &candidates {
             if let Ok(content) = std::fs::read_to_string(path)
@@ -218,7 +288,7 @@ impl ProjectConfig {
             }
         }
 
-        let mut cfg = Self::infer_from_workspace(workspace_root);
+        let mut cfg = Self::default();
         cfg.docs.paths = Self::detect_default_docs_paths(workspace_root);
         cfg
     }
@@ -256,6 +326,8 @@ impl ProjectConfig {
                 failure_message: Some(
                     "Project compilation failed (`cargo check --all-targets`).".into(),
                 ),
+                error_regex: Some("error[E".into()),
+                explain_command: Some(vec!["rustc".into(), "--explain".into()]),
             },
         );
         gates.insert(
@@ -266,6 +338,8 @@ impl ProjectConfig {
                 failure_message: Some(
                     "Test suite compilation failed (`cargo test --no-run`).".into(),
                 ),
+                error_regex: Some("error[E".into()),
+                explain_command: Some(vec!["rustc".into(), "--explain".into()]),
             },
         );
         gates.insert(
@@ -281,6 +355,8 @@ impl ProjectConfig {
                 ],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("Linter check failed (`cargo clippy`).".into()),
+                error_regex: Some("error[E".into()),
+                explain_command: None,
             },
         );
 
@@ -292,6 +368,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("rust".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: vec!["crates".into(), "packages".into()],
+                ignored_paths: vec!["target".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -312,6 +392,8 @@ impl ProjectConfig {
                 command: vec!["zig".into(), "build".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("Zig project build failed (`zig build`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
         gates.insert(
@@ -320,6 +402,8 @@ impl ProjectConfig {
                 command: vec!["zig".into(), "build".into(), "test".into(), "--no-exec".into()],
                 timeout_seconds: DEFAULT_TEST_GATE_TIMEOUT_SECS,
                 failure_message: Some("Zig test build failed (`zig build test --no-exec`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -328,6 +412,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("zig".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: Vec::new(),
+                ignored_paths: vec![".zig-cache".into(), "zig-out".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -348,6 +436,8 @@ impl ProjectConfig {
                 command: vec!["go".into(), "build".into(), "./...".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("Go package build failed (`go build ./...`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
         gates.insert(
@@ -356,6 +446,8 @@ impl ProjectConfig {
                 command: vec!["go".into(), "test".into(), "-run=^$".into(), "./...".into()],
                 timeout_seconds: DEFAULT_TEST_GATE_TIMEOUT_SECS,
                 failure_message: Some("Go test compilation failed (`go test -run=^$ ./...`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -364,6 +456,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("go".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: Vec::new(),
+                ignored_paths: vec![".cache/go-build".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -384,6 +480,8 @@ impl ProjectConfig {
                 command: vec!["pnpm".into(), "typecheck".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("TypeScript typecheck failed (`pnpm typecheck`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -392,6 +490,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("typescript".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: vec!["packages".into(), "apps".into()],
+                ignored_paths: vec![".turbo".into(), "node_modules/.cache".into(), "dist".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -412,6 +514,8 @@ impl ProjectConfig {
                 command: vec!["mypy".into(), ".".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("Python typecheck failed (`mypy .`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -420,6 +524,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("python".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: Vec::new(),
+                ignored_paths: vec![".pytest_cache".into(), ".mypy_cache".into(), "__pycache__".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -440,6 +548,8 @@ impl ProjectConfig {
                 command: vec!["meson".into(), "compile".into(), "-C".into(), "build".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("Meson build compilation failed (`meson compile -C build`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -448,6 +558,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("c".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: Vec::new(),
+                ignored_paths: vec!["build".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -468,6 +582,8 @@ impl ProjectConfig {
                 command: vec!["cmake".into(), "--build".into(), "build".into()],
                 timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
                 failure_message: Some("CMake build compilation failed (`cmake --build build`).".into()),
+                error_regex: None,
+                explain_command: None,
             },
         );
 
@@ -476,6 +592,10 @@ impl ProjectConfig {
                 name: None,
                 language: Some("cpp".into()),
                 version: None,
+            },
+            workspace: ProjectWorkspaceConfig {
+                containers: Vec::new(),
+                ignored_paths: vec!["build".into()],
             },
             gates,
             sandbox: ProjectSandboxConfig {
@@ -609,6 +729,8 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
             command: Vec::new(),
             timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
             failure_message: None,
+            error_regex: None,
+            explain_command: None,
         });
 
         match key {
@@ -619,6 +741,9 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
             }
             "failure_message" => {
                 gate.failure_message = Some(clean_str.to_owned());
+            }
+            "error_regex" => {
+                gate.error_regex = Some(clean_str.to_owned());
             }
             _ => {}
         }
@@ -638,6 +763,7 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
         match key {
             "description" => config.docs.description = Some(clean_str.to_owned()),
             "path" | "paths" => config.docs.paths = vec![clean_str.to_owned()],
+            "tool_name" => config.docs.tool_name = Some(clean_str.to_owned()),
             _ => {}
         }
     } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths") {
@@ -649,6 +775,12 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
     if key == "extra_banned_files" {
         config.extra_banned_files = items.to_vec();
         config.security.extra_banned_patterns.extend(items.to_vec());
+    } else if section == "workspace" {
+        if key == "containers" {
+            config.workspace.containers = items.to_vec();
+        } else if key == "ignored_paths" {
+            config.workspace.ignored_paths = items.to_vec();
+        }
     } else if (section == "docs" && (key == "paths" || key == "dirs"))
         || ((section == "project" || section.is_empty())
             && (key == "docs" || key == "docs_paths" || key == "paths"))
@@ -659,10 +791,14 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
             command: Vec::new(),
             timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
             failure_message: None,
+            error_regex: None,
+            explain_command: None,
         });
 
         if key == "command" {
             gate.command = items.to_vec();
+        } else if key == "explain_command" {
+            gate.explain_command = Some(items.to_vec());
         }
     } else if section == "sandbox" && key == "bind_mounts" {
         config.sandbox.bind_mounts = items.to_vec();

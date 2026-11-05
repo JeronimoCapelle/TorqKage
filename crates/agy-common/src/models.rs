@@ -592,6 +592,29 @@ impl CircuitBreakerLedger {
     }
 }
 
+/// Extracts a compiler error signature from output, guided by optional custom prefix or pattern.
+#[must_use]
+pub fn extract_compiler_error_signature(output: &str, custom_prefix: Option<&str>) -> Option<String> {
+    if let Some(prefix) = custom_prefix {
+        for line in output.lines() {
+            if let Some(idx) = line.find(prefix) {
+                let start = idx.saturating_add(prefix.len());
+                let rest = line.get(start..).unwrap_or("");
+                let token = rest
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or(rest)
+                    .trim_matches([':', ']', ')', '"', '\'']);
+                if !token.is_empty() {
+                    return Some(token.to_owned());
+                }
+            }
+        }
+    }
+
+    extract_rustc_error_code(output)
+}
+
 /// Extracts the first compiler error code (e.g., "E0502") from compiler output.
 #[must_use]
 pub fn extract_rustc_error_code(output: &str) -> Option<String> {

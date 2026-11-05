@@ -2,30 +2,18 @@
 //!
 //! Neutralizes the host IDE procedural-macro / `build.rs` execution sandbox escape vector.
 
+use std::path::Path;
 use agy_common::{PreToolResponse, PreToolUseInput};
 use crate::config::HooksConfig;
 
-/// File modification tool names that directly alter repository contents.
-const FILE_MUTATION_TOOLS: &[&str] = &[
-    "file_write",
-    "write_file",
-    "mpatch_edit",
-    "modify_code",
-    "edit_file",
-];
+const fn is_default_fallback_mutation_tool(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    matches!(bytes, b"file_write" | b"write_file" | b"mpatch_edit" | b"modify_code" | b"edit_file")
+}
 
 /// Extracts the target file path argument from a tool invocation payload.
-fn extract_target_path(args: &serde_json::Value) -> Option<&str> {
-    const CANDIDATE_KEYS: &[&str] = &[
-        "path",
-        "file_path",
-        "filePath",
-        "Path",
-        "target_file",
-        "file",
-    ];
-
-    for key in CANDIDATE_KEYS {
+fn extract_target_path<'a>(args: &'a serde_json::Value, keys: &[String]) -> Option<&'a str> {
+    for key in keys {
         if let Some(val) = args.get(key).and_then(serde_json::Value::as_str) {
             let trimmed = val.trim();
             if !trimmed.is_empty() {
@@ -44,6 +32,7 @@ fn extract_target_path(args: &serde_json::Value) -> Option<&str> {
 #[must_use]
 pub(crate) fn evaluate_manifest_guard(
     input: &PreToolUseInput,
+    root: &Path,
     config: &HooksConfig,
 ) -> Option<PreToolResponse> {
     if !config.manifest_guard.enabled {
@@ -53,13 +42,18 @@ pub(crate) fn evaluate_manifest_guard(
     let tc = input.tool_call.as_ref()?;
     let tool_name = tc.name.as_str();
 
-    let is_mutation_tool = FILE_MUTATION_TOOLS.contains(&tool_name);
+    let is_mutation_tool = if config.manifest_guard.protected_tools.is_empty() {
+        crate::policy_gate::is_mutating_tool(tool_name, root)
+            || is_default_fallback_mutation_tool(tool_name)
+    } else {
+        config.manifest_guard.protected_tools.iter().any(|t| t == tool_name)
+    };
     if !is_mutation_tool {
         return None;
     }
 
-    let target_path = extract_target_path(&tc.args)?;
-    let p = std::path::Path::new(target_path);
+    let target_path = extract_target_path(&tc.args, &config.manifest_guard.target_keys)?;
+    let p = Path::new(target_path);
     let file_name = p.file_name()?.to_string_lossy();
 
     let is_protected = config
@@ -105,7 +99,7 @@ mod tests {
         };
 
         let config = HooksConfig::default();
-        let resp = evaluate_manifest_guard(&input, &config);
+        let resp = evaluate_manifest_guard(&input, Path::new("."), &config);
         assert!(resp.is_some());
         if let Some(res) = resp {
             assert_eq!(res.decision, agy_common::HookDecision::Ask);
@@ -127,7 +121,7 @@ mod tests {
         };
 
         let config = HooksConfig::default();
-        let resp = evaluate_manifest_guard(&input, &config);
+        let resp = evaluate_manifest_guard(&input, Path::new("."), &config);
         assert!(resp.is_some());
         if let Some(res) = resp {
             assert_eq!(res.decision, agy_common::HookDecision::Ask);
@@ -148,7 +142,7 @@ mod tests {
         };
 
         let config = HooksConfig::default();
-        let resp = evaluate_manifest_guard(&input, &config);
+        let resp = evaluate_manifest_guard(&input, Path::new("."), &config);
         assert!(resp.is_none());
     }
 }

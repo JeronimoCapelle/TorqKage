@@ -43,12 +43,14 @@ impl Default for PreToolUseConfig {
 /// Circuit breaker configuration from `hooks.toml`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CircuitBreakerConfig {
+    pub(crate) enabled: bool,
     pub(crate) max_strikes: usize,
 }
 
 impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
+            enabled: true,
             max_strikes: agy_common::CircuitBreakerLedger::DEFAULT_MAX_STRIKES,
         }
     }
@@ -59,6 +61,8 @@ impl Default for CircuitBreakerConfig {
 pub(crate) struct ManifestGuardConfig {
     pub(crate) enabled: bool,
     pub(crate) protected_patterns: Vec<String>,
+    pub(crate) protected_tools: Vec<String>,
+    pub(crate) target_keys: Vec<String>,
 }
 
 impl Default for ManifestGuardConfig {
@@ -73,8 +77,70 @@ impl Default for ManifestGuardConfig {
                 "meson.build".into(),
                 "package.json".into(),
                 "build.zig".into(),
+                "go.mod".into(),
                 "Makefile".into(),
             ],
+            protected_tools: Vec::new(),
+            target_keys: vec![
+                "path".into(),
+                "file_path".into(),
+                "filePath".into(),
+                "Path".into(),
+                "target_file".into(),
+                "file".into(),
+            ],
+        }
+    }
+}
+
+/// Work-In-Progress (WIP) turn-by-turn change detector configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WipConfig {
+    pub(crate) enabled: bool,
+    pub(crate) max_preview_files: usize,
+}
+
+impl Default for WipConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_preview_files: 4,
+        }
+    }
+}
+
+/// Session start context & wake-up injection configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SessionStartConfig {
+    pub(crate) enabled: bool,
+    pub(crate) inject_wake_state: bool,
+    pub(crate) inject_documentation: bool,
+}
+
+impl Default for SessionStartConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            inject_wake_state: true,
+            inject_documentation: true,
+        }
+    }
+}
+
+/// Session stop handoff recording configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StopConfig {
+    pub(crate) enabled: bool,
+    pub(crate) record_handoff: bool,
+    pub(crate) max_modified_files: usize,
+}
+
+impl Default for StopConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            record_handoff: true,
+            max_modified_files: 10,
         }
     }
 }
@@ -85,6 +151,9 @@ pub(crate) struct HooksConfig {
     pub(crate) pre_tool_use: PreToolUseConfig,
     pub(crate) circuit_breaker: CircuitBreakerConfig,
     pub(crate) manifest_guard: ManifestGuardConfig,
+    pub(crate) wip: WipConfig,
+    pub(crate) session_start: SessionStartConfig,
+    pub(crate) stop: StopConfig,
 }
 
 impl HooksConfig {
@@ -265,8 +334,14 @@ fn apply_array_field(
 ) {
     if section == "pre_tool_use" && key == "pipeline" {
         config.pre_tool_use.pipeline = items.to_vec();
-    } else if section == "manifest_guard" && key == "protected_patterns" {
-        config.manifest_guard.protected_patterns = items.to_vec();
+    } else if section == "manifest_guard" {
+        if key == "protected_patterns" {
+            config.manifest_guard.protected_patterns = items.to_vec();
+        } else if key == "protected_tools" {
+            config.manifest_guard.protected_tools = items.to_vec();
+        } else if key == "target_keys" {
+            config.manifest_guard.target_keys = items.to_vec();
+        }
     } else if section == "custom_check"
         && key == "command"
         && let Some(check) = current_check
@@ -282,14 +357,46 @@ fn apply_string_field(
     val: &str,
     current_check: &mut Option<CustomCheck>,
 ) {
-    if section == "pre_tool_use" && key == "vcs_conflicts_matcher" {
+    if (section == "pre_tool_use" || section == "vcs_conflicts")
+        && (key == "vcs_conflicts_matcher" || key == "matcher")
+    {
         val.clone_into(&mut config.pre_tool_use.vcs_conflicts_matcher);
-    } else if section == "circuit_breaker" && key == "max_strikes" {
-        if let Ok(m) = val.parse::<usize>() {
-            config.circuit_breaker.max_strikes = m;
+    } else if section == "circuit_breaker" {
+        if key == "max_strikes" {
+            if let Ok(m) = val.parse::<usize>() {
+                config.circuit_breaker.max_strikes = m;
+            }
+        } else if key == "enabled" {
+            config.circuit_breaker.enabled = val.parse::<bool>().unwrap_or(true);
         }
     } else if section == "manifest_guard" && key == "enabled" {
         config.manifest_guard.enabled = val.parse::<bool>().unwrap_or(true);
+    } else if section == "wip" {
+        if key == "enabled" {
+            config.wip.enabled = val.parse::<bool>().unwrap_or(true);
+        } else if key == "max_preview_files"
+            && let Ok(n) = val.parse::<usize>()
+        {
+            config.wip.max_preview_files = n;
+        }
+    } else if section == "session_start" {
+        if key == "enabled" {
+            config.session_start.enabled = val.parse::<bool>().unwrap_or(true);
+        } else if key == "inject_wake_state" {
+            config.session_start.inject_wake_state = val.parse::<bool>().unwrap_or(true);
+        } else if key == "inject_documentation" {
+            config.session_start.inject_documentation = val.parse::<bool>().unwrap_or(true);
+        }
+    } else if section == "stop" {
+        if key == "enabled" {
+            config.stop.enabled = val.parse::<bool>().unwrap_or(true);
+        } else if key == "record_handoff" {
+            config.stop.record_handoff = val.parse::<bool>().unwrap_or(true);
+        } else if key == "max_modified_files"
+            && let Ok(n) = val.parse::<usize>()
+        {
+            config.stop.max_modified_files = n;
+        }
     } else if section == "custom_check"
         && let Some(check) = current_check
     {

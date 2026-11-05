@@ -51,10 +51,11 @@ impl JujutsuWorkspace {
         {
             let list_str = String::from_utf8_lossy(&out.stdout);
             for line in list_str.lines() {
-                if let Some(first) = line.split(':').next()
-                    && first.trim() == name
-                {
-                    return true;
+                if let Some(first) = line.split(':').next() {
+                    let ws_id = first.split_whitespace().next().unwrap_or("").trim();
+                    if ws_id == name {
+                        return true;
+                    }
                 }
             }
         }
@@ -81,10 +82,19 @@ impl JujutsuWorkspace {
             return false;
         }
 
+        let project = crate::project::ProjectConfig::detect_or_load(ws_path);
         let stdout = String::from_utf8_lossy(&out.stdout);
         !stdout.lines().any(|l| {
             let trimmed = l.trim();
-            !trimmed.is_empty() && trimmed != "A target" && trimmed != "M target"
+            if trimmed.is_empty() {
+                return false;
+            }
+            let path_to_check = if let Some((_op, rest)) = trimmed.split_once(' ') {
+                rest.trim()
+            } else {
+                trimmed
+            };
+            !project.is_ignored_or_cache_path(path_to_check)
         })
     }
 
@@ -175,20 +185,26 @@ impl JujutsuWorkspace {
             }
         }
 
-        // Share root target cache to avoid cold-start compilation overhead
-        let root_target = repo_root.join("target");
-        let ws_target = agent_ws_path.join("target");
-        if !ws_target.exists() && root_target.is_dir() {
-            #[cfg(unix)]
-            {
-                if let Err(e) = std::os::unix::fs::symlink(&root_target, &ws_target)
-                    && e.kind() != std::io::ErrorKind::AlreadyExists
+        // Share declared build caches from project descriptor to avoid cold-start compilation overhead
+        let project = crate::project::ProjectConfig::detect_or_load(&repo_root);
+        for cache_name in project.all_ignored_or_cache_paths() {
+            let root_cache = repo_root.join(&cache_name);
+            let ws_cache = agent_ws_path.join(&cache_name);
+            if !ws_cache.exists() && root_cache.is_dir() {
+                #[cfg(unix)]
                 {
-                    eprintln!(
-                        "[agy-common] warning: failed to symlink target directory from {} to {}: {e}",
-                        root_target.display(),
-                        ws_target.display()
-                    );
+                    if let Some(parent) = ws_cache.parent() {
+                        drop(std::fs::create_dir_all(parent));
+                    }
+                    if let Err(e) = std::os::unix::fs::symlink(&root_cache, &ws_cache)
+                        && e.kind() != std::io::ErrorKind::AlreadyExists
+                    {
+                        eprintln!(
+                            "[agy-common] warning: failed to symlink cache directory from {} to {}: {e}",
+                            root_cache.display(),
+                            ws_cache.display()
+                        );
+                    }
                 }
             }
         }

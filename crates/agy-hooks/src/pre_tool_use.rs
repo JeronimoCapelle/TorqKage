@@ -41,25 +41,27 @@ pub(crate) fn evaluate_pre_tool_use(
     for stage in &config.pre_tool_use.pipeline {
         match stage.as_str() {
             "circuit_breaker" => {
-                let mut ledger = CircuitBreakerLedger::load(root);
-                if config.circuit_breaker.max_strikes > 0 {
-                    ledger.max_strikes = config.circuit_breaker.max_strikes;
-                }
-                if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
-                    && policy_gate::is_mutating_tool(tool_name, root)
-                {
-                    return PreToolResponse::ask(format!(
-                        "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
-                         Last Error: {}\n\
-                         Autonomous loop halted to prevent token burn and code regression.\n\
-                         Confirm manual override to allow tool '{tool_name}'?",
-                        ledger.consecutive_failures,
-                        ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
-                    ));
+                if config.circuit_breaker.enabled {
+                    let mut ledger = CircuitBreakerLedger::load(root);
+                    if config.circuit_breaker.max_strikes > 0 {
+                        ledger.max_strikes = config.circuit_breaker.max_strikes;
+                    }
+                    if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
+                        && policy_gate::is_mutating_tool(tool_name, root)
+                    {
+                        return PreToolResponse::ask(format!(
+                            "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
+                             Last Error: {}\n\
+                             Autonomous loop halted to prevent token burn and code regression.\n\
+                             Confirm manual override to allow tool '{tool_name}'?",
+                            ledger.consecutive_failures,
+                            ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
+                        ));
+                    }
                 }
             }
             "manifest_guard" => {
-                if let Some(resp) = manifest_guard::evaluate_manifest_guard(input, config) {
+                if let Some(resp) = manifest_guard::evaluate_manifest_guard(input, root, config) {
                     return resp;
                 }
             }
@@ -116,7 +118,11 @@ fn execute_custom_check(check: &CustomCheck, root: &Path) -> Option<PreToolRespo
     cmd.args(args);
     cmd.current_dir(root);
 
-    let output = cmd.output().ok()?;
+    let output = agy_common::SubprocessSupervisor::run_supervised(
+        cmd,
+        agy_common::DEFAULT_QUICK_COMMAND_TIMEOUT_SECS,
+    )
+    .ok()?;
     let combined = format!(
         "{}\n{}",
         String::from_utf8_lossy(&output.stdout),

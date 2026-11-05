@@ -1,0 +1,42 @@
+# project.toml — Declarative Project Configuration for agy-suite
+#
+# This file provides declarative contracts for compiler gates, sandbox mounts,
+# workspace containers, security policies, and documentation paths.
+
+[project]
+name = "agy-suite"
+language = "rust"
+version = "0.1.0"
+
+[workspace]
+containers = ["crates", "packages"]
+ignored_paths = ["target"]
+
+[sandbox]
+bind_mounts = ["target"]
+
+[gates.compilation]
+command = ["cargo", "check", "--all-targets"]
+timeout_seconds = 30
+failure_message = "Project compilation failed (`cargo check --all-targets`)."
+error_regex = "error[E"
+
+[gates.tests]
+command = ["cargo", "test", "--no-run"]
+timeout_seconds = 45
+failure_message = "Test suite compilation failed (`cargo test --no-run`)."
+
+[gates.linter]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+timeout_seconds = 30
+failure_message = "Linter check failed (`cargo clippy`)."
+
+[docs]
+paths = ["docs", "ARCHITECTURE.md"]
+tool_name = "query_project_spec"
+description = "Antigravity systems suite specification and architecture manual."
+
+[security]
+disabled_categories = []
+allowed_patterns = []
+extra_banned_patterns = []

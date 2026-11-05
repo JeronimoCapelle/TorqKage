@@ -310,7 +310,15 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
 /// # Errors
 /// Returns a list of blocking failure diagnostics if any mandatory check fails.
 pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>, Vec<String>> {
-    evaluate_pre_flight_checks(workspace_root, &["cargo_compilation", "test_compilation", "vcs_conflicts"])
+    let project = ProjectConfig::detect_or_load(workspace_root);
+    let mut check_names = vec!["vcs_conflicts"];
+    if project.gates.contains_key("compilation") || workspace_root.join("Cargo.toml").is_file() {
+        check_names.push("compilation");
+    }
+    if project.gates.contains_key("tests") || workspace_root.join("Cargo.toml").is_file() {
+        check_names.push("tests");
+    }
+    evaluate_pre_flight_checks(workspace_root, &check_names)
 }
 
 /// Discovers the path to an agent's Markdown specification file.
