@@ -1,4 +1,84 @@
+# ==============================================================================
 # tools.toml — Declarative MCP Tool Definitions & Guard Policies for agy-mcp
+# ==============================================================================
+#
+# PURPOSE & ARCHITECTURAL ROLE:
+# ------------------------------
+# `tools.toml` defines all Model Context Protocol (MCP) tools exposed to LLM
+# agents by the `agy-mcp` server. It acts as a declarative tool engine that
+# dynamically synthesizes JSON Schemas, validates parameters against regex
+# constraints, enforces path confinement, monitors safety policies, and
+# executes actions without requiring hardcoded Rust logic.
+#
+# DECLARATIVE TOOL SCHEMA SPECIFICATION:
+# --------------------------------------
+# Each tool declared in `[tools.<name>]` or `[base_tools.<name>]` supports:
+#
+# 1. INHERITANCE:
+#    - `inherit`: String referencing a template in `[base_tools.<name>]`.
+#      The child tool inherits all base properties and selectively overrides fields.
+#
+# 2. ACTIONS (`action`):
+#    The execution engine powering the tool:
+#    - `file_read`: Bounded file reading with line/byte truncation and truncation notices.
+#    - `file_write`: Atomic file creation strictly within workspace bounds.
+#    - `mpatch_edit`: Fuzzy search/replace block patcher (powered by mpatch engine).
+#    - `file_search`: Scoped grep/ripgrep search across configured documentation paths.
+#    - `static_command`: Runs a fixed shell/CLI command without dynamic arguments.
+#    - `parameterized_command`: Runs CLI commands with validated, regex-checked parameters.
+#    - `cargo_json_diagnostics`: Executes cargo with `--message-format=json`, filters errors,
+#                               and automatically attaches `rustc --explain` descriptions.
+#    - `cli_manual`: Renders man-page style help text for available commands.
+#    - `project_state`: Synthesizes VCS revision, status, branch, and quality gate health.
+#    - `workspace_ensure`: Provisions or validates an isolated Jujutsu sparse workspace.
+#
+# 3. SAFETY & POLICY FLAGS:
+#    - `category`: Logical tool category (e.g. "filesystem", "compilation", "diagnostics",
+#                  "vcs", "release", "documentation", "system").
+#    - `mutating`: Boolean indicating if the tool modifies the filesystem or working tree.
+#                  Monitored by `manifest_guard` and `circuit_breaker` in `agy-hooks`.
+#    - `tracks_circuit_breaker`: Nonzero exit codes count as compiler failure strikes.
+#    - `require_permission_gate`: Prompts operator for [y/n] confirmation prior to execution.
+#
+# 4. SANDBOXING & FILE BOUNDARIES:
+#    - `enforce_workspace_bounds`: Blocks path traversal (`../`) and out-of-tree symlinks.
+#    - `ban_dangerous_files`: Blocks reading/writing credentials, keys, VCS internals,
+#                             and sensitive shell profiles.
+#    - `allowed_directories`: Restricts this specific tool to operate only in listed paths.
+#
+# 5. ARGUMENT SPECIFICATION (`args`):
+#    - `name`: Parameter name in the MCP JSON Schema.
+#    - `description`: Explanatory text for the LLM.
+#    - `required`: Boolean indicating if the argument is mandatory.
+#    - `regex`: Strict regex validation pattern to prevent shell injection.
+#    - `flag`: CLI flag to prepend when passing the argument (e.g. "-p", "--bin").
+#    - `default`: Default value if omitted by the caller.
+#
+# 6. OUTPUT CAPTURE & TRUNCATION:
+#    - `output_capture`: Process streams captured:
+#      * "stdout": Capture stdout only.
+#      * "stderr": Capture stderr only.
+#      * "both": Capture combined stdout and stderr.
+#      * "exit_code_only": Returns "Success (exit code 0)" with zero token output.
+#      * "json_spans": Filters compiler JSON stream to meaningful error spans.
+#    - `truncate_lines`: Max lines returned before truncation.
+#    - `truncate_bytes`: Max bytes returned before truncation.
+#    - `emit_truncation_notice`: Appends a notice when output has been truncated.
+#    - `attach_rustc_explain`: Automatically appends compiler error explanations.
+#    - `timeout_seconds`: Process execution timeout before aborting.
+#
+# 7. PRECONDITIONS:
+#    - `require_workspace_clean`: Working tree must have zero uncommitted changes.
+#    - `require_clippy_clean`: Cargo clippy must pass with zero warnings.
+#    - `require_tests_passed`: All tests must be green before this tool can run.
+#    - `require_gates`: Array of gate names from `project.toml` that must succeed.
+#
+# 8. FALLBACKS & EXIT CODES:
+#    - `empty_fallback`: Text returned if command produces empty output.
+#    - `error_fallback`: Text returned if command fails.
+#    - `success_exit_codes`: Array of integer exit codes treated as success (e.g. [0, 1]).
+#
+# ==============================================================================
 
 # ==============================================================================
 # BASE TOOL TEMPLATES (Abstract engines inherited by concrete scoped tools)
@@ -79,24 +159,54 @@ description = "Creates a new file strictly within the canonical workspace bounds
 # ==============================================================================
 # DECLARATIVE PER-AGENT PATH & DIRECTORY GUARDS
 # ==============================================================================
+# `agy-mcp` inspects the caller's agent identity (passed via `--agent <name>`)
+# and strictly confines file write and modify operations to the paths declared below.
+#
+# Rules:
+#   - `allowed_dirs`:    Array of directories where modifications are permitted.
+#                        Use `["*"]` to allow unrestricted workspace writes.
+#   - `disallowed_dirs`: Array of directories where modifications are forbidden.
+#   - `allowed_files`:   Specific individual files permitted even if parent dir is not.
 
+# Coder: Focused strictly on production code in src/
 [agent_guards.coder]
 allowed_dirs = ["src"]
-disallowed_dirs = ["tests", "benches"]
+disallowed_dirs = ["tests", "benches", "docs"]
 
+# Test-Author: Focused strictly on test suites, mocks, and benchmarks
 [agent_guards.test-author]
 allowed_dirs = ["tests", "benches"]
-disallowed_dirs = ["src"]
+disallowed_dirs = ["src", "docs"]
 
+# Planner: Focused on specifications, architecture documents, and scratchpads
 [agent_guards.planner]
 allowed_dirs = ["docs", ".scratchpad"]
 allowed_files = ["ARCHITECTURE.md"]
 disallowed_dirs = ["src", "tests", "benches"]
 
+# Copilot: Interactive Chief of Staff orchestrating the entire workspace
 [agent_guards.copilot]
 allowed_dirs = ["*"]
 
+# Finisher: Gatekeeper validating release readiness across the whole tree
 [agent_guards.finisher]
+allowed_dirs = ["*"]
+
+# Mini: Narrow math/symbolic agent (strictly read-only container)
+[agent_guards.mini]
+disallowed_dirs = ["*"]
+
+# Perf-Analyst: Benchmarking and hardware profiling agent
+[agent_guards.perf-analyst]
+allowed_dirs = ["benches", "docs", ".agy/artifacts"]
+disallowed_dirs = ["src", "tests"]
+
+# Spec-Checker: Read-only auditor cross-referencing docs against implementation
+[agent_guards.spec-checker]
+disallowed_dirs = ["*"]
+
+# Sysadmin: High-reasoning Arch Linux system administration and environment troubleshooter
+[agent_guards.sysadmin]
 allowed_dirs = ["*"]
 
 # --- Compilation & Compiler Diagnostics ---

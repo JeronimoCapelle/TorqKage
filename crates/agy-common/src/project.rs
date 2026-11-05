@@ -267,15 +267,11 @@ impl ProjectConfig {
     /// with auto-detected documentation paths.
     #[must_use]
     pub fn detect_or_load(workspace_root: &Path) -> Self {
-        let mut candidates = vec![
+        let candidates = [
             workspace_root.join(".agy/project.toml"),
             workspace_root.join("project.toml"),
             workspace_root.join("plugins/agy-suite/project.toml"),
         ];
-
-        if let Ok(home) = std::env::var("HOME") {
-            candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/project.toml"));
-        }
 
         for path in &candidates {
             if let Ok(content) = std::fs::read_to_string(path)
