@@ -433,6 +433,18 @@ output_capture = "stdout"
 truncate_lines = 120
 timeout_seconds = 60
 
+[tools.query_public_api]
+description = "Extracts compiler-verified public API signatures of a workspace crate or installed package via cargo-public-api"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["cargo-public-api", "-s", "-s", "-v"]
+args = [
+    { name = "package", required = true, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Name of the package or dependency to inspect (e.g. 'ratatui', 'serde', 'agy-common')" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 30
+
 [tools.cargo_semver_checks]
 description = "Verifies semantic versioning contract rules against the published API baseline"
 action = "static_command"

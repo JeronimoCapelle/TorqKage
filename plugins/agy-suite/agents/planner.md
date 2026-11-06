@@ -38,6 +38,7 @@ mcp_tools:
   - inspect_module_structure
   - inspect_module_dependencies
   - cargo_public_api
+  - query_public_api
   - query_project_spec
   - list_project_docs
   - query_tool_help

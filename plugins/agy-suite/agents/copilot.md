@@ -52,6 +52,7 @@ mcp_tools:
   - ensure_agent_workspace
   - inspect_agent_workspace
   - merge_agent_workspace
+  - query_public_api
   - inspect_workspace_clean
   - query_tool_help
 ---

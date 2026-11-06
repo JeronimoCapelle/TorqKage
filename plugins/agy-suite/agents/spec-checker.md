@@ -36,6 +36,7 @@ mcp_tools:
   - cargo_machete
   - cargo_semver_checks
   - cargo_public_api
+  - query_public_api
   - cargo_hack
   - cargo_outdated
   - ast_grep
