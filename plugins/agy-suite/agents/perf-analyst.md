@@ -39,6 +39,8 @@ mcp_tools:
   - run_flamegraph
   - run_cargo_perf
   - run_cargo_bloat
+  - run_cargo_size
+  - run_cargo_nm
   - run_hyperfine
   - run_nasm_check
   - analyze_llvm_mca
@@ -54,7 +56,10 @@ mcp_tools:
   - Inspect generated compiler assembly using `run_cargo_asm` to identify missing auto-vectorization (SIMD), unintended bounds check branches, loop unrolling issues, and register spills.
   - Pipe assembly into `analyze_llvm_mca` to simulate CPU execution pipeline ports, throughput, latency, and register pressure.
 - **Hardware Counters & Profiling:** Collect hardware performance counters (L1/L3 data cache misses, branch mispredictions, cycle counts, instructions per cycle) via `run_cargo_perf` (`perf stat`) and profile callstack hotspots via `run_flamegraph`.
-- **Binary Footprint Audit:** Audit release binary size and pinpoint monomorphization bloat per crate and symbol using `run_cargo_bloat`.
+- **Binary Footprint & Memory Section Audit:**
+  - Audit release binary size and pinpoint monomorphization bloat per crate and symbol using `run_cargo_bloat`.
+  - For bare-metal / embedded targets, use `run_cargo_size` to audit RAM/ROM section boundaries (`.text`, `.rodata`, `.data`, `.bss`) against hardware silicon limits.
+  - Use `run_cargo_nm` to audit symbol sizes, alignment, and virtual address mapping.
 - **Structured Performance Report:** Output a diagnostic report to `.agy/artifacts/perf_report.md` detailing:
   1. **Hotspots & Bottlenecks:** Functions dominating CPU execution time or cache miss rates.
   2. **Microarchitectural Inefficiencies:** Port contention, pipeline stalls, failure to vectorize, or excessive stack spills.

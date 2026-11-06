@@ -44,6 +44,7 @@ mcp_tools:
   - run_cargo_doc
   - run_cargo_check_targets
   - run_mutation_tests
+  - run_cargo_size
   - run_git_cliff
   - jj_absorb_working_copy
   - jj_describe_revision
