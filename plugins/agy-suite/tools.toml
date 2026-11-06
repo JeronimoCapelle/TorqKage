@@ -327,9 +327,20 @@ allowed_dirs = ["docs", ".scratchpad"]
 allowed_files = ["ARCHITECTURE.md"]
 disallowed_dirs = ["src", "tests", "benches"]
 
-# Copilot: Interactive Chief of Staff orchestrating the entire workspace
+# Copilot: Interactive Chief of Staff and workflow navigator (read-only orchestration)
 [agent_guards.copilot]
-allowed_dirs = ["*"]
+disallowed_dirs = ["*"]
+
+# Embedded-Engineer: Low-level target specialist, linker scripts, layouts, and inline assembly
+[agent_guards.embedded-engineer]
+allowed_dirs = ["src", "boards", "layout", "targets", "benches", "crates"]
+disallowed_dirs = ["tests", "docs"]
+
+# Doc-Author: Technical documentation, specifications, RFCs, and rustdoc
+[agent_guards.doc-author]
+allowed_dirs = ["docs", "specs", "src"]
+allowed_files = ["README.md", "ARCHITECTURE.md"]
+disallowed_dirs = ["tests", "benches"]
 
 # Finisher: Gatekeeper validating release readiness across the whole tree
 [agent_guards.finisher]
@@ -759,6 +770,30 @@ output_capture = "stdout"
 truncate_lines = 200
 timeout_seconds = 15
 
+[tools.run_cargo_size]
+description = "Inspects binary section memory sizes (.text, .data, .bss, total) via cargo size (cargo-binutils)"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["cargo", "size"]
+args = [
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Target binary name" }
+]
+output_capture = "stdout"
+truncate_lines = 60
+timeout_seconds = 30
+
+[tools.run_cargo_nm]
+description = "Lists symbol table and memory addresses of compiled ELF binaries via cargo nm (cargo-binutils)"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["cargo", "nm"]
+args = [
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Target binary name" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 30
+
 # [tools.run_cargo_zigbuild]
 # description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
 # action = "static_command"
@@ -957,3 +992,17 @@ command = ["cargo", "fmt"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 30
+
+[tools.run_pre_release_gauntlet]
+description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, tests, clippy -D warnings, formatting, ancillary targets, and docs) in a single pass"
+action = "static_command"
+category = "release"
+tracks_circuit_breaker = true
+command = [
+    "bash",
+    "-c",
+    "echo '=== 1. VCS Conflict Check ===' && (git diff --check || (echo 'FAILED: Unresolved VCS conflict markers detected' && exit 1)) && echo 'PASSED: No conflict markers' && echo '=== 2. Deterministic Nextest ===' && (cargo fast test || cargo test) && echo 'PASSED: All tests green' && echo '=== 3. Pedantic Clippy (-D warnings) ===' && (cargo fast clippy --all-targets -- -D warnings || cargo clippy --all-targets -- -D warnings) && echo 'PASSED: Clippy 0 warnings' && echo '=== 4. Code Formatting Check ===' && cargo fmt --check && echo 'PASSED: Formatting clean' && echo '=== 5. Ancillary Targets Check ===' && (cargo fast check --benches --examples || cargo check --benches --examples) && echo 'PASSED: Benches and examples compile' && echo '=== 6. Offline Docs Check ===' && cargo doc --no-deps && echo 'PASSED: Documentation builds without broken links' && echo '=== ALL PRE-RELEASE GAUNTLET CHECKS PASSED ==='"
+]
+output_capture = "both"
+truncate_lines = 150
+timeout_seconds = 300

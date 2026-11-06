@@ -4,6 +4,8 @@ description: "Autonomous source code implementer that writes production logic in
 effort: medium
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+pre_launch_checks:
+  - vcs_conflicts
 mainAgent: true
 subagent: true
 tools: []

@@ -63,17 +63,19 @@ All autonomous agents and human contributors operating within this repository or
 
 Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-Privilege Model**:
 
-| Agent | Responsibility | Permitted Directory Scope (`tools.toml`) | Available Tooling Scope |
-| :--- | :--- | :--- | :--- |
-| **`coder`** | Production implementation | `allowed_dirs = ["src"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`. |
-| **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`, `careful`), differential inspection (`llvm-objdump`). |
-| **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. |
-| **`copilot`** | Interactive Chief of Staff | `allowed_dirs = ["*"]` | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection. |
-| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | Deterministic pass/fail audit: diffs, mutation scores, mandated proof adherence, clippy, public API. |
-| **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | Spec searches, ISA opcode checks, AST grep queries, clippy, cargo-deny, semver-checks. |
-| **`perf-analyst`** | Hardware profiling & benchmarks | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat (purified of correctness tools). |
-| **`mini`** | Symbolic math & calculation | **Strictly air-gapped** (`disallowed_dirs = ["*"]`) | `eval_symbolic_math` (SymPy) inside isolated container only. |
-| **`sysadmin`** | Arch Linux / CachyOS admin | `allowed_dirs = ["*"]` | Host troubleshooting, systemd, pacman inspection (all mutating ops prompt `[y/n]`). |
+| Agent | Responsibility | Permitted Directory Scope (`tools.toml`) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
+| :--- | :--- | :--- | :--- | :--- |
+| **`coder`** | Production systems implementation | `allowed_dirs = ["src"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`. |
+| **`embedded-engineer`** | Low-level target & embedded specialist | `allowed_dirs = ["src", "boards", "layout", "targets", "benches"]`<br>`disallowed_dirs = ["tests", "docs"]` | `vcs_conflicts` | Linker scripts (`link.ld`, `memory.x`), section memory maps, inline asm (`asm!`), target JSON specs, `cargo-size`, `cargo-nm`, `llvm-objdump`. |
+| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, `cargo doc --no-deps`. |
+| **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), differential inspection (`llvm-objdump`). |
+| **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. |
+| **`copilot`** | Interactive Chief of Staff & Orchestrator | **Strictly read-only** (`disallowed_dirs = ["*"]`) | None | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection (zero direct code mutation). |
+| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | `compilation`, `tests`, `vcs_conflicts` | Deterministic pass/fail audit via single-pass `run_pre_release_gauntlet`, mutation scoring, mandated proof checks, git-cliff changelog. |
+| **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, clippy, cargo-deny, semver-checks. |
+| **`perf-analyst`** | Hardware profiling & benchmarks | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]` | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat (purified of correctness tools). |
+| **`mini`** | Symbolic math & calculation | **Strictly air-gapped** (`disallowed_dirs = ["*"]`) | None | `eval_symbolic_math` (SymPy) inside isolated container only. |
+| **`sysadmin`** | Arch Linux / CachyOS admin | `allowed_dirs = ["*"]` | None | Host troubleshooting, systemd, pacman inspection (all mutating ops prompt `[y/n]`). |
 
 ### Workspace Isolation
 - Each agent operates in its own sparse Jujutsu workspace at `.agy/workspaces/<agent>/`.
@@ -124,6 +126,11 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
    - Autonomous tests are validated via mutation scoring (`run_mutation_tests`). Any test suite where synthetic mutants survive is rejected as ineffective/tautological.
 6. **Purification of Performance Profiling:**
    - `perf-analyst` strictly measures throughput, latency distributions, CPU execution pipeline ports (`analyze_llvm_mca`), disassembly (`run_cargo_asm`), cache misses (`run_cargo_perf`), and binary size (`run_cargo_bloat`). It is entirely decoupled from correctness/UB tools.
+7. **Hardware, Target & Documentation Separation:**
+   - Low-level targets, RISC-V runtime setup, linker scripts (`link.ld`, `memory.x`), section allocation (`.text`, `.data`, `.bss`, MMIO), and inline assembly are isolated to `embedded-engineer`.
+   - Technical rustdoc (`///`), architectural RFCs, register bitfield diagrams, and specifications are authored by `doc-author`.
+8. **Deterministic Pre-Release Gauntlet (`run_pre_release_gauntlet`):**
+   - Rather than executing 6–8 sequential CLI commands across multiple LLM turns, the release gatekeeper executes `run_pre_release_gauntlet` in a single shot. This evaluates VCS conflicts, unit/integration tests, clippy `-D warnings`, rustfmt check, ancillary targets, and doc build in one pass, outputting a consolidated scorecard.
 
 ---
 
@@ -131,11 +138,13 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
 
 When `invoke_subagent` is called, `agy-hooks` evaluates the `subagent_admission` gate before the subagent can boot:
 1. Target agent's frontmatter `pre_launch_checks: [...]` is extracted.
-2. Gates are matched against `project.toml [gates.<name>]` (e.g. `compilation`, `tests`).
+2. Gates are evaluated:
+   - Built-in VCS conflict check (`vcs_conflicts` blocks invocation if merge conflict markers are detected).
+   - Built-in workspace cleanliness check (`workspace_clean`).
+   - Declarative project gates matched against `project.toml [gates.<name>]` (e.g. `compilation`, `tests`, `linter`, `fmt`).
 3. If any gate check fails:
-   - Admission is **denied**.
-   - The subagent is not launched, preventing wasted LLM tokens.
-   - Diagnostic output is returned to the calling agent to guide remediation.
+   - Admission is **denied** before burning LLM tokens.
+   - Diagnostic output is returned to the calling agent with specific failure lines to guide remediation.
 
 ---
 

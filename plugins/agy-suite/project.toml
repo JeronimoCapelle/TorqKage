@@ -134,6 +134,12 @@ timeout_seconds = 30
 failure_message = "Linter check failed (`cargo clippy`). Adhere to all pedantic linter and style guidelines."
 error_regex = "error[E"
 
+# Code formatting and rustfmt alignment gate
+[gates.fmt]
+command = ["cargo", "fmt", "--check"]
+timeout_seconds = 15
+failure_message = "Code formatting check failed (`cargo fmt --check`). Run `cargo fmt` to align code with rustfmt guidelines."
+
 
 # ------------------------------------------------------------------------------
 # 5. ENVIRONMENT VARIABLES

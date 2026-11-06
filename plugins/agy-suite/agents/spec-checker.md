@@ -5,6 +5,8 @@ effort: high
 mainAgent: true
 permissionMode: plan
 commandExecutionPolicy: off
+pre_launch_checks:
+  - vcs_conflicts
 tools: []
 inheritMcp: false
 mcpServers:

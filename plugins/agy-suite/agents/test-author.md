@@ -5,6 +5,8 @@ effort: medium
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+pre_launch_checks:
+  - vcs_conflicts
 tools: []
 inheritMcp: false
 mcpServers:

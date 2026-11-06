@@ -5,6 +5,9 @@ effort: high
 mainAgent: true
 permissionMode: plan
 commandExecutionPolicy: off
+pre_launch_checks:
+  - compilation
+  - vcs_conflicts
 allowed_subagents:
   - mini
 tools:

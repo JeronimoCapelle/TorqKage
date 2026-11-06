@@ -36,6 +36,7 @@ mcp_tools:
   - inspect_bookmarks
   - inspect_project_state
   - run_cargo_nextest
+  - run_pre_release_gauntlet
   - run_cargo_clippy
   - run_cargo_doc
   - run_cargo_fmt
@@ -62,13 +63,10 @@ mcp_tools:
   - Unhandled error variants or inappropriate panics (`unwrap()`, `expect()`).
   - Inadvertent allocations or copies on critical hot paths.
 - **Enforce the Pre-Release Gauntlet:**
-  1. **Tree & Workspace Hygiene:** Verify zero unresolved conflict markers (`inspect_workspace_conflicts`) and clean workspace state (`inspect_workspace_clean`).
-  2. **Deterministic Test Gauntlet:** Verify all unit, integration, and snapshot tests pass cleanly under nextest (`run_cargo_nextest`).
-  3. **Mandated Verification Adherence:** Verify that any verification harness mandated in `ARCHITECTURE.md` (Kani SMT proofs, Loom concurrency permutations, Miri pointer provenance, or differential execution) ran and passed with zero errors.
-  4. **Mutation Test Audit:** Run `run_mutation_tests` (`cargo mutants`) to prove that test harnesses catch synthetic semantic mutations and no mutants survived.
-  5. **Pedantic Lint Cleanliness:** Verify compilation and clippy pass with zero warnings under `-D warnings` across all targets (`run_cargo_clippy`).
-  6. **Ancillary Targets:** Verify examples and benchmarks compile cleanly (`run_cargo_check_targets`).
-  7. **Style & Docs:** Enforce clean code formatting (`run_cargo_fmt`) and verify offline docs build without broken intra-doc links (`run_cargo_doc`).
-  8. **Changelog Generation:** Generate release notes from Conventional Commits via `run_git_cliff`.
+  1. **Consolidated Quality Gauntlet:** Execute `run_pre_release_gauntlet` as your first action. This single-shot tool runs VCS conflict checks, nextest, clippy `-D warnings`, rustfmt check, ancillary targets, and offline doc compilation in one aggregated pass, returning a full scorecard. Do not run these individually unless debugging a specific failure reported by the gauntlet.
+  2. **Mandated Verification Adherence:** Verify that any specialized verification harness mandated in `ARCHITECTURE.md` (Kani SMT proofs, Loom concurrency permutations, Miri pointer provenance, or differential execution) ran and passed with zero errors.
+  3. **Mutation Test Audit:** Run `run_mutation_tests` (`cargo mutants`) to prove that test harnesses catch synthetic semantic mutations and no mutants survived.
+  4. **Workspace Cleanliness:** Verify workspace state hygiene (`inspect_workspace_clean`).
+  5. **Changelog Generation:** Generate release notes from Conventional Commits via `run_git_cliff`.
 - **Live CLI Ground Truth:** Never guess tool flags; use `query_tool_help(tool_name = "...")` to inspect live options.
 - **Explicit Checkpoint Gate:** You can ONLY declare "We have reached a new stable project checkpoint" AFTER all gauntlet checks pass and the human operator explicitly confirms. Never declare completion autonomously.

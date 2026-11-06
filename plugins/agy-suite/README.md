@@ -95,13 +95,15 @@ plugins/agy-suite/
 ├── agents/             # Autonomous agent role specifications (.md markdown with frontmatter)
 │   ├── coder.md        # Autonomous implementation agent confined to src/
 │   ├── copilot.md      # Chief of Staff coordinating tasks and fleet handoffs
+│   ├── doc-author.md   # Technical documentation, rustdoc, and specification writer
+│   ├── embedded-engineer.md # Bare-metal, linker script, target JSON, and inline assembly specialist
 │   ├── finisher.md     # Gatekeeper validating diffs and release readiness
 │   ├── mini.md         # Narrow symbolic math and optimization subagent
-│   ├── perf-analyst.md # Profiling, assembly, hardware counters, and memory safety
+│   ├── perf-analyst.md # Profiling, assembly, hardware counters, and microarchitectural analysis
 │   ├── planner.md      # Systems architect maintaining ARCHITECTURE.md and docs/
 │   ├── spec-checker.md # Read-only auditor cross-referencing specs against code
 │   ├── sysadmin.md     # Arch Linux / CachyOS system administrator and troubleshooter
-│   └── test-author.md  # Comprehensive test engineer confined to tests/ and benches/
+│   └── test-author.md  # Design Verification (DV) engineer (Loom, Kani, Miri, differential testing)
 ├── bin/                # Self-contained compiled binaries (isolated from project code)
 │   ├── agy-mcp         # Declarative MCP stdio server
 │   ├── agy-hooks       # High-assurance lifecycle hook handler
