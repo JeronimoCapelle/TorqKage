@@ -25,10 +25,18 @@ mcpServers:
     args: ["--agent", "copilot"]
 mcp_tools:
   - read_project_file
+  - list_directory
+  - inspect_directory_tree
+  - find_project_files
+  - inspect_file_meta
+  - inspect_file_type
+  - count_file_lines
   - write_file
   - modify_code
   - search_codebase
   - query_project_spec
+  - list_project_docs
+  - inspect_git_status
   - inspect_module_structure
   - inspect_module_dependencies
   - inspect_project_state

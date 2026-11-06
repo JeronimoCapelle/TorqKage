@@ -159,7 +159,7 @@ ban_dangerous_files = true
 # CONCRETE TOOLS (Declarative, Scoped, Inheriting from Base Templates)
 # ==============================================================================
 
-# --- Filesystem Inspection ---
+# --- Filesystem Inspection & Exploration ---
 
 [tools.read_project_file]
 description = "Reads a file within the project root. Output is truncated safely."
@@ -170,6 +170,81 @@ ban_dangerous_files = true
 truncate_lines = 800
 truncate_bytes = 46080
 emit_truncation_notice = true
+
+[tools.list_directory]
+description = "Lists files and directory contents with file permissions, byte sizes, and timestamps using ls"
+action = "parameterized_command"
+category = "filesystem"
+command = ["ls", "-la", "--group-directories-first"]
+args = [
+    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory path to list (defaults to project root '.')" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 10
+
+[tools.inspect_directory_tree]
+description = "Visualizes recursive directory tree hierarchy up to a specified depth using eza"
+action = "parameterized_command"
+category = "filesystem"
+command = ["eza", "--tree", "--icons=never"]
+args = [
+    { name = "level", required = false, default = "2", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
+    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to display tree from (defaults to '.')" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 10
+
+[tools.find_project_files]
+description = "Finds project files matching a name or regex pattern across the workspace using fd (skips VCS internals by default)"
+action = "parameterized_command"
+category = "filesystem"
+command = ["fd", "--hidden", "--exclude", ".git", "--exclude", ".jj"]
+args = [
+    { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
+    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to search from (defaults to '.')" }
+]
+empty_fallback = "No files found matching pattern."
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 15
+
+[tools.inspect_file_meta]
+description = "Inspects file stat and metadata (exact byte size, permissions, inode, access/modify timestamps) without reading file content"
+action = "parameterized_command"
+category = "filesystem"
+command = ["stat"]
+args = [
+    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path relative to workspace" }
+]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
+
+[tools.inspect_file_type]
+description = "Determines the file MIME type, encoding, and format (e.g. text/plain, ELF binary, UTF-8) using file"
+action = "parameterized_command"
+category = "filesystem"
+command = ["file", "-b"]
+args = [
+    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file path relative to workspace" }
+]
+output_capture = "stdout"
+truncate_lines = 20
+timeout_seconds = 10
+
+[tools.count_file_lines]
+description = "Counts total lines in a file or directory pattern using wc -l without loading content into token context"
+action = "parameterized_command"
+category = "filesystem"
+command = ["wc", "-l"]
+args = [
+    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file path relative to workspace" }
+]
+output_capture = "stdout"
+truncate_lines = 30
+timeout_seconds = 10
 
 [tools.query_project_spec]
 description = "Searches project documentation and specifications across configured doc paths (docs/, ARCHITECTURE.md, etc.) for grep-ready specs, opcodes, and ABI definitions"
@@ -183,6 +258,19 @@ args = [
     { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or pattern to search across documentation" },
     { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" }
 ]
+
+[tools.list_project_docs]
+description = "Lists all documentation files, specifications, and architecture blueprints in the project (docs/, specs/, ARCHITECTURE.md)"
+action = "parameterized_command"
+category = "documentation"
+command = ["fd", "--extension", "md", "--extension", "markdown"]
+args = [
+    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory to list docs from (defaults to project root '.')" }
+]
+empty_fallback = "No documentation files found."
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 10
 
 [tools.search_codebase]
 description = "Searches the codebase for a text or regex pattern using ripgrep (bounded to project root)"
@@ -664,6 +752,7 @@ timeout_seconds = 30
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
 category = "release"
+skip_gates = ["workspace_clean"]
 command = ["git-cliff", "--unreleased", "--strip", "header"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -789,10 +878,21 @@ output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
 
+[tools.inspect_git_status]
+description = "Inspects Git working tree status (uncommitted, untracked, staged files) via git status --short"
+action = "static_command"
+category = "diagnostics"
+command = ["git", "status", "--short"]
+empty_fallback = "Clean (0 uncommitted Git changes)"
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
+
 [tools.run_cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
 action = "static_command"
 category = "release"
+skip_gates = ["workspace_clean"]
 command = ["cargo", "doc", "--no-deps"]
 output_capture = "both"
 truncate_lines = 100
