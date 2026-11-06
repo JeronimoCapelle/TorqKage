@@ -42,7 +42,6 @@ mcp_tools:
   - run_pre_release_gauntlet
   - run_cargo_clippy
   - run_cargo_doc
-  - run_cargo_fmt
   - run_cargo_check_targets
   - run_mutation_tests
   - run_git_cliff

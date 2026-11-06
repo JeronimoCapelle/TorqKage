@@ -928,16 +928,6 @@ output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 60
 
-[tools.run_cargo_fmt]
-description = "Formats all workspace source files according to rustfmt style guidelines"
-action = "static_command"
-category = "compilation"
-mutating = true
-command = ["cargo", "fmt"]
-output_capture = "stdout"
-truncate_lines = 50
-timeout_seconds = 30
-
 [tools.run_pre_release_gauntlet]
 description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, auto-format, tests, clippy -D warnings, ancillary targets, and docs) in a single pass"
 action = "static_command"
