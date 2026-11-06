@@ -40,9 +40,8 @@ pub use fast_hash::{
 };
 pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
-    CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, ProjectGateCheck,
-    VcsConflictCheck, WorkspaceCleanCheck, evaluate_finisher_readiness, evaluate_pre_flight_checks,
-    find_agent_manifest_path, parse_pre_launch_checks,
+    GateCheck, GateCheckStatus, ProjectGateCheck, VcsConflictCheck, WorkspaceCleanCheck,
+    evaluate_pre_flight_checks, find_agent_manifest_path, parse_pre_launch_checks,
 };
 pub use jujutsu::JujutsuWorkspace;
 pub use limits::{
@@ -56,7 +55,7 @@ pub use models::{
     InjectStep, PipelineHandoff, PostInvocationInput, PostInvocationResponse, PostToolUseInput,
     PreInvocationInput, PreInvocationResponse, PreToolResponse, PreToolUseInput, SessionStartInput,
     SessionStartResponse, SystemMessagePayload, StopInput, StopResponse, ToolCallPayload,
-    extract_compiler_error_signature, extract_rustc_error_code,
+    extract_compiler_error_signature, extract_bracketed_error_code,
 };
 pub use project::{
     GateDefinition, ProjectConfig, ProjectDocsConfig, ProjectMeta, ProjectSandboxConfig,

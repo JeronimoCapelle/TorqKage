@@ -11,7 +11,7 @@
 //! - `pre-tool-use`: Unified hybrid `PreToolUse` hook evaluating `hooks.toml` pipeline (alias: `tool-use`).
 //! - `detect-wip`: Emits ephemeral notification on working tree modification; burns zero tokens if clean.
 //! - `check-conflicts`: Blocks builds and tests if unresolved Jujutsu or Git conflict markers exist.
-//! - `check-subagent`: Intercepts `invoke_subagent` and evaluates declared `pre_launch_checks` (alias: `check-finisher`).
+//! - `check-subagent`: Intercepts `invoke_subagent` and evaluates declared `pre_launch_checks`.
 //! - `enforce-tool-policy`: Enforces operator confirmation (`ask`) for mutating tools or tripped circuit breaker.
 //! - `record-handoff`: Captures session state and modified files to `.agy/state/` upon session termination.
 //! - `inject-wake`: Injects prior handoff state into Turn 1 of new conversation sessions.
@@ -21,12 +21,12 @@
 
 mod config;
 mod conflicts;
-mod finisher_gate;
 mod handoff;
 mod manifest_guard;
 mod policy_gate;
 mod pre_tool_use;
 mod stdin;
+mod subagent_gate;
 mod wip;
 
 use std::process::ExitCode;
@@ -48,8 +48,8 @@ fn main() -> ExitCode {
             conflicts::execute();
             ExitCode::SUCCESS
         }
-        "check-subagent" | "check-finisher" => {
-            finisher_gate::execute();
+        "check-subagent" => {
+            subagent_gate::execute();
             ExitCode::SUCCESS
         }
         "enforce-tool-policy" => {
@@ -86,7 +86,7 @@ fn print_usage() {
     eprintln!("  pre-tool-use          Unified hybrid PreToolUse hook evaluating hooks.toml pipeline (alias: tool-use)");
     eprintln!("  detect-wip            PreInvocation ephemeral notification on working tree modification");
     eprintln!("  check-conflicts       PreToolUse hook blocking builds/tests when unresolved conflicts exist");
-    eprintln!("  check-subagent        PreToolUse hook blocking subagent dispatch when pre-launch quality gates fail (alias: check-finisher)");
+    eprintln!("  check-subagent        PreToolUse hook blocking subagent dispatch when pre-launch quality gates fail");
     eprintln!("  enforce-tool-policy   PreToolUse hook enforcing granular ASK vs ALLOW decision per tool");
     eprintln!("  record-handoff        Stop hook recording session metadata to .agy/state/last_handoff.md");
     eprintln!("  inject-wake           SessionStart hook injecting last handoff state into conversation");

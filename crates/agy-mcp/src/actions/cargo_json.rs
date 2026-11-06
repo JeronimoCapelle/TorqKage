@@ -21,6 +21,9 @@ pub(crate) fn execute(
     }
 
     let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
+    if !binary.contains('/') && which::which(binary).is_err() {
+        return Err(format!("Configured compiler binary '{binary}' for tool '{}' is not installed on host ($PATH)", tool.name));
+    }
     let mut args: Vec<String> = tool.command.get(1..).unwrap_or(&[]).to_vec();
 
     // Ensure --color=never is supplied if not already present
@@ -39,17 +42,17 @@ pub(crate) fn execute(
 
     if rendered_diagnostics.is_empty() {
         if output.status.success() {
-            return Ok(("Cargo verification passed: 0 errors, 0 warnings.".to_owned(), false));
+            return Ok(("Verification passed: 0 errors, 0 warnings.".to_owned(), false));
         }
 
         // Check if stderr contains something relevant (e.g. build failure or panic)
         let stderr_str = String::from_utf8_lossy(&output.stderr);
         let trimmed_stderr = stderr_str.trim();
         if !trimmed_stderr.is_empty() {
-            return Ok((format!("Cargo check failed:\n{trimmed_stderr}"), true));
+            return Ok((format!("Verification check failed:\n{trimmed_stderr}"), true));
         }
 
-        return Ok(("Cargo verification failed with non-zero exit code.".to_owned(), true));
+        return Ok(("Verification failed with non-zero exit code.".to_owned(), true));
     }
 
     let joined = rendered_diagnostics.join("\n\n");

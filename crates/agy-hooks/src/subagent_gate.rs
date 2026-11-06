@@ -1,4 +1,4 @@
-//! Pre-tool gate for `invoke_subagent` calls targeting `finisher` (`check-finisher`).
+//! Pre-tool gate for `invoke_subagent` calls validating declared `pre_launch_checks`.
 
 use std::path::PathBuf;
 use agy_common::{PreToolResponse, PreToolUseInput, WorkspaceResolver};
@@ -6,11 +6,11 @@ use serde_json::Value;
 
 use crate::stdin;
 
-/// Executes the `check-finisher` command.
+/// Executes the `check-subagent` command.
 ///
-/// Inspects incoming `PreToolUseInput` on `stdin`. If the tool call is `invoke_subagent`
-/// with target type `finisher`, it executes all modular gate checks (compilation, test compilation,
-/// VCS merge conflicts). If any checks fail, it outputs a blocking `PreToolResponse::deny` payload.
+/// Inspects incoming `PreToolUseInput` on `stdin`. If the tool call is `invoke_subagent`,
+/// it parses the target agent's declared `pre_launch_checks` and executes all specified gates.
+/// If any check fails, it outputs a blocking `PreToolResponse::deny` payload.
 /// Otherwise, outputs `PreToolResponse::allow`.
 pub(crate) fn execute() {
     let input = stdin::read_stdin_payload::<PreToolUseInput>();
@@ -115,9 +115,9 @@ mod tests {
     }
 
     #[test]
-    fn test_finisher_subagent_evaluates_readiness() {
+    fn test_subagent_evaluates_readiness() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "finisher_test_{}",
+            "admission_test_{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -126,17 +126,17 @@ mod tests {
         let agents_dir = temp_dir.join("plugins/agy-suite/agents");
         drop(std::fs::create_dir_all(&agents_dir));
         drop(std::fs::write(
-            agents_dir.join("finisher.md"),
-            "---\nname: finisher\npre_launch_checks:\n  - vcs_conflicts\n---\nPrompt",
+            agents_dir.join("reviewer.md"),
+            "---\nname: reviewer\npre_launch_checks:\n  - vcs_conflicts\n---\nPrompt",
         ));
 
         let mut input = PreToolUseInput {
             tool_call: Some(ToolCallPayload {
                 name: "invoke_subagent".to_owned(),
                 args: json!({
-                    "TypeName": "finisher",
-                    "Role": "Release auditor",
-                    "Prompt": "Check PR readiness"
+                    "TypeName": "reviewer",
+                    "Role": "Review auditor",
+                    "Prompt": "Check workspace readiness"
                 }),
             }),
             ..Default::default()

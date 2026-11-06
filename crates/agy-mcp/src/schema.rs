@@ -98,7 +98,7 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
             "properties": {
                 "tool_name": {
                     "type": "string",
-                    "description": "Name of the CLI binary or command to look up manual, recipes, or usage for (e.g. 'cargo', 'git', 'perf', 'valgrind')"
+                    "description": "Name of the CLI binary or command to look up manual, recipes, or usage for (e.g. 'git', 'make', 'pytest', 'valgrind')"
                 },
                 "query": {
                     "type": "string",

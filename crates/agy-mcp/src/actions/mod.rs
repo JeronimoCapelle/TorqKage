@@ -56,6 +56,12 @@ pub(crate) fn execute_supervised_command_with_detector<F>(
 where
     F: Fn() -> bool,
 {
+    if !program.contains('/') && which::which(program).is_err() {
+        return Err(format!(
+            "Tool '{tool_name}' failed to execute: binary '{program}' is not installed on host ($PATH)"
+        ));
+    }
+
     let (base_args, dynamic_args) = args;
     if enforce_sandbox {
         if is_outer_sandbox() {

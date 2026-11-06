@@ -627,14 +627,14 @@ pub fn extract_compiler_error_signature(output: &str, custom_prefix: Option<&str
         }
     }
 
-    extract_rustc_error_code(output)
+    extract_bracketed_error_code(output)
 }
 
-/// Extracts the first compiler error code (e.g., "E0502") from compiler output.
+/// Extracts the first bracketed compiler error code (e.g., "[E0502]", "[syntax-error]") from compiler output.
 #[must_use]
-pub fn extract_rustc_error_code(output: &str) -> Option<String> {
+pub fn extract_bracketed_error_code(output: &str) -> Option<String> {
     for line in output.lines() {
-        if let Some(idx) = line.find("error[E") {
+        if let Some(idx) = line.find("error[") {
             let start = idx.saturating_add(6);
             if let Some(rest) = line.get(start..)
                 && let Some(end) = rest.find(']')
@@ -798,11 +798,11 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_rustc_error_code() {
+    fn test_extract_bracketed_error_code() {
         let sample_output = "error[E0502]: cannot borrow `*self` as mutable, as it is also borrowed as immutable\n  --> src/main.rs:10:5";
-        assert_eq!(extract_rustc_error_code(sample_output), Some("E0502".to_owned()));
+        assert_eq!(extract_bracketed_error_code(sample_output), Some("E0502".to_owned()));
 
         let clean_output = "Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s";
-        assert_eq!(extract_rustc_error_code(clean_output), None);
+        assert_eq!(extract_bracketed_error_code(clean_output), None);
     }
 }

@@ -46,35 +46,59 @@ pub(crate) fn execute(
 }
 
 fn resolve_tool_help(name: &str, query_opt: Option<&str>) -> String {
-    // 1. If a specific query/topic was provided, check navi first
-    if let Some(query) = query_opt
+    let tool_installed = which::which(name).is_ok();
+    let navi_installed = which::which("navi").is_ok();
+    let tldr_installed = which::which("tldr").is_ok();
+    let man_installed = which::which("man").is_ok();
+
+    // 1. If a specific query/topic was provided, check navi first (if installed)
+    if navi_installed
+        && let Some(query) = query_opt
         && !query.is_empty()
         && let Some(recipe) = query_navi(name, query)
     {
         return format!("# navi cheatsheet recipe: {name} ({query})\n\n```bash\n{recipe}\n```");
     }
 
-    // 2. Query tldr for concise, task-oriented examples
-    if let Some(tldr) = query_tldr(name) {
+    // 2. Query tldr for concise, task-oriented examples (if installed)
+    if tldr_installed
+        && let Some(tldr) = query_tldr(name)
+    {
         return format!("# tldr cheatsheet: {name}\n\n{tldr}");
     }
 
-    // 3. Query navi with tool name alone if tldr was absent
-    if let Some(recipe) = query_navi(name, "") {
+    // 3. Query navi with tool name alone if tldr was absent (if installed)
+    if navi_installed
+        && let Some(recipe) = query_navi(name, "")
+    {
         return format!("# navi cheatsheet recipe: {name}\n\n```bash\n{recipe}\n```");
     }
 
-    // 4. Query tool's native `--help` flag
-    if let Some(help) = query_cli_help(name) {
+    // 4. Query tool's native `--help` flag (only if tool binary is actually installed)
+    if tool_installed
+        && let Some(help) = query_cli_help(name)
+    {
         return format!("# {name} --help\n\n{help}");
     }
 
-    // 5. Query man page and extract concise NAME + SYNOPSIS block
-    if let Some(man_synopsis) = query_man_synopsis(name) {
+    // 5. Query man page and extract concise NAME + SYNOPSIS block (if installed)
+    if man_installed
+        && let Some(man_synopsis) = query_man_synopsis(name)
+    {
         return format!("# man synopsis: {name}\n\n{man_synopsis}");
     }
 
-    format!("No manual, tldr, navi recipe, or --help usage output available for command '{name}' on host system.")
+    if !tool_installed {
+        return format!(
+            "Tool '{name}' is not installed on the host system ($PATH), and no local tldr/navi/man documentation was found."
+        );
+    }
+
+    let mut msg = format!("No manual, tldr, navi recipe, or --help usage output available for command '{name}' on host system.");
+    if !tldr_installed && !navi_installed {
+        msg.push_str("\n\n[Advisory]: Cheatsheet utilities 'tldr' and 'navi' are not installed on this host. Installing them enables rich offline command recipes.");
+    }
+    msg
 }
 
 fn query_navi(name: &str, query: &str) -> Option<String> {
@@ -171,46 +195,13 @@ fn extract_man_snippet(man_text: &str) -> Option<String> {
 }
 
 fn default_tool_catalog() -> String {
-    "# Available CLI Tooling in agy-suite\n\
+    "# CLI Tool Manual & Reference Guide\n\
      \n\
-     ## Category C: Test Synthesis & Verification (Agent: test-author)\n\
-     - cargo-nextest: Parallel test harness runner (3x faster than standard test runner)\n\
-     - cargo-llvm-cov: Source-based branch and line code coverage reports\n\
-     - cargo-mutants: Mutation testing framework uncovering weak test assertions\n\
-     - cargo-insta: Snapshot testing review tool for golden files, AST, and state\n\
-     - cargo-fuzz: Native libFuzzer integration for panic discovery and security bounds\n\
+     Specify a tool name using the `tool_name` parameter to inspect manuals, usage cheatsheets, and recipes.\n\
      \n\
-     ## Category D: Performance & Hardware Diagnostics (Agent: perf-analyst)\n\
-     - cargo-show-asm: Disassembles Rust symbols to assembly or LLVM-IR (SIMD/loops)\n\
-     - cargo-bench: Latency and throughput microbenchmarks via Criterion/Divan\n\
-     - cargo-careful: Fast runtime undefined behavior (UB) and memory sanitizer\n\
-     - cargo-miri: Deep interpreter for stacked/tree borrows, UB, and pointer provenance\n\
-     - cargo-flamegraph: Generates CPU callstack flamegraphs to identify bottlenecks\n\
-     - cargo-perf: Linux hardware performance counters (cache misses, IPC, branch miss)\n\
-     - cargo-bloat: Binary footprint and monomorphization text-size analyzer\n\
-     - hyperfine: Statistical CLI benchmarking with warmup runs and cache clearing\n\
-     - samply: Sampling CPU profiler with Firefox Profiler visual flamecharts\n\
-     - cargo-binutils (size, nm, objdump): Low-level ELF sections, symbols, disassembly\n\
-     \n\
-     ## Category E: Static Analysis & SemVer (Agent: spec-checker)\n\
-     - cargo-clippy: Strict idiomatic Rust linter (-D warnings)\n\
-     - cargo-deny: Audits dependency tree for RUSTSEC advisories, copyleft licenses, bans\n\
-     - cargo-machete: Fast scanner detecting unused dependencies in Cargo.toml\n\
-     - cargo-semver-checks: Validates public API changes adhere to Semantic Versioning\n\
-     - cargo-public-api: Diffs exposed public crate API signatures across git revisions\n\
-     - cargo-hack: Matrix verification testing across all feature flag combinations\n\
-     - cargo-modules: Module tree visualization (visibility and internal hierarchy)\n\
-     - cargo-expand: Macro expansion introspection (macro_rules! and proc macros)\n\
-     \n\
-     ## Category B & Release (Agents: planner / finisher / operator)\n\
-     - cargo-zigbuild: Cross-compiles using Zig (musl, windows, aarch64, riscv)\n\
-     - git-cliff: Conventional commits changelog generator (Agent: finisher)\n\
-     - cargo-add / cargo-remove / cargo-update: Managed Cargo.toml dependency changes\n\
-     - cargo-generate: Scaffolds crates from git templates\n\
-     - agy-hooks: Ephemeral Antigravity lifecycle hook runner\n\
-     \n\
-     ## Category A: Strictly USER-ONLY Actions\n\
-     - cargo publish, cargo yank, cargo clean-all, cargo login: Banned from all autonomous agents\n"
+     Examples:\n\
+     - `query_tool_help(tool_name=\"git\")`: View command synopsis and help.\n\
+     - `query_tool_help(tool_name=\"git\", query=\"rebase\")`: View recipes for git rebase.\n"
         .to_owned()
 }
 
@@ -230,7 +221,7 @@ mod tests {
         let args = serde_json::json!({});
         let (out, is_err) = execute(&tool, &args);
         assert!(!is_err);
-        assert!(out.contains("Available CLI Tooling"));
+        assert!(out.contains("CLI Tool Manual"));
     }
 
     #[test]

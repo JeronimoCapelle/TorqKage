@@ -1,13 +1,10 @@
 //! # gatekeeper
 //!
-//! Modular quality gatekeeper and pre-flight validation rules for specialized agents (e.g., `finisher`).
+//! Modular quality gatekeeper and pre-flight validation rules for specialized agents.
 
 use std::path::Path;
 use std::process::Command;
-use crate::limits::{
-    DEFAULT_GATE_TIMEOUT_SECS, DEFAULT_PREVIEW_LINES, DEFAULT_TEST_GATE_TIMEOUT_SECS,
-    DEFAULT_VCS_QUERY_TIMEOUT_SECS,
-};
+use crate::limits::{DEFAULT_PREVIEW_LINES, DEFAULT_VCS_QUERY_TIMEOUT_SECS};
 use crate::project::ProjectConfig;
 use crate::supervisor::SubprocessSupervisor;
 
@@ -57,6 +54,18 @@ impl ProjectGateCheck {
     }
 }
 
+fn is_binary_in_path(binary: &str) -> bool {
+    if let Some(paths) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&paths) {
+            let full = dir.join(binary);
+            if full.is_file() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 impl GateCheck for ProjectGateCheck {
     fn name(&self) -> &str {
         &self.name
@@ -66,6 +75,12 @@ impl GateCheck for ProjectGateCheck {
         let Some(binary) = self.command.first() else {
             return GateCheckStatus::Passed;
         };
+        if !binary.contains('/') && !is_binary_in_path(binary) {
+            return GateCheckStatus::Failed(format!(
+                "Quality gate '{}' binary '{binary}' is not installed on host ($PATH)",
+                self.name
+            ));
+        }
         let args = self.command.get(1..).unwrap_or(&[]);
 
         let mut cmd = Command::new(binary);
@@ -88,88 +103,6 @@ impl GateCheck for ProjectGateCheck {
                 }
             }
             Err(e) => GateCheckStatus::Failed(format!("Failed to execute gate '{}': {e}", self.name)),
-        }
-    }
-}
-
-/// Validates that the project compiles cleanly (`cargo check --all-targets`).
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CargoCompilationCheck;
-
-impl GateCheck for CargoCompilationCheck {
-    #[allow(clippy::unnecessary_literal_bound, reason = "Fulfills GateCheck trait returning &str")]
-    fn name(&self) -> &str {
-        "Cargo Compilation Check"
-    }
-
-    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
-        if !workspace_root.join("Cargo.toml").is_file() {
-            return GateCheckStatus::Passed;
-        }
-
-        let mut cmd = Command::new("cargo");
-        cmd.args(["check", "--all-targets"]);
-        cmd.current_dir(workspace_root);
-
-        match SubprocessSupervisor::run_supervised(cmd, DEFAULT_GATE_TIMEOUT_SECS) {
-            Ok(out) => {
-                if out.status.success() {
-                    GateCheckStatus::Passed
-                } else {
-                    let stderr = String::from_utf8_lossy(&out.stderr);
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
-                    let diag = truncated.join("\n");
-                    GateCheckStatus::Failed(format!(
-                        "Project compilation failed (`cargo check --all-targets`).\n\
-                         100% clean compilation required before subagent launch.\n\n\
-                         [Compiler Output]:\n{diag}"
-                    ))
-                }
-            }
-            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo check': {e}")),
-        }
-    }
-}
-
-/// Validates that test harnesses compile without errors (`cargo test --no-run`).
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CargoTestCompilationCheck;
-
-impl GateCheck for CargoTestCompilationCheck {
-    #[allow(clippy::unnecessary_literal_bound, reason = "Fulfills GateCheck trait returning &str")]
-    fn name(&self) -> &str {
-        "Cargo Test Harness Compilation Check"
-    }
-
-    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
-        if !workspace_root.join("Cargo.toml").is_file() {
-            return GateCheckStatus::Passed;
-        }
-
-        let mut cmd = Command::new("cargo");
-        cmd.args(["test", "--no-run"]);
-        cmd.current_dir(workspace_root);
-
-        match SubprocessSupervisor::run_supervised(cmd, DEFAULT_TEST_GATE_TIMEOUT_SECS) {
-            Ok(out) => {
-                if out.status.success() {
-                    GateCheckStatus::Passed
-                } else {
-                    let stderr = String::from_utf8_lossy(&out.stderr);
-                    let stdout = String::from_utf8_lossy(&out.stdout);
-                    let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
-                    let diag = truncated.join("\n");
-                    GateCheckStatus::Failed(format!(
-                        "Test suite compilation failed (`cargo test --no-run`).\n\
-                         All tests must compile before subagent launch.\n\n\
-                         [Compiler Output]:\n{diag}"
-                    ))
-                }
-            }
-            Err(e) => GateCheckStatus::Failed(format!("Failed to execute 'cargo test --no-run': {e}")),
         }
     }
 }
@@ -261,73 +194,47 @@ impl GateCheck for WorkspaceCleanCheck {
 
 /// Evaluates pre-flight admission checks specified by name.
 ///
-/// Recognized check names:
+/// Built-in checks:
 /// - `"vcs_conflicts"` -> `VcsConflictCheck`
 /// - `"workspace_clean"` -> `WorkspaceCleanCheck`
-/// - `"compilation"` -> `ProjectGateCheck` (or `CargoCompilationCheck`)
-/// - `"tests"` -> `ProjectGateCheck` (or `CargoTestCompilationCheck`)
-/// - `"linter"` -> `ProjectGateCheck` (linter gate)
-/// - Any custom gate name defined in `project.toml [gates.<name>]`
+/// - Any quality gate configured dynamically in `project.toml [gates.<name>]`
+///
+/// Fallback behavior:
+/// - If a gate is required by an agent manifest but not configured in `project.toml`,
+///   admission fails with a descriptive error. No language-specific commands are assumed.
 ///
 /// # Errors
 /// Returns a list of blocking failure diagnostics if any mandatory check fails.
 pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -> Result<Vec<String>, Vec<String>> {
     let project = ProjectConfig::detect_or_load(workspace_root);
     let mut checks: Vec<Box<dyn GateCheck>> = Vec::new();
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
 
     for name in check_names {
         match *name {
             "vcs_conflicts" => checks.push(Box::new(VcsConflictCheck)),
             "workspace_clean" => checks.push(Box::new(WorkspaceCleanCheck)),
-            "compilation" => {
-                if let Some(gate) = project.gates.get("compilation") {
+            gate_name => {
+                if let Some(gate) = project.gates.get(gate_name) {
                     checks.push(Box::new(ProjectGateCheck::new(
-                        "Compilation Check",
+                        format!("Quality Gate: {gate_name}"),
                         gate.command.clone(),
                         gate.timeout_seconds,
                         gate.failure_message.clone(),
                     )));
+                } else if project.gates.is_empty() {
+                    warnings.push(format!(
+                        "Advisory: Gate '{gate_name}' was requested, but workspace has no quality gates configured in project.toml."
+                    ));
                 } else {
-                    checks.push(Box::new(CargoCompilationCheck));
-                }
-            }
-            "tests" => {
-                if let Some(gate) = project.gates.get("tests") {
-                    checks.push(Box::new(ProjectGateCheck::new(
-                        "Test Compilation Check",
-                        gate.command.clone(),
-                        gate.timeout_seconds,
-                        gate.failure_message.clone(),
-                    )));
-                } else {
-                    checks.push(Box::new(CargoTestCompilationCheck));
-                }
-            }
-            "linter" => {
-                if let Some(gate) = project.gates.get("linter") {
-                    checks.push(Box::new(ProjectGateCheck::new(
-                        "Linter Check",
-                        gate.command.clone(),
-                        gate.timeout_seconds,
-                        gate.failure_message.clone(),
-                    )));
-                }
-            }
-            custom => {
-                if let Some(gate) = project.gates.get(custom) {
-                    checks.push(Box::new(ProjectGateCheck::new(
-                        custom.to_owned(),
-                        gate.command.clone(),
-                        gate.timeout_seconds,
-                        gate.failure_message.clone(),
-                    )));
+                    errors.push(format!(
+                        "Pre-launch check '{gate_name}' is required by agent manifest, but no gate '[gates.{gate_name}]' is defined in project.toml."
+                    ));
                 }
             }
         }
     }
-
-    let mut errors = Vec::new();
-    let mut warnings = Vec::new();
 
     for check in checks {
         match check.execute(workspace_root) {
@@ -342,22 +249,6 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
     } else {
         Err(errors)
     }
-}
-
-/// Evaluates all mandatory and advisory pre-checks before allowing `finisher` execution.
-///
-/// # Errors
-/// Returns a list of blocking failure diagnostics if any mandatory check fails.
-pub fn evaluate_finisher_readiness(workspace_root: &Path) -> Result<Vec<String>, Vec<String>> {
-    let project = ProjectConfig::detect_or_load(workspace_root);
-    let mut check_names = vec!["vcs_conflicts"];
-    if project.gates.contains_key("compilation") || workspace_root.join("Cargo.toml").is_file() {
-        check_names.push("compilation");
-    }
-    if project.gates.contains_key("tests") || workspace_root.join("Cargo.toml").is_file() {
-        check_names.push("tests");
-    }
-    evaluate_pre_flight_checks(workspace_root, &check_names)
 }
 
 /// Discovers the path to an agent's Markdown specification file.

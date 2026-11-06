@@ -621,51 +621,9 @@ fn draw_directives_editor(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn draw_manual_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(28), // Sections list
-            Constraint::Min(40),    // Section content
-        ])
-        .split(area);
-
-    // Left pane: Sections list
-    let sections: Vec<ListItem<'_>> = crate::manual::ManualSection::ALL
-        .iter()
-        .enumerate()
-        .map(|(idx, section)| {
-            let is_selected = idx == app.manual_section_idx;
-            let style = if is_selected {
-                Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            let prefix = if is_selected { "▶ " } else { "  " };
-            ListItem::new(Line::from(vec![
-                Span::styled(prefix, style),
-                Span::styled(section.title(), style),
-            ]))
-        })
-        .collect();
-
-    let section_block = Block::default()
-        .title(" [Sections ( [ / ] )] ")
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::Cyan));
-
-    let section_list = List::new(sections).block(section_block);
-    frame.render_widget(section_list, chunks[0]);
-
-    // Right pane: Content
-    let active_section = crate::manual::ManualSection::ALL
-        .get(app.manual_section_idx)
-        .copied()
-        .unwrap_or(crate::manual::ManualSection::Keybindings);
-
-    let content_lines = active_section.lines();
+    let content_lines = crate::manual::controls_content();
     let content_block = Block::default()
-        .title(format!(" [{}] (Scroll: j/k, PgUp/PgDn) ", active_section.title()))
+        .title(" [Controls & Keybindings Reference] (Scroll: j/k, PgUp/PgDn, Esc/Enter to close) ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Yellow));
@@ -675,7 +633,7 @@ fn draw_manual_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .wrap(Wrap { trim: false })
         .scroll((app.manual_scroll, 0));
 
-    frame.render_widget(content_para, chunks[1]);
+    frame.render_widget(content_para, area);
 }
 
 fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {

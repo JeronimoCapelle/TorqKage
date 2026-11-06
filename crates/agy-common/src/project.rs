@@ -342,52 +342,6 @@ impl ProjectConfig {
     }
 
     fn infer_rust() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["cargo".into(), "check".into(), "--all-targets".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some(
-                    "Project compilation failed (`cargo check --all-targets`).".into(),
-                ),
-                error_regex: Some("error[E".into()),
-                explain_command: Some(vec!["rustc".into(), "--explain".into()]),
-            },
-        );
-        gates.insert(
-            "tests".to_owned(),
-            GateDefinition {
-                command: vec!["cargo".into(), "test".into(), "--no-run".into()],
-                timeout_seconds: DEFAULT_TEST_GATE_TIMEOUT_SECS,
-                failure_message: Some(
-                    "Test suite compilation failed (`cargo test --no-run`).".into(),
-                ),
-                error_regex: Some("error[E".into()),
-                explain_command: Some(vec!["rustc".into(), "--explain".into()]),
-            },
-        );
-        gates.insert(
-            "linter".to_owned(),
-            GateDefinition {
-                command: vec![
-                    "cargo".into(),
-                    "clippy".into(),
-                    "--all-targets".into(),
-                    "--".into(),
-                    "-D".into(),
-                    "warnings".into(),
-                ],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("Linter check failed (`cargo clippy`).".into()),
-                error_regex: Some("error[E".into()),
-                explain_command: None,
-            },
-        );
-
-        let mut environment = BTreeMap::new();
-        environment.insert("CARGO_TARGET_DIR".into(), "target".into());
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -398,11 +352,11 @@ impl ProjectConfig {
                 containers: vec!["crates".into(), "packages".into()],
                 ignored_paths: vec!["target".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec!["target".into()],
             },
-            environment,
+            environment: BTreeMap::new(),
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
@@ -411,28 +365,6 @@ impl ProjectConfig {
     }
 
     fn infer_zig() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["zig".into(), "build".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("Zig project build failed (`zig build`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-        gates.insert(
-            "tests".to_owned(),
-            GateDefinition {
-                command: vec!["zig".into(), "build".into(), "test".into(), "--no-exec".into()],
-                timeout_seconds: DEFAULT_TEST_GATE_TIMEOUT_SECS,
-                failure_message: Some("Zig test build failed (`zig build test --no-exec`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -443,7 +375,7 @@ impl ProjectConfig {
                 containers: Vec::new(),
                 ignored_paths: vec![".zig-cache".into(), "zig-out".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec![".zig-cache".into(), "zig-out".into()],
             },
@@ -456,28 +388,6 @@ impl ProjectConfig {
     }
 
     fn infer_go() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["go".into(), "build".into(), "./...".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("Go package build failed (`go build ./...`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-        gates.insert(
-            "tests".to_owned(),
-            GateDefinition {
-                command: vec!["go".into(), "test".into(), "-run=^$".into(), "./...".into()],
-                timeout_seconds: DEFAULT_TEST_GATE_TIMEOUT_SECS,
-                failure_message: Some("Go test compilation failed (`go test -run=^$ ./...`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -488,7 +398,7 @@ impl ProjectConfig {
                 containers: Vec::new(),
                 ignored_paths: vec![".cache/go-build".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec![".cache/go-build".into()],
             },
@@ -501,18 +411,6 @@ impl ProjectConfig {
     }
 
     fn infer_typescript() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["pnpm".into(), "typecheck".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("TypeScript typecheck failed (`pnpm typecheck`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -523,7 +421,7 @@ impl ProjectConfig {
                 containers: vec!["packages".into(), "apps".into()],
                 ignored_paths: vec![".turbo".into(), "node_modules/.cache".into(), "dist".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec![".turbo".into(), "node_modules/.cache".into()],
             },
@@ -536,18 +434,6 @@ impl ProjectConfig {
     }
 
     fn infer_python() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["mypy".into(), ".".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("Python typecheck failed (`mypy .`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -558,7 +444,7 @@ impl ProjectConfig {
                 containers: Vec::new(),
                 ignored_paths: vec![".pytest_cache".into(), ".mypy_cache".into(), "__pycache__".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec![".pytest_cache".into(), ".mypy_cache".into()],
             },
@@ -571,18 +457,6 @@ impl ProjectConfig {
     }
 
     fn infer_meson() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["meson".into(), "compile".into(), "-C".into(), "build".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("Meson build compilation failed (`meson compile -C build`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -593,7 +467,7 @@ impl ProjectConfig {
                 containers: Vec::new(),
                 ignored_paths: vec!["build".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec!["build".into()],
             },
@@ -606,18 +480,6 @@ impl ProjectConfig {
     }
 
     fn infer_cmake() -> Self {
-        let mut gates = BTreeMap::new();
-        gates.insert(
-            "compilation".to_owned(),
-            GateDefinition {
-                command: vec!["cmake".into(), "--build".into(), "build".into()],
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: Some("CMake build compilation failed (`cmake --build build`).".into()),
-                error_regex: None,
-                explain_command: None,
-            },
-        );
-
         Self {
             project: ProjectMeta {
                 name: None,
@@ -628,7 +490,7 @@ impl ProjectConfig {
                 containers: Vec::new(),
                 ignored_paths: vec!["build".into()],
             },
-            gates,
+            gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
                 bind_mounts: vec!["build".into()],
             },
@@ -1045,9 +907,7 @@ filter = "tests_only"
 
         let cfg = ProjectConfig::infer_from_workspace(&temp);
         assert_eq!(cfg.project.language.as_deref(), Some("rust"));
-        assert!(cfg.gates.contains_key("compilation"));
-        assert!(cfg.gates.contains_key("tests"));
-        assert!(cfg.gates.contains_key("linter"));
+        assert!(cfg.gates.is_empty());
         assert_eq!(cfg.sandbox.bind_mounts, vec!["target"]);
 
         drop(std::fs::remove_dir_all(&temp));
@@ -1061,7 +921,7 @@ filter = "tests_only"
 
         let cfg = ProjectConfig::infer_from_workspace(&temp);
         assert_eq!(cfg.project.language.as_deref(), Some("zig"));
-        assert_eq!(cfg.gates["compilation"].command, vec!["zig", "build"]);
+        assert!(cfg.gates.is_empty());
         assert_eq!(cfg.sandbox.bind_mounts, vec![".zig-cache", "zig-out"]);
 
         drop(std::fs::remove_dir_all(&temp));

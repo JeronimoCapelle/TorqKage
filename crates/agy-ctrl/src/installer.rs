@@ -4,13 +4,14 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use agy_common::{DEFAULT_TOOL_TIMEOUT_SECS, SubprocessSupervisor};
+use agy_common::{DEFAULT_TOOL_TIMEOUT_SECS, FastHashSet, SubprocessSupervisor};
+use crate::model::load_tools_from_file;
 
 /// Prerequisite binary diagnostic report item.
 #[derive(Debug, Clone)]
 pub(crate) struct BinaryCheck {
-    pub(crate) name: &'static str,
-    pub(crate) description: &'static str,
+    pub(crate) name: String,
+    pub(crate) description: String,
     pub(crate) required: bool,
     pub(crate) installed: bool,
 }
@@ -65,15 +66,14 @@ impl DiagnosticsReport {
 }
 
 /// Checks whether a binary is available in system `PATH`.
-fn is_binary_available(name: &str) -> bool {
-    let mut cmd = Command::new("which");
-    cmd.arg(name);
-    SubprocessSupervisor::run_supervised(cmd, 3).is_ok_and(|out| out.status.success())
+pub(crate) fn is_binary_available(name: &str) -> bool {
+    which::which(name).is_ok()
 }
 
-/// Runs a diagnostic scan of the host environment and plugin install path.
+/// Runs a diagnostic scan of the host environment, plugin install path,
+/// and dynamically validates all binaries declared across tools.toml and project.toml.
 #[must_use]
-pub(crate) fn run_diagnostics(_workspace_root: &Path) -> DiagnosticsReport {
+pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
     let plugin_path = std::env::var("HOME")
         .map_or_else(|_| PathBuf::from(".gemini/config/plugins/agy-suite"), |h| {
             PathBuf::from(h).join(".gemini/config/plugins/agy-suite")
@@ -82,68 +82,74 @@ pub(crate) fn run_diagnostics(_workspace_root: &Path) -> DiagnosticsReport {
     let plugin_installed = plugin_path.exists();
     let is_symlink = plugin_path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink());
 
-    let binary_checks = vec![
+    let mut binary_checks = vec![
         BinaryCheck {
-            name: "agy",
-            description: "Antigravity CLI harness for agent execution",
+            name: "agy".to_owned(),
+            description: "Antigravity CLI harness for agent execution".to_owned(),
             required: true,
             installed: is_binary_available("agy"),
         },
         BinaryCheck {
-            name: "jj",
-            description: "Jujutsu VCS for isolated subagent workspaces",
-            required: true,
+            name: "jj".to_owned(),
+            description: "Jujutsu VCS for isolated subagent workspaces".to_owned(),
+            required: false,
             installed: is_binary_available("jj"),
         },
         BinaryCheck {
-            name: "bwrap",
-            description: "Bubblewrap unprivileged Linux container sandbox",
+            name: "git".to_owned(),
+            description: "Git version control system".to_owned(),
+            required: false,
+            installed: is_binary_available("git"),
+        },
+        BinaryCheck {
+            name: "bwrap".to_owned(),
+            description: "Bubblewrap unprivileged Linux container sandbox".to_owned(),
             required: false,
             installed: is_binary_available("bwrap"),
         },
-        BinaryCheck {
-            name: "cargo",
-            description: "Rust package manager & build system",
-            required: true,
-            installed: is_binary_available("cargo"),
-        },
-        BinaryCheck {
-            name: "rustc",
-            description: "Rust compiler",
-            required: true,
-            installed: is_binary_available("rustc"),
-        },
-        BinaryCheck {
-            name: "paru",
-            description: "Arch Linux AUR & package helper",
-            required: false,
-            installed: is_binary_available("paru"),
-        },
-        BinaryCheck {
-            name: "cargo-binstall",
-            description: "Fast binary crate installer",
-            required: false,
-            installed: is_binary_available("cargo-binstall"),
-        },
-        BinaryCheck {
-            name: "cargo-nextest",
-            description: "Parallel test harness runner",
-            required: false,
-            installed: is_binary_available("cargo-nextest"),
-        },
-        BinaryCheck {
-            name: "cargo-llvm-cov",
-            description: "Source-based code coverage generator",
-            required: false,
-            installed: is_binary_available("cargo-llvm-cov"),
-        },
-        BinaryCheck {
-            name: "cargo-mutants",
-            description: "Mutation testing framework",
-            required: false,
-            installed: is_binary_available("cargo-mutants"),
-        },
     ];
+
+    let mut checked_names = FastHashSet::default();
+    checked_names.insert("agy".to_owned());
+    checked_names.insert("jj".to_owned());
+    checked_names.insert("git".to_owned());
+    checked_names.insert("bwrap".to_owned());
+
+    // Dynamically check tools declared in tools.toml
+    if let Ok(tools) = load_tools_from_file(workspace_root) {
+        for tool in &tools {
+            if let Some(cmd) = &tool.command
+                && let Some(bin) = cmd.first()
+                && !bin.is_empty()
+                && checked_names.insert(bin.clone())
+            {
+                let installed = is_binary_available(bin);
+                binary_checks.push(BinaryCheck {
+                    name: bin.clone(),
+                    description: format!("Declared tool '{}' in tools.toml", tool.name),
+                    required: false,
+                    installed,
+                });
+            }
+        }
+    }
+
+    // Dynamically check quality gate commands configured in project.toml
+    let project = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    for (gate_name, gate) in &project.gates {
+        if let Some(bin) = gate.command.first()
+            && !bin.is_empty()
+            && checked_names.insert(bin.clone())
+        {
+            let installed = is_binary_available(bin);
+            binary_checks.push(BinaryCheck {
+                name: bin.clone(),
+                description: format!("Project quality gate '[gates.{gate_name}]'"),
+                required: true,
+                installed,
+            });
+        }
+    }
 
     DiagnosticsReport {
         plugin_installed,

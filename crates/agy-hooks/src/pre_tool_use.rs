@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use agy_common::{CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput, WorkspaceResolver};
 use crate::config::{CustomCheck, HooksConfig, matches_pattern};
-use crate::{conflicts, finisher_gate, manifest_guard, policy_gate, stdin};
+use crate::{conflicts, manifest_guard, policy_gate, stdin, subagent_gate};
 
 /// Executes the unified `pre-tool-use` hook.
 pub(crate) fn execute() {
@@ -72,7 +72,7 @@ pub(crate) fn evaluate_pre_tool_use(
             }
             "subagent_admission" => {
                 if tool_name == "invoke_subagent" {
-                    let resp = finisher_gate::evaluate_tool_invocation(input);
+                    let resp = subagent_gate::evaluate_tool_invocation(input);
                     if resp.decision != HookDecision::Allow {
                         return resp;
                     }

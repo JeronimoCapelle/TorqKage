@@ -27,7 +27,7 @@ impl ActiveTab {
             Self::FleetOverview => "[1] Fleet Matrix",
             Self::ToolCatalog => "[2] Tool Catalog",
             Self::DirectivesEditor => "[3] Directives Editor",
-            Self::Manual => "[4] Architecture Manual",
+            Self::Manual => "[4] Controls & Help",
         }
     }
 }
@@ -60,7 +60,6 @@ pub(crate) struct App {
     pub(crate) selected_tool_idx: usize,
     pub(crate) selected_category: Option<ToolCategory>,
     pub(crate) directives_scroll: u16,
-    pub(crate) manual_section_idx: usize,
     pub(crate) manual_scroll: u16,
     pub(crate) previous_tab: Option<ActiveTab>,
     pub(crate) show_help: bool,
@@ -122,7 +121,6 @@ impl App {
             selected_tool_idx: 0,
             selected_category: None,
             directives_scroll: 0,
-            manual_section_idx: 0,
             manual_scroll: 0,
             previous_tab: None,
             show_help: false,
@@ -390,26 +388,13 @@ impl App {
         }
     }
 
-    /// Advances to the next manual section.
+    /// Advances manual section (resets scroll).
     pub(crate) const fn next_manual_section(&mut self) {
-        let total = crate::manual::ManualSection::ALL.len();
-        let next = self.manual_section_idx.saturating_add(1);
-        if next >= total {
-            self.manual_section_idx = 0;
-        } else {
-            self.manual_section_idx = next;
-        }
         self.manual_scroll = 0;
     }
 
-    /// Returns to the previous manual section.
+    /// Returns to previous manual section (resets scroll).
     pub(crate) const fn prev_manual_section(&mut self) {
-        let total = crate::manual::ManualSection::ALL.len();
-        if self.manual_section_idx == 0 {
-            self.manual_section_idx = total.saturating_sub(1);
-        } else {
-            self.manual_section_idx = self.manual_section_idx.saturating_sub(1);
-        }
         self.manual_scroll = 0;
     }
 

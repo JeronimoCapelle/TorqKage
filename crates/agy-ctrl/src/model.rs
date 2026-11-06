@@ -11,15 +11,15 @@ use agy_common::tools::{
 /// Category of an MCP tool for filtering and visual grouping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum ToolCategory {
-    /// Compilation & code verification (`cargo check`, `cargo clippy`, `rustfmt`)
+    /// Compilation & code verification (compilers, linters, formatters)
     Compilation,
-    /// Automated testing, coverage & fuzzing (`nextest`, `llvm-cov`, `mutants`, `fuzz`)
+    /// Automated testing, coverage & fuzzing (`test`, `coverage`, `mutants`, `fuzz`)
     Testing,
-    /// Hardware performance, microarchitecture, benchmarks & profiling (`asm`, `llvm-mca`, `samply`, `divan`)
+    /// Hardware performance, microarchitecture, benchmarks & profiling (`asm`, `perf`, `flamegraph`)
     Profiling,
     /// Transactional, bounded filesystem operations (`read_project_file`, `mpatch`)
     Filesystem,
-    /// Supply-chain, licensing, `SemVer` & changelog auditing (`cargo-deny`, `git-cliff`)
+    /// Supply-chain, licensing, `SemVer` & changelog auditing (`licenses`, `semver`)
     Release,
     /// Repository state, Git/JJ inspection, specs & manuals (`diff`, `conflicts`, `tldr`)
     Diagnostics,
