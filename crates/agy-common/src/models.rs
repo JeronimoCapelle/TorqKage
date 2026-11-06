@@ -768,12 +768,12 @@ mod tests {
         assert!(!ledger.tripped);
 
         // Strike 1
-        ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
         assert_eq!(ledger.consecutive_failures, 1);
         assert!(!ledger.tripped);
 
         // Strike 2: Circuit breaker trips!
-        ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
         assert_eq!(ledger.consecutive_failures, 2);
         assert!(ledger.tripped);
         assert_eq!(ledger.last_error_signature.as_deref(), Some("E0502"));
@@ -784,7 +784,7 @@ mod tests {
         assert!(loaded.tripped);
 
         // Record success: resets to clean
-        ledger.record_success(&temp_dir, Some("run_quick_check")).unwrap();
+        ledger.record_success(&temp_dir, Some("quick_check")).unwrap();
         assert_eq!(ledger.consecutive_failures, 0);
         assert!(!ledger.tripped);
 

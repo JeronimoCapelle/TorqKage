@@ -66,7 +66,7 @@ Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-
 
 | Agent | Responsibility | Permitted Directory Scope (Agent Frontmatter) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
 | :--- | :--- | :--- | :--- | :--- |
-| **`coder`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, `run_cargo_verification`, `run_cargo_test`, `run_cargo_clippy`. |
+| **`coder`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, `cargo_check`, `cargo_test`, `cargo_clippy`. |
 | **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, module structure, `cargo doc --no-deps`. |
 | **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), compiler explanations, differential inspection (`llvm-objdump`). |
 | **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. Pre-injected with workspace crate topology. |
@@ -109,10 +109,10 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
 ### Core Engineering Invariants:
 1. **Upfront Verification Planning (Zero Timing Paradox):**
    - The Planner MUST declare the `Required Verification Strategy` in `ARCHITECTURE.md` during inception:
-     * *Pure logic & bit-twiddling:* Kani formal proof (`run_cargo_kani`).
-     * *Atomics & channels:* Loom C11 memory permutation harness (`run_cargo_loom`).
-     * *Raw pointers & `#![no_std]` buffers:* Miri pointer provenance & Tree Borrows (`run_cargo_miri`).
-     * *Instruction decoders (e.g. RISC-V):* Differential execution against reference models or `llvm-objdump` (`run_llvm_objdump`).
+     * *Pure logic & bit-twiddling:* Kani formal proof (`cargo_kani`).
+     * *Atomics & channels:* Loom C11 memory permutation harness (`cargo_loom`).
+     * *Raw pointers & `#![no_std]` buffers:* Miri pointer provenance & Tree Borrows (`cargo_miri`).
+     * *Instruction decoders (e.g. RISC-V):* Differential execution against reference models or `llvm-objdump` (`llvm_objdump`).
    - Late-stage verification tool discovery at release is strictly forbidden.
 2. **The Silicon Design Verification (DV) Split:**
    - Under hardware discipline (ASIC/RISC-V design), the engineer who writes implementation logic **never** authors the verification testbench.
@@ -123,14 +123,14 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
 4. **Functional Coverage Bins Over Line Coverage:**
    - Tests must target state-space coverage bins (e.g. shift operations with sign-bit 1 vs 0, page-boundary memory crossings, interrupt cycle transitions, privilege register bitfields) rather than superficial line counts.
 5. **Mutation Testing Gate (`cargo mutants`):**
-   - Autonomous tests are validated via mutation scoring (`run_mutation_tests`). Any test suite where synthetic mutants survive is rejected as ineffective/tautological.
+   - Autonomous tests are validated via mutation scoring (`cargo_mutants`). Any test suite where synthetic mutants survive is rejected as ineffective/tautological.
 6. **Purification of Performance Profiling:**
-   - `perf-analyst` strictly measures throughput, latency distributions, CPU execution pipeline ports (`analyze_llvm_mca`), disassembly (`run_cargo_asm`), cache misses (`run_cargo_perf`), and binary size (`run_cargo_bloat`). It is entirely decoupled from correctness/UB tools.
+   - `perf-analyst` strictly measures throughput, latency distributions, CPU execution pipeline ports (`llvm_mca`), disassembly (`cargo_asm`), cache misses (`cargo_perf`), and binary size (`cargo_bloat`). It is entirely decoupled from correctness/UB tools.
 7. **Unified Systems Implementation & Documentation Separation:**
    - Systems implementation across all abstraction tiers—from high-level business logic down to bare-metal RISC-V initialization, linker scripts (`link.ld`, `memory.x`), section allocation (`.text`, `.data`, `.bss`), and inline assembly—is unified in `coder`.
    - Technical rustdoc (`///`), architectural RFCs, register bitfield diagrams, and specifications are authored by `doc-author`.
-8. **Deterministic Pre-Release Gauntlet (`run_pre_release_gauntlet`):**
-   - Rather than executing 6–8 sequential CLI commands across multiple LLM turns, the release gatekeeper executes `run_pre_release_gauntlet` in a single shot. This evaluates VCS conflicts, unit/integration tests, clippy `-D warnings`, rustfmt check, ancillary targets, and doc build in one pass, outputting a consolidated scorecard.
+8. **Deterministic Pre-Release Gauntlet (`pre_release_gauntlet`):**
+   - Rather than executing 6–8 sequential CLI commands across multiple LLM turns, the release gatekeeper executes `pre_release_gauntlet` in a single shot. This evaluates VCS conflicts, unit/integration tests, clippy `-D warnings`, rustfmt check, ancillary targets, and doc build in one pass, outputting a consolidated scorecard.
 
 ---
 

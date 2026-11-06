@@ -46,8 +46,8 @@ mcp_tools:
   - inspect_parent_commit
   - inspect_revision_log
   - inspect_bookmarks
-  - run_quick_check
-  - run_cargo_verification
+  - quick_check
+  - cargo_check
   - query_compiler_explain
   - ensure_agent_workspace
   - inspect_workspace_clean

@@ -211,10 +211,10 @@ mcp_tools:
   - write_file
   - search_codebase
   - query_project_spec
-  - run_quick_check
-  - run_cargo_verification
-  - run_cargo_test
-  - run_cargo_clippy
+  - quick_check
+  - cargo_check
+  - cargo_test
+  - cargo_clippy
 pre_launch_checks:
   - compilation
   - tests
@@ -229,7 +229,7 @@ pre_launch_checks:
    Instantiates `agy-mcp` with the caller's distinct identity. This binds the MCP server session directly to that agent's security guard in `tools.toml`.
 3. **`mcp_tools` Strict Allowlist:**
    `agy-mcp` compares tools declared in `tools.toml` against the agent's frontmatter `mcp_tools`. Any tool NOT in `mcp_tools` is **completely hidden and air-gapped** from the agent's LLM context.
-   - Example: `coder` cannot run `run_cargo_semver_checks` or `run_cargo_deny`.
+   - Example: `coder` cannot run `cargo_semver_checks` or `cargo_deny`.
    - Example: `mini` can ONLY see `eval_symbolic_math`.
    - Example: `spec-checker` has zero write or mutate tools.
 

@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn test_parameterized_command_schema() {
         let def = ToolDefinition {
-            name: "run_cargo_expand".to_owned(),
+            name: "cargo_expand".to_owned(),
             description: "Expand macro".to_owned(),
             action: ToolAction::ParameterizedCommand,
             args: vec![ToolArg {

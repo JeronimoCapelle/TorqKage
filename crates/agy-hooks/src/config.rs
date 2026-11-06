@@ -505,9 +505,9 @@ mod tests {
     fn test_matches_pattern_wildcard() {
         assert!(matches_pattern("anything", "*"));
         assert!(matches_pattern("anything", ""));
-        assert!(matches_pattern("run_cargo_check", "run_cargo_.*|run_quick_check"));
-        assert!(matches_pattern("run_quick_check", "run_cargo_.*|run_quick_check"));
-        assert!(!matches_pattern("modify_code", "run_cargo_.*|run_quick_check"));
+        assert!(matches_pattern("cargo_check", "cargo_.*|quick_check"));
+        assert!(matches_pattern("quick_check", "cargo_.*|quick_check"));
+        assert!(!matches_pattern("modify_code", "cargo_.*|quick_check"));
     }
 
     #[test]

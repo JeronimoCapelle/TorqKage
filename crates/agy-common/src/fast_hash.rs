@@ -123,9 +123,9 @@ mod tests {
 
     #[test]
     fn test_fast_hasher_distinct_hashes() {
-        let h1 = compute_hash(&"run_quick_check");
-        let h2 = compute_hash(&"run_cargo_verification");
-        let h3 = compute_hash(&"run_cargo_clippy");
+        let h1 = compute_hash(&"quick_check");
+        let h2 = compute_hash(&"cargo_check");
+        let h3 = compute_hash(&"cargo_clippy");
         assert_ne!(h1, h2);
         assert_ne!(h2, h3);
         assert_ne!(h1, h3);

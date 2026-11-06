@@ -159,7 +159,7 @@ impl ToolItem {
     #[must_use]
     pub(crate) fn infer_category(name: &str) -> ToolCategory {
         let n = name.to_ascii_lowercase();
-        if n.contains("test") || n.contains("fuzz") || n.contains("mutation") || n.contains("insta") {
+        if n.contains("test") || n.contains("fuzz") || n.contains("mutation") || n.contains("mutant") || n.contains("insta") {
             ToolCategory::Testing
         } else if n.contains("bench")
             || n.contains("profile")
@@ -544,12 +544,12 @@ mod tests {
 
     #[test]
     fn test_tool_category_inference() {
-        assert_eq!(ToolItem::infer_category("run_cargo_clippy"), ToolCategory::Compilation);
-        assert_eq!(ToolItem::infer_category("run_cargo_nextest"), ToolCategory::Testing);
-        assert_eq!(ToolItem::infer_category("analyze_llvm_mca"), ToolCategory::Profiling);
+        assert_eq!(ToolItem::infer_category("cargo_clippy"), ToolCategory::Compilation);
+        assert_eq!(ToolItem::infer_category("cargo_nextest"), ToolCategory::Testing);
+        assert_eq!(ToolItem::infer_category("llvm_mca"), ToolCategory::Profiling);
         assert_eq!(ToolItem::infer_category("write_file"), ToolCategory::Filesystem);
         assert_eq!(ToolItem::infer_category("modify_code"), ToolCategory::Filesystem);
-        assert_eq!(ToolItem::infer_category("run_cargo_deny"), ToolCategory::Release);
+        assert_eq!(ToolItem::infer_category("cargo_deny"), ToolCategory::Release);
         assert_eq!(ToolItem::infer_category("inspect_project_state"), ToolCategory::Diagnostics);
         assert_eq!(ToolItem::infer_category("unknown_custom_tool"), ToolCategory::Other);
     }
@@ -573,8 +573,8 @@ pre_launch_checks:
   - vcs_conflicts
 tools: []
 mcp_tools:
-  - run_cargo_clippy
-  - run_cargo_test
+  - cargo_clippy
+  - cargo_test
 mcpServers:
   - name: agy-tools
     command: agy-mcp
@@ -593,7 +593,7 @@ You are a test agent. Always pass tests.
         assert_eq!(manifest.name, "test-agent");
         assert_eq!(manifest.effort, "high");
         assert!(!manifest.inherit_mcp);
-        assert_eq!(manifest.mcp_tools, vec!["run_cargo_clippy", "run_cargo_test"]);
+        assert_eq!(manifest.mcp_tools, vec!["cargo_clippy", "cargo_test"]);
         assert_eq!(manifest.allowed_subagents, vec!["mini"]);
         assert_eq!(manifest.pre_launch_checks, vec!["compilation", "vcs_conflicts"]);
         assert!(manifest.directives.contains("You are a test agent."));
@@ -603,7 +603,7 @@ You are a test agent. Always pass tests.
         assert!(serialized.contains("pre_launch_checks:"));
         assert!(serialized.contains("- compilation"));
         assert!(serialized.contains("mcp_tools:"));
-        assert!(serialized.contains("- run_cargo_clippy"));
+        assert!(serialized.contains("- cargo_clippy"));
         assert!(serialized.contains("inheritMcp: false"));
         assert!(serialized.contains("You are a test agent."));
     }

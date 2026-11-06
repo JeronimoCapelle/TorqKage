@@ -403,7 +403,7 @@ mod tests {
     fn test_clippy_fix_triggers_ask() {
         let input = PreToolUseInput {
             tool_call: Some(ToolCallPayload {
-                name: "run_cargo_clippy_fix".to_owned(),
+                name: "cargo_clippy_fix".to_owned(),
                 args: json!({}),
             }),
             ..Default::default()
@@ -423,8 +423,8 @@ mod tests {
         ));
 
         let mut ledger = CircuitBreakerLedger::new("coder");
-        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("borrow error")));
-        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("run_quick_check"), Some("E0502"), Some("borrow error")));
+        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("borrow error")));
+        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("borrow error")));
         assert!(ledger.tripped);
 
         let input = PreToolUseInput {

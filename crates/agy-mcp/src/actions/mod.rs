@@ -255,7 +255,7 @@ mod tests {
         drop(std::fs::create_dir_all(&temp_dir));
 
         let tool = ToolDefinition {
-            name: "run_quick_check".to_owned(),
+            name: "quick_check".to_owned(),
             safety: agy_common::tools::ToolSafetyPolicy {
                 tracks_circuit_breaker: true,
                 ..Default::default()

@@ -37,7 +37,7 @@ mcp_tools:
   - search_codebase
   - inspect_module_structure
   - inspect_module_dependencies
-  - run_cargo_public_api
+  - cargo_public_api
   - query_project_spec
   - list_project_docs
   - query_tool_help
@@ -51,11 +51,11 @@ mcp_tools:
 - **Mandatory Upfront Verification Strategy:**
   - In hardware and systems engineering, verification tooling must be chosen during the design phase, never discovered at the exit gate.
   - For every architectural component or module specification added to `ARCHITECTURE.md`, you MUST declare a mandatory `Required Verification Strategy`:
-    * **Pure Logic & Bit-twiddling:** Mandate formal SMT model checking via Kani (`run_cargo_kani`).
-    * **Atomics, Lock-Free Rings, Channels:** Mandate Loom C11 memory-order permutation testing (`run_cargo_loom`).
-    * **Raw Pointers, `#![no_std]` Buffers, FFI:** Mandate Miri Tree Borrows / pointer provenance verification (`run_cargo_miri`).
-    * **State-Space & Input Space:** Mandate generative property-based testing (proptest) and libFuzzer targets (`run_cargo_fuzz`).
-    * **Instruction Decoders & Processors (e.g. RISC-V):** Mandate differential execution harnesses against golden reference models (`run_llvm_objdump` or Sail/Spike reference models).
+    * **Pure Logic & Bit-twiddling:** Mandate formal SMT model checking via Kani (`cargo_kani`).
+    * **Atomics, Lock-Free Rings, Channels:** Mandate Loom C11 memory-order permutation testing (`cargo_loom`).
+    * **Raw Pointers, `#![no_std]` Buffers, FFI:** Mandate Miri Tree Borrows / pointer provenance verification (`cargo_miri`).
+    * **State-Space & Input Space:** Mandate generative property-based testing (proptest) and libFuzzer targets (`cargo_fuzz`).
+    * **Instruction Decoders & Processors (e.g. RISC-V):** Mandate differential execution harnesses against golden reference models (`llvm_objdump` or Sail/Spike reference models).
     * **Functional Coverage Bins:** Define explicit boundary state-space coverage criteria.
   - This ensures the Design Verification engineer (`test-author`) writes appropriate harnesses before `coder` touches implementation.
 - **Module Discovery:** Use `inspect_module_structure` (`cargo-modules`) to map current crate visibility and boundaries before proposing refactorings.

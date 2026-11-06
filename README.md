@@ -157,7 +157,7 @@ mcp_tools:
   - read_project_file
   - search_codebase
   - inspect_workspace_diff
-  - run_quick_check
+  - quick_check
 ---
 
 You are the Security Auditor for the agy-suite workspace.

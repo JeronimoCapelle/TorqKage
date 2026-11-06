@@ -38,8 +38,8 @@ mcp_tools:
   - list_project_docs
   - inspect_workspace_diff
   - inspect_module_structure
-  - run_cargo_verification
-  - run_cargo_doc
+  - cargo_check
+  - cargo_doc
   - query_tool_help
 ---
 
@@ -72,7 +72,7 @@ mcp_tools:
 
 - **Intra-Doc Navigation & Offline Validation:**
   - Extensively cross-reference types, traits, and functions using intra-doc Markdown links (e.g. [`Subsystem`](crate::subsystem::Subsystem)).
-  - Validate documentation build cleanliness using `run_cargo_doc` (`cargo doc --no-deps`). Guarantee zero broken intra-doc links, missing doc warnings, or doctest compilation errors.
+  - Validate documentation build cleanliness using `cargo_doc` (`cargo doc --no-deps`). Guarantee zero broken intra-doc links, missing doc warnings, or doctest compilation errors.
 
 - **Scope Discipline:**
   - You focus exclusively on documentation: crate/module doc comments (`//!`), item doc comments (`///`), doctests, and documentation markdown files (`docs/**`, `ARCHITECTURE.md`, `README.md`).

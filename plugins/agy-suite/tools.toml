@@ -310,7 +310,7 @@ description = "Creates a new file strictly within the canonical workspace bounds
 
 # --- Compilation & Compiler Diagnostics ---
 
-[tools.run_quick_check]
+[tools.quick_check]
 description = "Runs cargo fast check with zero token noise (exit code only) for maximum incremental iteration speed"
 action = "static_command"
 category = "compilation"
@@ -319,7 +319,7 @@ command = ["cargo", "fast", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
 
-[tools.run_cargo_verification]
+[tools.cargo_check]
 description = "Runs cargo fast check and returns filtered compiler diagnostics and error spans"
 action = "cargo_json_diagnostics"
 category = "compilation"
@@ -328,7 +328,7 @@ command = ["cargo", "fast", "check", "--message-format=json"]
 output_capture = "json_spans"
 timeout_seconds = 120
 
-[tools.run_cargo_clippy]
+[tools.cargo_clippy]
 description = "Runs cargo fast clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
 action = "cargo_json_diagnostics"
 category = "compilation"
@@ -337,7 +337,7 @@ command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=json", 
 output_capture = "json_spans"
 timeout_seconds = 120
 
-[tools.run_cargo_clippy_fix]
+[tools.cargo_clippy_fix]
 description = "Runs cargo fast clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
 action = "static_command"
 category = "compilation"
@@ -348,7 +348,7 @@ truncate_lines = 100
 timeout_seconds = 180
 require_permission_gate = true
 
-[tools.run_cargo_build]
+[tools.cargo_build]
 description = "Compiles packages and binaries using cargo fast build (Cranelift + Mold + O0 deps) for high-speed compilation"
 action = "parameterized_command"
 category = "compilation"
@@ -363,7 +363,7 @@ output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 180
 
-[tools.run_cargo_run]
+[tools.cargo_run]
 description = "Compiles and executes a specific workspace binary via cargo fast run"
 action = "parameterized_command"
 category = "compilation"
@@ -406,7 +406,7 @@ output_capture = "stdout"
 truncate_lines = 200
 timeout_seconds = 30
 
-[tools.run_cargo_deny]
+[tools.cargo_deny]
 description = "Checks supply-chain security, RustSec advisories, banned crates, license allowlists, and sources via cargo-deny"
 action = "static_command"
 category = "release"
@@ -415,7 +415,7 @@ output_capture = "stdout"
 truncate_lines = 120
 timeout_seconds = 60
 
-[tools.run_cargo_machete]
+[tools.cargo_machete]
 description = "Scans Cargo.toml manifests for unused dependencies via cargo-machete"
 action = "static_command"
 category = "diagnostics"
@@ -424,7 +424,7 @@ output_capture = "stdout"
 truncate_lines = 80
 timeout_seconds = 45
 
-[tools.run_cargo_public_api]
+[tools.cargo_public_api]
 description = "Inspects and diffs the exposed public API surface of the crate against git revisions"
 action = "static_command"
 category = "release"
@@ -433,7 +433,7 @@ output_capture = "stdout"
 truncate_lines = 120
 timeout_seconds = 60
 
-[tools.run_cargo_semver_checks]
+[tools.cargo_semver_checks]
 description = "Verifies semantic versioning contract rules against the published API baseline"
 action = "static_command"
 category = "release"
@@ -442,7 +442,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
 
-[tools.run_cargo_hack]
+[tools.cargo_hack]
 description = "Performs matrix verification checking all feature flag combinations (--each-feature)"
 action = "static_command"
 category = "compilation"
@@ -451,7 +451,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
 
-[tools.run_cargo_outdated]
+[tools.cargo_outdated]
 description = "Scans dependencies to find available SemVer updates and compatibility ranges"
 action = "static_command"
 category = "diagnostics"
@@ -460,7 +460,7 @@ output_capture = "stdout"
 truncate_lines = 60
 timeout_seconds = 60
 
-[tools.run_cargo_expand]
+[tools.cargo_expand]
 description = "Expands macros and visualizes generated compiler tokens for a specific item (struct, enum, fn, module) with token-smart fallback on error"
 action = "parameterized_command"
 category = "diagnostics"
@@ -473,7 +473,7 @@ output_capture = "stdout"
 truncate_lines = 250
 timeout_seconds = 60
 
-[tools.run_ast_grep]
+[tools.ast_grep]
 description = "Performs structural AST pattern queries across source trees via ast-grep"
 action = "static_command"
 category = "diagnostics"
@@ -515,7 +515,7 @@ timeout_seconds = 10
 
 # --- Test Suite & Formal Verification Tooling ---
 
-[tools.run_cargo_test]
+[tools.cargo_test]
 description = "Executes unit and integration tests via cargo fast test with optional target/filter overrides"
 action = "parameterized_command"
 category = "testing"
@@ -529,7 +529,7 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 180
 
-[tools.run_cargo_nextest]
+[tools.cargo_nextest]
 description = "Executes unit and integration tests in parallel via nextest with optional target/filter overrides"
 action = "parameterized_command"
 category = "testing"
@@ -543,7 +543,7 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 120
 
-[tools.run_coverage_summary]
+[tools.coverage_summary]
 description = "Extracts line and branch coverage summary via cargo llvm-cov"
 action = "static_command"
 category = "testing"
@@ -553,7 +553,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
 
-[tools.run_mutation_tests]
+[tools.cargo_mutants]
 description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs (mutation testing score)"
 action = "static_command"
 category = "testing"
@@ -563,7 +563,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 300
 
-[tools.run_cargo_insta]
+[tools.cargo_insta]
 description = "Executes snapshot tests for golden ASTs, opcode decoders, and struct serialization"
 action = "static_command"
 category = "testing"
@@ -573,7 +573,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 120
 
-[tools.run_cargo_fuzz]
+[tools.cargo_fuzz]
 description = "Executes libFuzzer target to discover crashes, panics, and out-of-bounds byte accesses"
 action = "static_command"
 category = "testing"
@@ -582,7 +582,7 @@ output_capture = "stderr"
 truncate_lines = 100
 timeout_seconds = 90
 
-[tools.run_cargo_careful]
+[tools.cargo_careful]
 description = "Executes tests with extra debug checks to detect undefined behavior and invalid memory operations"
 action = "static_command"
 category = "testing"
@@ -592,7 +592,7 @@ output_capture = "stderr"
 truncate_lines = 150
 timeout_seconds = 180
 
-[tools.run_cargo_miri]
+[tools.cargo_miri]
 description = "Runs tests inside Miri interpreter to verify strict pointer provenance, uninitialized memory, and Tree Borrows"
 action = "static_command"
 category = "testing"
@@ -602,7 +602,7 @@ output_capture = "stderr"
 truncate_lines = 200
 timeout_seconds = 300
 
-[tools.run_cargo_loom]
+[tools.cargo_loom]
 description = "Executes Loom deterministic concurrency permutations to detect data races and atomic ordering violations"
 action = "parameterized_command"
 category = "testing"
@@ -616,7 +616,7 @@ output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 240
 
-[tools.run_cargo_kani]
+[tools.cargo_kani]
 description = "Executes Kani formal verification model checker to mathematically prove contract satisfiability and panic freedom"
 action = "parameterized_command"
 category = "testing"
@@ -631,7 +631,7 @@ timeout_seconds = 300
 
 # --- Performance Profiling & Hardware Diagnostics Tooling ---
 
-[tools.run_cargo_asm]
+[tools.cargo_asm]
 description = "Disassembles functions to inspect generated assembly, auto-vectorization, and spills"
 action = "static_command"
 category = "profiling"
@@ -640,7 +640,7 @@ output_capture = "stdout"
 truncate_lines = 250
 timeout_seconds = 60
 
-[tools.run_cargo_bench]
+[tools.cargo_bench]
 description = "Executes benchmark suites across Divan, Criterion2, and Gungraun with optional target/filter overrides"
 action = "parameterized_command"
 category = "profiling"
@@ -654,7 +654,7 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 240
 
-[tools.run_flamegraph]
+[tools.flamegraph]
 description = "Generates CPU flame graphs to identify profiling hotspots and callstack bottlenecks"
 action = "static_command"
 category = "profiling"
@@ -664,7 +664,7 @@ output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 240
 
-[tools.run_cargo_perf]
+[tools.cargo_perf]
 description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count) during test execution via Linux perf"
 action = "static_command"
 category = "profiling"
@@ -674,7 +674,7 @@ output_capture = "stderr"
 truncate_lines = 50
 timeout_seconds = 180
 
-[tools.run_cargo_bloat]
+[tools.cargo_bloat]
 description = "Analyzes binary size per symbol and crate to pinpoint monomorphization bloat"
 action = "static_command"
 category = "profiling"
@@ -683,7 +683,7 @@ output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 60
 
-[tools.run_hyperfine]
+[tools.hyperfine]
 description = "Executes black-box binary benchmarking via hyperfine with statistical timing and warmup"
 action = "static_command"
 category = "profiling"
@@ -693,7 +693,7 @@ output_capture = "stdout"
 truncate_lines = 40
 timeout_seconds = 120
 
-[tools.analyze_llvm_mca]
+[tools.llvm_mca]
 description = "Pipes generated assembly into llvm-mca to simulate CPU instruction ports, latency, and register pressure"
 action = "static_command"
 category = "profiling"
@@ -702,7 +702,7 @@ output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
 
-[tools.run_llvm_objdump]
+[tools.llvm_objdump]
 description = "Disassembles raw binary or object file using llvm-objdump with instruction decoding (useful for differential testing)"
 action = "parameterized_command"
 category = "diagnostics"
@@ -715,7 +715,7 @@ output_capture = "stdout"
 truncate_lines = 200
 timeout_seconds = 15
 
-[tools.run_cargo_size]
+[tools.cargo_size]
 description = "Inspects binary section memory sizes (.text, .data, .bss, total) via cargo size (cargo-binutils)"
 action = "parameterized_command"
 category = "diagnostics"
@@ -727,7 +727,7 @@ output_capture = "stdout"
 truncate_lines = 60
 timeout_seconds = 30
 
-[tools.run_cargo_nm]
+[tools.cargo_nm]
 description = "Lists symbol table and memory addresses of compiled ELF binaries via cargo nm (cargo-binutils)"
 action = "parameterized_command"
 category = "diagnostics"
@@ -739,7 +739,7 @@ output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 30
 
-# [tools.run_cargo_zigbuild]
+# [tools.cargo_zigbuild]
 # description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
 # action = "static_command"
 # category = "compilation"
@@ -748,7 +748,7 @@ timeout_seconds = 30
 # truncate_lines = 100
 # timeout_seconds = 180
 
-[tools.run_nasm_check]
+[tools.nasm_check]
 description = "Assembles x86 real-mode and bare-metal bootloader assembly sources via NASM"
 action = "static_command"
 category = "compilation"
@@ -768,7 +768,7 @@ timeout_seconds = 30
 
 # --- Release Automation & High-Level Mathematics Tooling ---
 
-[tools.run_git_cliff]
+[tools.git_cliff]
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
 category = "release"
@@ -908,7 +908,7 @@ output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
 
-[tools.run_cargo_doc]
+[tools.cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
 action = "static_command"
 category = "release"
@@ -918,7 +918,7 @@ output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 120
 
-[tools.run_cargo_check_targets]
+[tools.cargo_check_targets]
 description = "Verifies compilation health of benches and examples (cargo fast check --benches --examples)"
 action = "static_command"
 category = "compilation"
@@ -928,7 +928,7 @@ output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 60
 
-[tools.run_pre_release_gauntlet]
+[tools.pre_release_gauntlet]
 description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, auto-format, tests, clippy -D warnings, ancillary targets, and docs) in a single pass"
 action = "static_command"
 category = "release"

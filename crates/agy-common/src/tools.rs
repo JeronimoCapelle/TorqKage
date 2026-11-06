@@ -395,7 +395,7 @@ mod tests {
         let mut tools = BTreeMap::new();
         // Tool 1: inherits category gates and adds extra gate
         tools.insert(
-            "run_cargo_clippy".to_owned(),
+            "cargo_clippy".to_owned(),
             RawTool {
                 category: Some("compilation".to_owned()),
                 require_gates: Some(vec!["compilation".to_owned()]),
@@ -421,7 +421,7 @@ mod tests {
         let resolved = resolve_tools(&config);
         assert_eq!(resolved.len(), 2);
 
-        let clippy = resolved.iter().find(|t| t.name == "run_cargo_clippy").unwrap();
+        let clippy = resolved.iter().find(|t| t.name == "cargo_clippy").unwrap();
         assert!(clippy.tracks_circuit_breaker());
         assert_eq!(clippy.timeout_seconds, 60);
         // Has both category gate and tool-added gate
