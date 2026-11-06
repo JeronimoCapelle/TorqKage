@@ -6,6 +6,7 @@ mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
 pre_launch_checks:
+  - fmt
   - compilation
   - tests
   - vcs_conflicts

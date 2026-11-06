@@ -939,14 +939,14 @@ truncate_lines = 50
 timeout_seconds = 30
 
 [tools.run_pre_release_gauntlet]
-description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, tests, clippy -D warnings, formatting, ancillary targets, and docs) in a single pass"
+description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, auto-format, tests, clippy -D warnings, ancillary targets, and docs) in a single pass"
 action = "static_command"
 category = "release"
 tracks_circuit_breaker = true
 command = [
     "bash",
     "-c",
-    "echo '=== 1. VCS Conflict Check ===' && (git diff --check || (echo 'FAILED: Unresolved VCS conflict markers detected' && exit 1)) && echo 'PASSED: No conflict markers' && echo '=== 2. Deterministic Nextest ===' && (cargo fast test || cargo test) && echo 'PASSED: All tests green' && echo '=== 3. Pedantic Clippy (-D warnings) ===' && (cargo fast clippy --all-targets -- -D warnings || cargo clippy --all-targets -- -D warnings) && echo 'PASSED: Clippy 0 warnings' && echo '=== 4. Code Formatting Check ===' && cargo fmt --check && echo 'PASSED: Formatting clean' && echo '=== 5. Ancillary Targets Check ===' && (cargo fast check --benches --examples || cargo check --benches --examples) && echo 'PASSED: Benches and examples compile' && echo '=== 6. Offline Docs Check ===' && cargo doc --no-deps && echo 'PASSED: Documentation builds without broken links' && echo '=== ALL PRE-RELEASE GAUNTLET CHECKS PASSED ==='"
+    "echo '=== 1. VCS Conflict Check ===' && (git diff --check || (echo 'FAILED: Unresolved VCS conflict markers detected' && exit 1)) && echo 'PASSED: No conflict markers' && echo '=== 2. Codebase Auto-Format ===' && cargo fmt && echo 'PASSED: Formatter executed' && echo '=== 3. Deterministic Nextest ===' && (cargo fast test || cargo test) && echo 'PASSED: All tests green' && echo '=== 4. Pedantic Clippy (-D warnings) ===' && (cargo fast clippy --all-targets -- -D warnings || cargo clippy --all-targets -- -D warnings) && echo 'PASSED: Clippy 0 warnings' && echo '=== 5. Ancillary Targets Check ===' && (cargo fast check --benches --examples || cargo check --benches --examples) && echo 'PASSED: Benches and examples compile' && echo '=== 6. Offline Docs Check ===' && cargo doc --no-deps && echo 'PASSED: Documentation builds without broken links' && echo '=== ALL PRE-RELEASE GAUNTLET CHECKS PASSED ==='"
 ]
 output_capture = "both"
 truncate_lines = 150
