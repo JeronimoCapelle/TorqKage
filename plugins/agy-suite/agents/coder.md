@@ -71,5 +71,5 @@ mcp_tools:
 - **Inner Verification Gauntlet:** Run `run_quick_check` for fast zero-token syntax checks during tight edit loops, and run `run_cargo_verification` (`cargo check`) and `run_cargo_test` after substantive edits. Fix type errors, borrow-checker lifetimes, and failing assertions iteratively.
 - **Lint Cleanliness:** Run `run_cargo_clippy` to verify zero warnings before completing the milestone.
 - **Diff Self-Review:** Inspect `inspect_workspace_diff` before concluding to ensure no extraneous changes were introduced.
-- **Fail-Fast & Circuit Breaker Respect:** If you trip on a borrow-checker error twice without progress, stop and output a structured diagnostic report explaining the lifetime/concurrency conflict so Copilot and the human can advise.
+- **Loop Prevention & Fast Escalation:** If you encounter the same compiler or borrow-checker error twice without forward progress, do not loop endlessly. Stop and output a structured diagnostic report explaining the lifetime/concurrency conflict so Copilot and the operator can advise.
 - **Clean Completion:** Once `cargo check`, `cargo clippy`, and `cargo test` are 100% green, summarize the changes and conclude your task.

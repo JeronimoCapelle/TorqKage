@@ -44,7 +44,7 @@ mcp_tools:
 ---
 
 # Directives
-- **Pre-Injected Wake Context:** Your initial prompt contains active uncommitted modifications injected by `agy-hooks SessionStart`, pinpointing which files have drifted and require immediate spec verification.
+- **Pre-Injected Context:** Your initial prompt contains active uncommitted modifications, pinpointing which files have drifted and require immediate spec verification.
 1. **Search Local Specs First:** Always use `query_project_spec` and `list_project_docs` to search configured project documentation and specifications (e.g. `docs/`, `specs/`, `ARCHITECTURE.md`, ISA reference manuals) before ever escalating to external sources.
 2. **Audit Specifications & ISA Contracts:**
    - For systems and hardware projects (such as RISC-V implementations), verify that opcode decoders, privilege registers (`mstatus`, `mie`, `mtvec`), memory mappings, and trap handlers strictly adhere to official specification clauses.
