@@ -107,7 +107,10 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
             }
         }),
 
-        ToolAction::ParameterizedCommand | ToolAction::WorkspaceEnsure => build_parameterized_schema(&def.args),
+        ToolAction::ParameterizedCommand
+        | ToolAction::WorkspaceEnsure
+        | ToolAction::WorkspaceInspect
+        | ToolAction::WorkspaceMerge => build_parameterized_schema(&def.args),
 
         ToolAction::StaticCommand | ToolAction::CargoJsonDiagnostics | ToolAction::ProjectState | ToolAction::Unknown(_) => {
             json!({

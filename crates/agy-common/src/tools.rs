@@ -18,6 +18,8 @@ pub enum ToolAction {
     CliManual,
     ProjectState,
     WorkspaceEnsure,
+    WorkspaceInspect,
+    WorkspaceMerge,
     #[serde(untagged)]
     Unknown(String),
 }

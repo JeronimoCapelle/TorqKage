@@ -50,6 +50,8 @@ mcp_tools:
   - cargo_check
   - query_compiler_explain
   - ensure_agent_workspace
+  - inspect_agent_workspace
+  - merge_agent_workspace
   - inspect_workspace_clean
   - query_tool_help
 ---

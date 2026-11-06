@@ -10,6 +10,8 @@ pub(crate) mod parameterized_cmd;
 pub(crate) mod project_state;
 pub(crate) mod static_cmd;
 pub(crate) mod workspace_ensure;
+pub(crate) mod workspace_inspect;
+pub(crate) mod workspace_merge;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -154,6 +156,10 @@ pub(crate) fn dispatch_action(
         ToolAction::ProjectState => Ok(project_state::execute(workspace_root)),
 
         ToolAction::WorkspaceEnsure => workspace_ensure::execute(workspace_root, arguments),
+
+        ToolAction::WorkspaceInspect => workspace_inspect::execute(workspace_root, arguments),
+
+        ToolAction::WorkspaceMerge => workspace_merge::execute(workspace_root, arguments),
 
         ToolAction::Unknown(_) => Err(format!(
             "Unknown or unsupported tool action for tool '{}'",

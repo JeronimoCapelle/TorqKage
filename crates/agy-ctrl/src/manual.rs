@@ -68,6 +68,7 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
 }
 
 #[cfg(test)]
+#[allow(clippy::assert_is_empty, reason = "Assertion on collection presence")]
 mod tests {
     use super::*;
 

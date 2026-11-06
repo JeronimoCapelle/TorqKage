@@ -885,6 +885,28 @@ args = [
 truncate_lines = 50
 timeout_seconds = 15
 
+[tools.inspect_agent_workspace]
+description = "Inspects revisions and working-copy diffs within a subagent's isolated Jujutsu workspace (.agy/workspaces/<agent>)"
+action = "workspace_inspect"
+category = "diagnostics"
+args = [
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be inspected" }
+]
+truncate_lines = 250
+timeout_seconds = 15
+
+[tools.merge_agent_workspace]
+description = "Rebases or squashes an isolated subagent workspace (.agy/workspaces/<agent>) onto @, runs declarative quality gates on the merged tree, and forgets the workspace on success"
+action = "workspace_merge"
+category = "release"
+mutating = true
+args = [
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be merged" },
+    { name = "strategy", required = false, default = "rebase", regex = "^(rebase|squash)$", description = "Merge strategy: 'rebase' (default) or 'squash'" }
+]
+truncate_lines = 100
+timeout_seconds = 120
+
 [tools.inspect_workspace_clean]
 description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
 action = "parameterized_command"

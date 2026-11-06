@@ -243,6 +243,267 @@ impl JujutsuWorkspace {
         }
         Ok(())
     }
+
+    /// Inspects the revisions and working-copy diff for an agent's isolated workspace.
+    ///
+    /// # Errors
+    /// Returns `AgyError` if Jujutsu is not available or the workspace does not exist.
+    pub fn inspect_agent_workspace(workspace_root: &Path, agent: &str) -> Result<String> {
+        let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
+            .unwrap_or_else(|_| workspace_root.to_path_buf());
+
+        if !is_jj_in_path() {
+            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+        }
+
+        if !Self::is_jj_repo(&repo_root) {
+            return Err(AgyError::Workspace(format!(
+                "Target workspace '{}' is not a Jujutsu repository (.jj not found).",
+                repo_root.display()
+            )));
+        }
+
+        let paths = crate::state::AgyStatePaths::new(&repo_root);
+        let agent_ws_path = paths.agent_workspace(agent);
+
+        if !agent_ws_path.is_dir() || !Self::workspace_exists(&repo_root, agent) {
+            return Err(AgyError::Workspace(format!(
+                "No isolated workspace found for agent '{agent}' at '{}'",
+                agent_ws_path.display()
+            )));
+        }
+
+        // Snapshot working copy in agent workspace
+        snapshot_workspace(&agent_ws_path);
+
+        // Retrieve diff
+        let mut diff_cmd = Command::new("jj");
+        diff_cmd.args(["--color=never", "diff"]);
+        diff_cmd.current_dir(&agent_ws_path);
+        let diff_out = SubprocessSupervisor::run_supervised(diff_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .map_err(|e| AgyError::Process(format!("Failed to execute 'jj diff' in {}: {e}", agent_ws_path.display())))?;
+        let diff_str = String::from_utf8_lossy(&diff_out.stdout).trim().to_owned();
+
+        // Retrieve revisions log
+        let mut log_cmd = Command::new("jj");
+        log_cmd.args(["--color=never", "log", "-r", "roots(default@..@)::@", "--no-graph"]);
+        log_cmd.current_dir(&agent_ws_path);
+        let log_out = SubprocessSupervisor::run_supervised(log_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .ok()
+            .and_then(|out| if out.status.success() { Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()) } else { None })
+            .unwrap_or_default();
+
+        if diff_str.is_empty() && (log_out.is_empty() || log_out.contains("(empty)")) {
+            return Ok(format!("Agent workspace '{agent}' is clean (0 uncommitted or branched changes)."));
+        }
+
+        let mut output = format!("=== Isolated Workspace: '{agent}' ({}) ===\n", agent_ws_path.display());
+        if !log_out.is_empty() {
+            output.push_str("--- Revisions ---\n");
+            output.push_str(&log_out);
+            output.push('\n');
+        }
+        if !diff_str.is_empty() {
+            output.push_str("--- Working Copy Diff ---\n");
+            output.push_str(&diff_str);
+            output.push('\n');
+        }
+        Ok(output)
+    }
+
+    /// Merges an agent's isolated workspace back into the main working tree `@`.
+    ///
+    /// 1. Snapshots starting VCS operation for rollback.
+    /// 2. Snapshots subagent workspace working copy.
+    /// 3. Rebases subagent revision(s) onto `@` (or squashes into `@` if strategy is 'squash').
+    /// 4. Advances main working copy on top of rebased revision via `jj new <agent>@`.
+    /// 5. Verifies zero merge conflicts (`conflicts() & @::`).
+    /// 6. Evaluates declarative project quality gates (`project.toml`) on the merged tree.
+    /// 7. On gate failure, restores starting VCS operation via `jj op restore`.
+    /// 8. On gate pass, cleans up the isolated workspace via `forget_agent_workspace`.
+    ///
+    /// # Errors
+    /// Returns `AgyError` if rebase, conflicts, or quality gates fail.
+    pub fn merge_agent_workspace(workspace_root: &Path, agent: &str, strategy: Option<&str>) -> Result<String> {
+        let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
+            .unwrap_or_else(|_| workspace_root.to_path_buf());
+
+        if !is_jj_in_path() {
+            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+        }
+
+        if !Self::is_jj_repo(&repo_root) {
+            return Err(AgyError::Workspace(format!(
+                "Target workspace '{}' is not a Jujutsu repository (.jj not found).",
+                repo_root.display()
+            )));
+        }
+
+        let paths = crate::state::AgyStatePaths::new(&repo_root);
+        let agent_ws_path = paths.agent_workspace(agent);
+
+        if !agent_ws_path.is_dir() || !Self::workspace_exists(&repo_root, agent) {
+            return Err(AgyError::Workspace(format!(
+                "No isolated workspace found for agent '{agent}' at '{}'",
+                agent_ws_path.display()
+            )));
+        }
+
+        // Snapshot agent workspace
+        snapshot_workspace(&agent_ws_path);
+
+        // Check if there are any changes to merge
+        let is_clean = Self::is_workspace_clean(&agent_ws_path);
+        let mut log_revs_cmd = Command::new("jj");
+        log_revs_cmd.args(["--color=never", "log", "-r", &format!("default@..{agent}@"), "--no-graph", "-T", "id\n"]);
+        log_revs_cmd.current_dir(&repo_root);
+        let revs_out = SubprocessSupervisor::run_supervised(log_revs_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .map_or_default(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned());
+
+        if is_clean && revs_out.is_empty() {
+            return Ok(format!("Isolated workspace '{agent}' has no changes to merge into '@'."));
+        }
+
+        let start_op_id = query_current_op_id(&repo_root);
+        let strat = strategy.unwrap_or("rebase");
+
+        if let Err(e) = execute_merge_vcs_steps(&repo_root, agent, strat) {
+            restore_op(&repo_root, start_op_id.as_deref());
+            return Err(e);
+        }
+
+        // Check for conflicts
+        if let Err(conf_err) = check_conflicts(&repo_root, agent, &agent_ws_path) {
+            restore_op(&repo_root, start_op_id.as_deref());
+            return Err(conf_err);
+        }
+
+        // Evaluate declarative project quality gates on merged tree
+        let project = crate::project::ProjectConfig::detect_or_load(&repo_root);
+        let mut gate_names: Vec<&str> = project.gates.keys().map(String::as_str).collect();
+        gate_names.push("vcs_conflicts");
+
+        match crate::gatekeeper::evaluate_pre_flight_checks(&repo_root, &gate_names) {
+            Ok(warnings) => {
+                Self::forget_agent_workspace(&repo_root, agent)?;
+
+                let mut report = format!(
+                    "✅ Successfully merged isolated workspace for '{agent}' onto '@' (strategy: {strat}):\n\
+                     - Quality gates passed: {}\n\
+                     - Workspace '{}' forgotten and cleaned up.",
+                    if gate_names.is_empty() { "none configured".to_owned() } else { gate_names.join(", ") },
+                    agent_ws_path.display()
+                );
+                if !warnings.is_empty() {
+                    report.push_str("\n\nAdvisories:\n");
+                    for w in warnings {
+                        report.push_str("- ");
+                        report.push_str(&w);
+                        report.push('\n');
+                    }
+                }
+                Ok(report)
+            }
+            Err(errors) => {
+                restore_op(&repo_root, start_op_id.as_deref());
+                Err(AgyError::Process(format!(
+                    "Merge aborted: Quality gate evaluation failed on merged tree:\n{}\n\
+                     Merge rolled back via 'jj op restore'. Workspace preserved at '{}'.",
+                    errors.join("\n"),
+                    agent_ws_path.display()
+                )))
+            }
+        }
+    }
+}
+
+fn snapshot_workspace(ws_path: &Path) {
+    let mut status_cmd = Command::new("jj");
+    status_cmd.args(["--color=never", "status"]);
+    status_cmd.current_dir(ws_path);
+    drop(SubprocessSupervisor::run_supervised(status_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS));
+}
+
+fn query_current_op_id(repo_root: &Path) -> Option<String> {
+    let mut op_cmd = Command::new("jj");
+    op_cmd.args(["--color=never", "op", "log", "-n", "1", "--no-graph", "-T", "id"]);
+    op_cmd.current_dir(repo_root);
+    SubprocessSupervisor::run_supervised(op_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        .ok()
+        .and_then(|out| if out.status.success() { Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()) } else { None })
+        .filter(|id| !id.is_empty())
+}
+
+fn restore_op(repo_root: &Path, op_id: Option<&str>) {
+    if let Some(id) = op_id {
+        let mut restore_cmd = Command::new("jj");
+        restore_cmd.args(["--color=never", "op", "restore", id]);
+        restore_cmd.current_dir(repo_root);
+        drop(SubprocessSupervisor::run_supervised(restore_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS));
+    }
+}
+
+fn execute_merge_vcs_steps(repo_root: &Path, agent: &str, strategy: &str) -> Result<()> {
+    if strategy == "squash" {
+        let mut squash_cmd = Command::new("jj");
+        squash_cmd.args(["--color=never", "squash", "--from", &format!("{agent}@"), "--into", "@"]);
+        squash_cmd.current_dir(repo_root);
+        let squash_res = SubprocessSupervisor::run_supervised(squash_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .map_err(|e| AgyError::Process(format!("Failed to execute 'jj squash': {e}")))?;
+        if !squash_res.status.success() {
+            let stderr = String::from_utf8_lossy(&squash_res.stderr);
+            return Err(AgyError::Process(format!("'jj squash --from {agent}@ --into @' failed: {stderr}")));
+        }
+    } else {
+        // Rebase revision(s) onto @
+        let roots_expr = format!("roots(default@..{agent}@)");
+        let mut rebase_cmd = Command::new("jj");
+        rebase_cmd.args(["--color=never", "rebase", "-s", &roots_expr, "-d", "@"]);
+        rebase_cmd.current_dir(repo_root);
+        let rebase_res = SubprocessSupervisor::run_supervised(rebase_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
+        let rebase_success = match rebase_res {
+            Ok(ref out) if out.status.success() => true,
+            _ => {
+                let mut fallback_cmd = Command::new("jj");
+                fallback_cmd.args(["--color=never", "rebase", "-s", &format!("{agent}@"), "-d", "@"]);
+                fallback_cmd.current_dir(repo_root);
+                SubprocessSupervisor::run_supervised(fallback_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                    .is_ok_and(|out| out.status.success())
+            }
+        };
+        if !rebase_success {
+            return Err(AgyError::Process(format!("Failed to rebase revisions from agent '{agent}' onto '@'")));
+        }
+
+        // Create new working copy commit on top of rebased changes
+        let mut new_cmd = Command::new("jj");
+        new_cmd.args(["--color=never", "new", &format!("{agent}@")]);
+        new_cmd.current_dir(repo_root);
+        let new_res = SubprocessSupervisor::run_supervised(new_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            .map_err(|e| AgyError::Process(format!("Failed to advance working copy via 'jj new': {e}")))?;
+        if !new_res.status.success() {
+            let stderr = String::from_utf8_lossy(&new_res.stderr);
+            return Err(AgyError::Process(format!("'jj new {agent}@' failed: {stderr}")));
+        }
+    }
+    Ok(())
+}
+
+fn check_conflicts(repo_root: &Path, _agent: &str, agent_ws_path: &Path) -> Result<()> {
+    let mut conf_cmd = Command::new("jj");
+    conf_cmd.args(["--color=never", "log", "-r", "conflicts() & @::", "--no-graph"]);
+    conf_cmd.current_dir(repo_root);
+    if let Ok(conf_out) = SubprocessSupervisor::run_supervised(conf_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
+        let conf_str = String::from_utf8_lossy(&conf_out.stdout).trim().to_owned();
+        if !conf_str.is_empty() {
+            return Err(AgyError::Process(format!(
+                "Merge aborted: Unresolved conflicts detected in rebased tree:\n{conf_str}\n\
+                 Merge rolled back via 'jj op restore'. Workspace preserved at '{}'.",
+                agent_ws_path.display()
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn is_jj_in_path() -> bool {
@@ -288,5 +549,31 @@ mod tests {
             .to_path_buf();
         assert!(JujutsuWorkspace::workspace_exists(&root, "default"));
         assert!(!JujutsuWorkspace::workspace_exists(&root, "non_existent_workspace_12345"));
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
+    fn test_inspect_agent_workspace_non_existent() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let res = JujutsuWorkspace::inspect_agent_workspace(&root, "non_existent_agent_999");
+        assert!(res.is_err());
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
+    fn test_merge_agent_workspace_non_existent() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let res = JujutsuWorkspace::merge_agent_workspace(&root, "non_existent_agent_999", None);
+        assert!(res.is_err());
     }
 }

@@ -100,6 +100,8 @@ impl ToolItem {
                 ToolAction::CliManual => "cli_manual".to_owned(),
                 ToolAction::ProjectState => "project_state".to_owned(),
                 ToolAction::WorkspaceEnsure => "workspace_ensure".to_owned(),
+                ToolAction::WorkspaceInspect => "workspace_inspect".to_owned(),
+                ToolAction::WorkspaceMerge => "workspace_merge".to_owned(),
                 ToolAction::Unknown(s) => s,
             },
             category,
