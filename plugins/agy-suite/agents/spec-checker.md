@@ -9,7 +9,8 @@ pre_launch_checks:
   - vcs_conflicts
 disallowed_dirs:
   - "*"
-tools: []
+tools:
+  - search_web
 inheritMcp: false
 mcpServers:
   - name: agy-tools

@@ -66,18 +66,7 @@ where
 
     let (base_args, dynamic_args) = args;
     if enforce_sandbox {
-        if is_outer_sandbox() {
-            let mut cmd = Command::new(program);
-            cmd.args(base_args);
-            cmd.args(dynamic_args);
-            cmd.current_dir(workspace_root);
-            SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
-        } else {
-            if which::which("bwrap").is_err() {
-                return Err(format!(
-                    "Security enforcement error: Tool '{tool_name}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host and no outer sandbox is active."
-                ));
-            }
+        if which::which("bwrap").is_ok() {
             let cmd = agy_common::sandbox::build_bubblewrap_command(
                 program,
                 base_args,
@@ -91,12 +80,29 @@ where
                     || stderr.contains("No permissions to create new namespace")
                     || stderr.contains("Setting up mount namespace failed")
                 {
+                    if is_outer_sandbox() {
+                        let mut fallback_cmd = Command::new(program);
+                        fallback_cmd.args(base_args);
+                        fallback_cmd.args(dynamic_args);
+                        fallback_cmd.current_dir(workspace_root);
+                        return SubprocessSupervisor::run_supervised(fallback_cmd, timeout_seconds);
+                    }
                     return Err(format!(
                         "Security enforcement error: Sandbox execution failed for tool '{tool_name}': {stderr}"
                     ));
                 }
             }
             Ok(out)
+        } else if is_outer_sandbox() {
+            let mut cmd = Command::new(program);
+            cmd.args(base_args);
+            cmd.args(dynamic_args);
+            cmd.current_dir(workspace_root);
+            SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
+        } else {
+            Err(format!(
+                "Security enforcement error: Tool '{tool_name}' requires sandbox enforcement ('enforce_sandbox = true'), but 'bwrap' was not found on host."
+            ))
         }
     } else {
         let mut cmd = Command::new(program);

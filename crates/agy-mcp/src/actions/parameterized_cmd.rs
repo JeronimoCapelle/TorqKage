@@ -472,4 +472,39 @@ mod tests {
         assert!(!is_err);
         assert!(out.contains("bwrap_isolation_passed"));
     }
+
+    #[test]
+    fn test_enforce_sandbox_blocks_network() {
+        if which::which("bwrap").is_err() || which::which("python3").is_err() {
+            return;
+        }
+        let temp = create_test_dir("sandbox_network");
+        let tool = ToolDefinition {
+            name: "eval_network_test".to_owned(),
+            command: vec!["python3".to_owned(), "-c".to_owned()],
+            sandbox: agy_common::tools::ToolSandboxPolicy {
+                enforce_sandbox: true,
+                ..Default::default()
+            },
+            args: vec![ToolArg {
+                name: "code".to_owned(),
+                required: true,
+                flag: None,
+                regex: Some("^[^\\x00]+$".to_owned()),
+                description: "python code".to_owned(),
+                default: None,
+            }],
+            output_capture: OutputCapture::Both,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "code": "import socket\ntry:\n    s = socket.create_connection(('8.8.8.8', 53), timeout=0.5)\n    print('CONNECTED')\nexcept Exception as e:\n    print(f'NETWORK_BLOCKED:{type(e).__name__}')"
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("NETWORK_BLOCKED"), "Expected network to be blocked in bwrap jail, got: {out}");
+        assert!(!out.contains("CONNECTED"));
+    }
 }

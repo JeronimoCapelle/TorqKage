@@ -186,7 +186,6 @@ pub(crate) fn launch_agy_interactive(
     }
     if sandbox {
         cmd.arg("--sandbox");
-        cmd.env("AGY_OUTER_SANDBOX", "1");
     }
     if let Some(conv_id) = resume_conversation {
         cmd.arg("--conversation").arg(conv_id);
@@ -269,7 +268,6 @@ pub(crate) fn launch_agy_headless(
     }
     if sandbox {
         cmd.arg("--sandbox");
-        cmd.env("AGY_OUTER_SANDBOX", "1");
     }
     if let Some(conv_id) = resume_conversation {
         cmd.arg("--conversation").arg(conv_id);

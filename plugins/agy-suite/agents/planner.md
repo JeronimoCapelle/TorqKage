@@ -19,6 +19,7 @@ disallowed_dirs:
 tools:
   - ask_question
   - invoke_subagent
+  - search_web
 inheritMcp: false
 mcpServers:
   - name: agy-tools

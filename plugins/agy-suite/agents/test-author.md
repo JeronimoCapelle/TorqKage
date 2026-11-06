@@ -16,7 +16,8 @@ disallowed_dirs:
 path_policies:
   - path: src
     filter: tests_only
-tools: []
+tools:
+  - search_web
 inheritMcp: false
 mcpServers:
   - name: agy-tools

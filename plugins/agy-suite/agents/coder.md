@@ -18,7 +18,8 @@ disallowed_dirs:
   - docs
 mainAgent: true
 subagent: true
-tools: []
+tools:
+  - search_web
 inheritMcp: false
 mcpServers:
   - name: agy-tools

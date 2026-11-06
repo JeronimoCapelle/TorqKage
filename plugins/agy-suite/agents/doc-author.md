@@ -20,7 +20,8 @@ disallowed_dirs:
 path_policies:
   - path: src
     filter: comments_only
-tools: []
+tools:
+  - search_web
 inheritMcp: false
 mcpServers:
   - name: agy-tools
