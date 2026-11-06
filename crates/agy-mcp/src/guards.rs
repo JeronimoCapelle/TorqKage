@@ -394,6 +394,8 @@ pub(crate) fn check_agent_guard(
 
 /// Enforces declarative agent path policies (e.g. `comments_only`, `tests_only`, `delimited`).
 ///
+/// Supports language-agnostic syntax resolution via `project.toml` and auto-detection.
+///
 /// # Errors
 /// Returns an error if the agent attempts to modify forbidden content within a policy-guarded path.
 pub(crate) fn check_agent_path_policies(
@@ -403,32 +405,53 @@ pub(crate) fn check_agent_path_policies(
     new_content: &str,
     agent_name: Option<&str>,
     guards: &BTreeMap<String, AgentGuard>,
+    project: Option<&agy_common::ProjectConfig>,
 ) -> Result<(), String> {
-    let Some(agent) = agent_name else {
-        return Ok(());
-    };
-
-    let Some(guard) = guards.get(agent) else {
-        return Ok(());
-    };
-
-    if guard.path_policies.is_empty() {
-        return Ok(());
-    }
-
     let relative = candidate
         .strip_prefix(workspace_root)
         .unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
-    for policy in &guard.path_policies {
-        if matches_directory_scope(&rel_lossy, &policy.path)
-            || path_matches_pattern(&rel_lossy, &policy.path)
-        {
-            policy.verify(original, new_content).map_err(|err| {
-                format!("Security policy violation for agent '{agent}': {err}")
-            })?;
+    // 1. Collect candidate policies from agent frontmatter
+    let mut applicable_policies: Vec<(Option<String>, agy_common::PathPolicy)> = Vec::new();
+    if let Some(agent) = agent_name
+        && let Some(guard) = guards.get(agent)
+    {
+        for p in &guard.path_policies {
+            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
+                applicable_policies.push((Some(agent.to_owned()), p.clone()));
+            }
         }
+    }
+
+    // 2. Collect candidate policies from project.toml
+    if let Some(proj) = project {
+        for p in proj.all_path_policies() {
+            let matches_agent = p.agent.is_none() || p.agent.as_deref() == agent_name;
+            if matches_agent
+                && (matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path))
+            {
+                let eff_agent = p.agent.clone().or_else(|| agent_name.map(str::to_owned));
+                applicable_policies.push((eff_agent, p));
+            }
+        }
+    }
+
+    if applicable_policies.is_empty() {
+        return Ok(());
+    }
+
+    let project_syntax = project.and_then(|p| p.policies.syntax.as_ref());
+    let language = project.and_then(|p| p.project.language.as_deref());
+
+    for (effective_agent, policy) in &applicable_policies {
+        let syntax = policy.effective_syntax(candidate, project_syntax, language);
+        policy
+            .verify_with_syntax(candidate, original, new_content, &syntax)
+            .map_err(|err| {
+                let role = effective_agent.as_deref().unwrap_or("operator");
+                format!("Security policy violation for agent '{role}': {err}")
+            })?;
     }
 
     Ok(())
@@ -892,16 +915,33 @@ mod tests {
         let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
         // doc-author: comments allowed, code edits blocked in src/
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_docs, Some("doc-author"), &guards).is_ok());
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("doc-author"), &guards).is_err());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_docs, Some("doc-author"), &guards, None).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("doc-author"), &guards, None).is_err());
 
         // test-author: tests allowed in src/, production code edits blocked
         let with_unit_test = "pub fn foo() -> u32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}";
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_unit_test, Some("test-author"), &guards).is_ok());
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("test-author"), &guards).is_err());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_unit_test, Some("test-author"), &guards, None).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("test-author"), &guards, None).is_err());
 
         // unconfigured agent: edits allowed
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("coder"), &guards).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("coder"), &guards, None).is_ok());
+
+        // Declarative project.toml custom path policy for Python
+        let mut proj = agy_common::ProjectConfig::default();
+        proj.project.language = Some("python".to_owned());
+        proj.path_policies.push(agy_common::PathPolicy {
+            path: "app".to_owned(),
+            filter: agy_common::ContentFilterKind::CommentsOnly,
+            agent: Some("doc-author".to_owned()),
+            ..Default::default()
+        });
+
+        let py_orig = "def add(a, b):\n    return a + b\n";
+        let py_docs = "def add(a, b):\n    \"\"\"Docstring\"\"\"\n    # comment\n    return a + b\n";
+        let py_tamper = "def add(a, b):\n    return a + b + 1\n";
+
+        assert!(check_agent_path_policies(&root, &root.join("app/math.py"), py_orig, py_docs, Some("doc-author"), &guards, Some(&proj)).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("app/math.py"), py_orig, py_tamper, Some("doc-author"), &guards, Some(&proj)).is_err());
     }
 
     #[test]

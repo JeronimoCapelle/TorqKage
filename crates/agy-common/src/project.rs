@@ -178,6 +178,15 @@ impl ProjectDocsConfig {
     }
 }
 
+/// Declarative project-level path policies and language syntax configurations.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct ProjectPolicyConfig {
+    #[serde(default)]
+    pub syntax: Option<crate::content_filter::SyntaxConfig>,
+    #[serde(default)]
+    pub path_policies: Vec<crate::content_filter::PathPolicy>,
+}
+
 /// Root project descriptor parsed from `project.toml` or dynamically synthesized.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -197,9 +206,25 @@ pub struct ProjectConfig {
     pub extra_banned_files: Vec<String>,
     #[serde(default)]
     pub docs: ProjectDocsConfig,
+    #[serde(default)]
+    pub policies: ProjectPolicyConfig,
+    #[serde(default)]
+    pub path_policies: Vec<crate::content_filter::PathPolicy>,
 }
 
 impl ProjectConfig {
+    /// Returns all declared path policies, combining `path_policies` and `policies.path_policies`.
+    #[must_use]
+    pub fn all_path_policies(&self) -> Vec<crate::content_filter::PathPolicy> {
+        let mut all = self.path_policies.clone();
+        for p in &self.policies.path_policies {
+            if !all.contains(p) {
+                all.push(p.clone());
+            }
+        }
+        all
+    }
+
     /// Returns all build cache and ignored directory paths across `sandbox.bind_mounts` and `workspace.ignored_paths`.
     #[must_use]
     pub fn all_ignored_or_cache_paths(&self) -> Vec<String> {
@@ -377,6 +402,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -421,6 +447,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -465,6 +492,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -499,6 +527,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -533,6 +562,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -567,6 +597,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -601,6 +632,7 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            ..Default::default()
         }
     }
 
@@ -651,6 +683,18 @@ pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
                 extract_quoted_items(trimmed, &mut array_items);
             }
             continue;
+        }
+
+        // Table array header: e.g. [[path_policies]]
+        if let Some(rest) = trimmed.strip_prefix("[[")
+            && let Some(section) = rest.strip_suffix("]]")
+        {
+            let sec_name = section.trim();
+            if sec_name == "path_policies" || sec_name == "policies.path_policies" {
+                config.path_policies.push(crate::content_filter::PathPolicy::default());
+                "path_policies".clone_into(&mut current_section);
+                continue;
+            }
         }
 
         // Section header
@@ -710,8 +754,20 @@ fn extract_quoted_items(text: &str, items: &mut Vec<String>) {
     }
 }
 
+fn unquote_toml_scalar(val: &str) -> &str {
+    let trimmed = val.trim();
+    if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2)
+        || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
+    {
+        let end = trimmed.len().saturating_sub(1);
+        trimmed.get(1..end).unwrap_or(trimmed)
+    } else {
+        trimmed
+    }
+}
+
 fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val: &str) {
-    let clean_str = val.trim_matches('"');
+    let clean_str = unquote_toml_scalar(val);
 
     if section == "project" {
         match key {
@@ -764,6 +820,51 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
         }
     } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths") {
         config.docs.paths = vec![clean_str.to_owned()];
+    } else if section == "path_policies" {
+        if let Some(last) = config.path_policies.last_mut() {
+            match key {
+                "agent" => last.agent = Some(clean_str.to_owned()),
+                "path" => clean_str.clone_into(&mut last.path),
+                "filter" => match clean_str {
+                    "comments_only" | "comments" => {
+                        last.filter = crate::content_filter::ContentFilterKind::CommentsOnly;
+                    }
+                    "tests_only" | "tests" => {
+                        last.filter = crate::content_filter::ContentFilterKind::TestsOnly;
+                    }
+                    "delimited" => {
+                        last.filter = crate::content_filter::ContentFilterKind::Delimited;
+                    }
+                    _ => {}
+                },
+                "start_marker" => last.start_marker = Some(clean_str.to_owned()),
+                "end_marker" => last.end_marker = Some(clean_str.to_owned()),
+                "line_comment" => last.line_comments = vec![clean_str.to_owned()],
+                "block_comment_start" => {
+                    if let Some(last_bc) = last.block_comments.last_mut() {
+                        clean_str.clone_into(&mut last_bc.start);
+                    } else {
+                        last.block_comments.push(crate::content_filter::BlockCommentDelimiters::new(clean_str, ""));
+                    }
+                }
+                "block_comment_end" => {
+                    if let Some(last_bc) = last.block_comments.last_mut() {
+                        clean_str.clone_into(&mut last_bc.end);
+                    } else {
+                        last.block_comments.push(crate::content_filter::BlockCommentDelimiters::new("", clean_str));
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else if section == "policies.syntax" || section == "syntax" {
+        let syntax = config.policies.syntax.get_or_insert_with(crate::content_filter::SyntaxConfig::default);
+        match key {
+            "line_comment" => syntax.line_comments = vec![clean_str.to_owned()],
+            "test_prefix" => syntax.test_prefixes = vec![clean_str.to_owned()],
+            "test_attribute" => syntax.test_attributes = vec![clean_str.to_owned()],
+            _ => {}
+        }
     }
 }
 
@@ -805,6 +906,23 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
             config.security.allowed_patterns = items.to_vec();
         } else if key == "disabled_categories" {
             config.security.disabled_categories = items.to_vec();
+        }
+    } else if section == "path_policies" {
+        if let Some(last) = config.path_policies.last_mut() {
+            match key {
+                "line_comments" => last.line_comments = items.to_vec(),
+                "test_attributes" => last.test_attributes = items.to_vec(),
+                "test_prefixes" => last.test_prefixes = items.to_vec(),
+                _ => {}
+            }
+        }
+    } else if section == "policies.syntax" || section == "syntax" {
+        let syntax = config.policies.syntax.get_or_insert_with(crate::content_filter::SyntaxConfig::default);
+        match key {
+            "line_comments" => syntax.line_comments = items.to_vec(),
+            "test_attributes" => syntax.test_attributes = items.to_vec(),
+            "test_prefixes" => syntax.test_prefixes = items.to_vec(),
+            _ => {}
         }
     }
 }
@@ -872,6 +990,52 @@ extra_banned_files = ["firmware_key.pem", ".secret_payload"]
             parsed.extra_banned_files,
             vec!["firmware_key.pem", ".secret_payload"]
         );
+    }
+
+    #[test]
+    fn test_parse_project_toml_path_policies_and_syntax() {
+        let sample = r##"
+[project]
+name = "python-service"
+language = "python"
+
+[policies.syntax]
+line_comments = ["#"]
+test_prefixes = ["test_"]
+
+[[path_policies]]
+agent = "doc-author"
+path = "src"
+filter = "comments_only"
+block_comment_start = '"""'
+block_comment_end = '"""'
+
+[[path_policies]]
+agent = "test-author"
+path = "src"
+filter = "tests_only"
+"##;
+
+        let parsed = parse_project_toml(sample).unwrap();
+        assert_eq!(parsed.project.name.as_deref(), Some("python-service"));
+        assert_eq!(parsed.project.language.as_deref(), Some("python"));
+
+        let syntax = parsed.policies.syntax.as_ref().unwrap();
+        assert_eq!(syntax.line_comments, vec!["#"]);
+        assert_eq!(syntax.test_prefixes, vec!["test_"]);
+
+        let policies = parsed.all_path_policies();
+        assert_eq!(policies.len(), 2);
+        assert_eq!(policies[0].agent.as_deref(), Some("doc-author"));
+        assert_eq!(policies[0].path, "src");
+        assert_eq!(policies[0].filter, crate::content_filter::ContentFilterKind::CommentsOnly);
+        assert_eq!(policies[0].block_comments.len(), 1);
+        assert_eq!(policies[0].block_comments[0].start, "\"\"\"");
+        assert_eq!(policies[0].block_comments[0].end, "\"\"\"");
+
+        assert_eq!(policies[1].agent.as_deref(), Some("test-author"));
+        assert_eq!(policies[1].path, "src");
+        assert_eq!(policies[1].filter, crate::content_filter::ContentFilterKind::TestsOnly);
     }
 
     #[test]

@@ -116,6 +116,7 @@ impl AgentFrontmatter {
                             filter,
                             start_marker,
                             end_marker,
+                            ..Default::default()
                         });
                     }
                     continue;

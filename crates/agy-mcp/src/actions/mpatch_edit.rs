@@ -38,8 +38,9 @@ pub(crate) fn execute(
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'patch'".to_owned())?;
 
+    let project = ProjectConfig::detect_or_load(workspace_root);
+
     if tool.ban_dangerous_files() {
-        let project = ProjectConfig::detect_or_load(workspace_root);
         check_dangerous_files_with_security(Path::new(&path_str), Some(&project.security))?;
     }
 
@@ -102,6 +103,7 @@ pub(crate) fn execute(
         &new_content,
         agent_name,
         agent_guards,
+        Some(&project),
     )?;
 
     std::fs::write(&safe_path, new_content.as_bytes())

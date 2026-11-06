@@ -37,8 +37,9 @@ pub(crate) fn execute(
         .and_then(serde_json::Value::as_str)
         .ok_or_else(|| "Missing required parameter 'content'".to_owned())?;
 
+    let project = ProjectConfig::detect_or_load(workspace_root);
+
     if tool.ban_dangerous_files() {
-        let project = ProjectConfig::detect_or_load(workspace_root);
         check_dangerous_files_with_security(Path::new(&path_str), Some(&project.security))?;
     }
 
@@ -70,6 +71,7 @@ pub(crate) fn execute(
         content,
         agent_name,
         agent_guards,
+        Some(&project),
     )?;
 
     if let Some(parent) = safe_path.parent()
@@ -318,6 +320,57 @@ mod tests {
         let tampered_args = json!({
             "path": "src/lib.rs",
             "content": "pub fn add(a: i32, b: i32) -> i32 { a + b + 1 }"
+        });
+        assert!(execute(&tool, &temp, &tampered_args, Some("doc-author"), &guards).is_err());
+    }
+
+    #[test]
+    fn test_file_write_project_toml_declarative_custom_policy() {
+        let temp = create_test_dir("write-project-policy");
+        let tool = ToolDefinition {
+            name: "write_file".to_owned(),
+            allowed_directories: vec!["app".to_owned()],
+            ..Default::default()
+        };
+
+        // Declarative project.toml defining a custom path policy without modifying agent frontmatter
+        let project_toml = r#"
+[project]
+name = "py-app"
+language = "python"
+
+[[path_policies]]
+agent = "doc-author"
+path = "app"
+filter = "comments_only"
+"#;
+        std::fs::write(temp.join("project.toml"), project_toml).unwrap();
+
+        // Agent has no frontmatter path policies, only allowed_dirs
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "doc-author".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["app".to_owned()],
+                ..Default::default()
+            },
+        );
+
+        let file_path = temp.join("app/calc.py");
+        std::fs::create_dir_all(temp.join("app")).unwrap();
+        std::fs::write(&file_path, "def add(a, b):\n    return a + b\n").unwrap();
+
+        // 1. Doc author adds docstring and # comments: allowed
+        let valid_args = json!({
+            "path": "app/calc.py",
+            "content": "def add(a, b):\n    \"\"\"Adds two numbers.\"\"\"\n    # Addition\n    return a + b\n"
+        });
+        assert!(execute(&tool, &temp, &valid_args, Some("doc-author"), &guards).is_ok());
+
+        // 2. Doc author modifies code: rejected by project.toml path policy
+        let tampered_args = json!({
+            "path": "app/calc.py",
+            "content": "def add(a, b):\n    return a + b + 1\n"
         });
         assert!(execute(&tool, &temp, &tampered_args, Some("doc-author"), &guards).is_err());
     }

@@ -29,7 +29,7 @@ pub mod state;
 pub mod supervisor;
 pub mod tools;
 
-pub use content_filter::{ContentFilterKind, PathPolicy};
+pub use content_filter::{BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig};
 pub use error::{AgyError, Result};
 pub use fast_hash::{
     FastBuildHasher, FastHashMap, FastHashSet, FastHasher, fast_map_new, fast_map_with_capacity,
