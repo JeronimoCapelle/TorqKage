@@ -53,6 +53,8 @@ mcp_tools:
   - inspect_agent_workspace
   - merge_agent_workspace
   - query_public_api
+  - query_code_graph
+  - sync_code_graph
   - inspect_workspace_clean
   - query_tool_help
 ---

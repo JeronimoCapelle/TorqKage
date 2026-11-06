@@ -51,6 +51,8 @@ mcp_tools:
   - cargo_check_targets
   - query_compiler_explain
   - query_public_api
+  - query_code_graph
+  - sync_code_graph
   - ast_grep_rewrite
   - jj_absorb_working_copy
   - query_tool_help

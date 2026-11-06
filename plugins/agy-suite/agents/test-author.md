@@ -53,6 +53,8 @@ mcp_tools:
   - cargo_fuzz
   - llvm_objdump
   - query_public_api
+  - query_code_graph
+  - sync_code_graph
   - query_compiler_explain
   - query_tool_help
 ---

@@ -24,6 +24,9 @@ mcpServers:
   - name: agy-tools
     command: agy-mcp
     args: ["--agent", "perf-analyst"]
+  - name: perfetto
+    command: perfetto-mcp-rs
+    args: []
 mcp_tools:
   - read_project_file
   - list_directory
@@ -55,6 +58,7 @@ mcp_tools:
   - Inspect generated compiler assembly using `cargo_asm` to identify missing auto-vectorization (SIMD), unintended bounds check branches, loop unrolling issues, and register spills.
   - Pipe assembly into `llvm_mca` to simulate CPU execution pipeline ports, throughput, latency, and register pressure.
 - **Hardware Counters & Profiling:** Collect hardware performance counters (L1/L3 data cache misses, branch mispredictions, cycle counts, instructions per cycle) via `cargo_perf` (`perf stat`) and profile callstack hotspots via `flamegraph`.
+- **System Trace Analysis (Perfetto):** When analyzing thread lock contention, scheduler context switches, or latency spikes, inspect system and application traces (`.pftrace`) using the dedicated `perfetto` MCP server tools (`load_trace`, `execute_sql`). Query PerfettoSQL slices to pinpoint exact thread wakeup latencies and blocking mutexes.
 - **Binary Footprint & Memory Section Audit:**
   - Audit release binary size and pinpoint monomorphization bloat per crate and symbol using `cargo_bloat`.
   - For bare-metal / embedded targets, use `cargo_size` to audit RAM/ROM section boundaries (`.text`, `.rodata`, `.data`, `.bss`) against hardware silicon limits.

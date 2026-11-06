@@ -513,6 +513,28 @@ output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 30
 
+[tools.query_code_graph]
+description = "Queries the Tree-sitter code graph for cross-file callers, callees, symbols, and blast-radius impact analysis across Rust, Python, Go, and JS/TS"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["graphtrail", "--db", ".agy/cache/graphtrail.db"]
+args = [
+    { name = "action", required = true, regex = "^(callers|callees|impact|search|context|affected|dead-code)$", description = "Query action to execute (callers, callees, impact, search, context, affected, dead-code)" },
+    { name = "target", required = false, regex = "^[^\\x00\\r\\n]+$", description = "Symbol name or relative file path to analyze" }
+]
+output_capture = "stdout"
+truncate_lines = 120
+timeout_seconds = 20
+
+[tools.sync_code_graph]
+description = "Indexes or refreshes the Tree-sitter code graph database (.agy/cache/graphtrail.db) across the repository"
+action = "static_command"
+category = "diagnostics"
+command = ["graphtrail", "sync", ".", "--db", ".agy/cache/graphtrail.db"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 30
+
 [tools.query_compiler_explain]
 description = "Retrieves compiler diagnostic explanations, error rationale, and code examples for a compiler error code (e.g. E0308)"
 action = "parameterized_command"

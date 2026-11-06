@@ -41,6 +41,8 @@ mcp_tools:
   - cargo_hack
   - cargo_outdated
   - ast_grep
+  - query_code_graph
+  - sync_code_graph
   - llvm_objdump
   - query_tool_help
 ---

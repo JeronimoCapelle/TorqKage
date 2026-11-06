@@ -148,10 +148,8 @@ cp -r "${PLUGIN_DIR}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
 cp -r "${PLUGIN_DIR}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
 
 # Copy executables (unlink first to prevent ETXTBSY if daemon/agents are running)
-rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl"
-cp "${PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"
-cp "${PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/"
-cp "${PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/"
+rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs"
+cp -r "${PLUGIN_DIR}/bin/"* "${TARGET_PLUGIN_DIR}/bin/"
 chmod +x "${TARGET_PLUGIN_DIR}/bin"/*
 
 # 4. Create convenient symlinks in ~/.local/bin
@@ -161,6 +159,12 @@ if [[ "${SKIP_SYMLINKS}" = false ]]; then
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${LOCAL_BIN_DIR}/agy-ctrl"
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${LOCAL_BIN_DIR}/agy-mcp"
     ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${LOCAL_BIN_DIR}/agy-hooks"
+    if [[ -f "${TARGET_PLUGIN_DIR}/bin/graphtrail" ]]; then
+        ln -sf "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${LOCAL_BIN_DIR}/graphtrail"
+    fi
+    if [[ -f "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" ]]; then
+        ln -sf "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" "${LOCAL_BIN_DIR}/perfetto-mcp-rs"
+    fi
 fi
 
 # 5. Validate installed plugin with agy plugin validate
