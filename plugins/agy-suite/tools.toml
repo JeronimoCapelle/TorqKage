@@ -557,7 +557,7 @@ output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 10
 
-# --- Test Suite & Verification Tooling ---
+# --- Test Suite & Formal Verification Tooling ---
 
 [tools.run_cargo_test]
 description = "Executes unit and integration tests via cargo fast test with optional target/filter overrides"
@@ -598,7 +598,7 @@ truncate_lines = 100
 timeout_seconds = 180
 
 [tools.run_mutation_tests]
-description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs"
+description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs (mutation testing score)"
 action = "static_command"
 category = "testing"
 require_gates = ["tests"]
@@ -626,6 +626,53 @@ output_capture = "stderr"
 truncate_lines = 100
 timeout_seconds = 90
 
+[tools.run_cargo_careful]
+description = "Executes tests with extra debug checks to detect undefined behavior and invalid memory operations"
+action = "static_command"
+category = "testing"
+tracks_circuit_breaker = true
+command = ["cargo", "careful", "test"]
+output_capture = "stderr"
+truncate_lines = 150
+timeout_seconds = 180
+
+[tools.run_cargo_miri]
+description = "Runs tests inside Miri interpreter to verify strict pointer provenance, uninitialized memory, and Tree Borrows"
+action = "static_command"
+category = "testing"
+tracks_circuit_breaker = true
+command = ["cargo", "miri", "test"]
+output_capture = "stderr"
+truncate_lines = 200
+timeout_seconds = 300
+
+[tools.run_cargo_loom]
+description = "Executes Loom deterministic concurrency permutations to detect data races and atomic ordering violations"
+action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
+command = ["cargo", "test"]
+args = [
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Target loom test harness binary (e.g. 'loom_ring_buffer')" },
+    { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test filter" }
+]
+output_capture = "both"
+truncate_lines = 150
+timeout_seconds = 240
+
+[tools.run_cargo_kani]
+description = "Executes Kani formal verification model checker to mathematically prove contract satisfiability and panic freedom"
+action = "parameterized_command"
+category = "testing"
+tracks_circuit_breaker = true
+command = ["cargo", "kani"]
+args = [
+    { name = "harness", required = false, flag = "--harness", regex = "^[a-zA-Z0-9_:]+$", description = "Specific proof harness to verify (e.g. 'verify_ring_buffer_invariants')" }
+]
+output_capture = "both"
+truncate_lines = 150
+timeout_seconds = 300
+
 # --- Performance Profiling & Hardware Diagnostics Tooling ---
 
 [tools.run_cargo_asm]
@@ -650,26 +697,6 @@ args = [
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 240
-
-[tools.run_cargo_careful]
-description = "Executes tests with extra debug checks to detect undefined behavior and invalid operations"
-action = "static_command"
-category = "testing"
-tracks_circuit_breaker = true
-command = ["cargo", "careful", "test"]
-output_capture = "stderr"
-truncate_lines = 150
-timeout_seconds = 180
-
-[tools.run_cargo_miri]
-description = "Runs tests inside Miri interpreter to verify strict pointer provenance and Tree Borrows"
-action = "static_command"
-category = "testing"
-tracks_circuit_breaker = true
-command = ["cargo", "miri", "test"]
-output_capture = "stderr"
-truncate_lines = 200
-timeout_seconds = 300
 
 [tools.run_flamegraph]
 description = "Generates CPU flame graphs to identify profiling hotspots and callstack bottlenecks"
@@ -718,6 +745,19 @@ command = ["llvm-mca", "-march=x86-64", "-mcpu=native"]
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
+
+[tools.run_llvm_objdump]
+description = "Disassembles raw binary or object file using llvm-objdump with instruction decoding (useful for differential testing)"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["llvm-objdump", "-d"]
+args = [
+    { name = "file", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target binary, ELF, or object file to disassemble" },
+    { name = "arch", required = false, flag = "--arch-name", regex = "^[a-zA-Z0-9_]+$", description = "Target architecture (e.g. 'riscv64', 'riscv32', 'x86_64')" }
+]
+output_capture = "stdout"
+truncate_lines = 200
+timeout_seconds = 15
 
 # [tools.run_cargo_zigbuild]
 # description = "Cross-compiles package targets using Zig as the C/C++ cross-compiler and linker"
