@@ -211,6 +211,33 @@ timeout_seconds = 5
 prefix = "### [AUTOMATED WAKE CONTEXT]: Unreleased Conventional Commits Preview (git-cliff)\n"
 fallback = "No unreleased conventional commits found in recent range."
 
+[[session_start.injections]]
+name = "copilot_vcs_status"
+matcher = "copilot"
+command = ["jj", "status", "--no-pager"]
+max_lines = 15
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Active Jujutsu VCS Status\n"
+fallback = "VCS status clean."
+
+[[session_start.injections]]
+name = "planner_workspace_topology"
+matcher = "planner"
+command = ["cargo", "tree", "--depth", "0", "--workspace"]
+max_lines = 20
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Workspace Member Crates\n"
+fallback = "Single-package workspace."
+
+[[session_start.injections]]
+name = "spec_checker_dirty_files"
+matcher = "spec-checker"
+command = ["git", "status", "--short"]
+max_lines = 25
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Active Files Awaiting Spec Audit\n"
+fallback = "No uncommitted modifications in repository."
+
 
 # ------------------------------------------------------------------------------
 # 6. SESSION STOP HANDOFF RECORDING
