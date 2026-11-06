@@ -38,15 +38,13 @@ mcp_tools:
   - inspect_workspace_conflicts
   - inspect_bookmarks
   - inspect_project_state
-  - run_cargo_nextest
   - run_pre_release_gauntlet
-  - run_cargo_clippy
+  - run_cargo_deny
   - run_cargo_doc
   - run_cargo_check_targets
   - run_mutation_tests
   - run_cargo_size
   - run_git_cliff
-  - jj_absorb_working_copy
   - jj_describe_revision
   - inspect_workspace_clean
   - query_tool_help
@@ -69,9 +67,10 @@ mcp_tools:
   - Inadvertent allocations or copies on critical hot paths.
 - **Exit Verification & Release Checklist:**
   1. **Mandated Verification Adherence:** Verify that any specialized verification harness mandated in `ARCHITECTURE.md` (Kani SMT proofs, Loom concurrency permutations, Miri pointer provenance, or differential execution) ran and passed with zero errors.
-  2. **Mutation Test Audit:** Run `run_mutation_tests` (`cargo mutants`) to prove that test harnesses catch synthetic semantic mutations and no mutants survived.
-  3. **Workspace Cleanliness:** Verify workspace state hygiene (`inspect_workspace_clean`).
-  4. **Changelog Generation:** Generate release notes from Conventional Commits via `run_git_cliff`.
-  5. **Optional Consolidated Check:** If you need to re-verify the full pipeline after fixes, execute `run_pre_release_gauntlet`.
+  2. **Supply-Chain Security Audit:** Execute `run_cargo_deny` to audit for RustSec security advisories, license compliance, and unapproved crates.
+  3. **Mutation Test Audit:** Run `run_mutation_tests` (`cargo mutants`) to prove that test harnesses catch synthetic semantic mutations and no mutants survived.
+  4. **Workspace Cleanliness:** Verify workspace state hygiene (`inspect_workspace_clean`).
+  5. **Changelog Generation:** Generate release notes from Conventional Commits via `run_git_cliff`.
+  6. **Optional Consolidated Check:** If you need to re-verify the full pipeline after fixes, execute `run_pre_release_gauntlet`.
 - **Live CLI Ground Truth:** Never guess tool flags; use `query_tool_help(tool_name = "...")` to inspect live options.
 - **Explicit Checkpoint Gate:** You can ONLY declare "We have reached a new stable project checkpoint" AFTER all gauntlet checks pass and the human operator explicitly confirms. Never declare completion autonomously.

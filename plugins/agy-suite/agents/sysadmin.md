@@ -8,8 +8,6 @@ commandExecutionPolicy: off
 allowed_dirs:
   - "*"
 tools:
-  - view_file
-  - grep_search
   - run_command
   - ask_question
 inheritMcp: false

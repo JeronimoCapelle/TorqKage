@@ -49,8 +49,6 @@ mcp_tools:
   - run_quick_check
   - run_cargo_verification
   - query_compiler_explain
-  - jj_absorb_working_copy
-  - jj_describe_revision
   - ensure_agent_workspace
   - inspect_workspace_clean
   - query_tool_help

@@ -42,7 +42,6 @@ mcp_tools:
   - run_cargo_size
   - run_cargo_nm
   - run_hyperfine
-  - run_nasm_check
   - analyze_llvm_mca
   - write_file
   - query_tool_help

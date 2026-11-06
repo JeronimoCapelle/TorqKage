@@ -43,12 +43,12 @@ mcp_tools:
   - run_cargo_miri
   - run_cargo_loom
   - run_cargo_kani
-  - run_cargo_expand
   - run_coverage_summary
   - run_mutation_tests
   - run_cargo_insta
   - run_cargo_fuzz
   - run_llvm_objdump
+  - query_compiler_explain
   - query_tool_help
 ---
 

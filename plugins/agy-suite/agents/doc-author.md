@@ -37,6 +37,8 @@ mcp_tools:
   - query_project_spec
   - list_project_docs
   - inspect_workspace_diff
+  - inspect_module_structure
+  - run_cargo_verification
   - run_cargo_doc
   - query_tool_help
 ---

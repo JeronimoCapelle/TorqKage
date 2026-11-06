@@ -29,7 +29,7 @@ mcp_tools:
   - inspect_git_status
   - inspect_module_structure
   - inspect_module_dependencies
-  - inspect_bookmarks
+  - inspect_workspace_diff
   - inspect_revision_log
   - run_cargo_clippy
   - run_cargo_deny
@@ -38,8 +38,6 @@ mcp_tools:
   - run_cargo_public_api
   - run_cargo_hack
   - run_cargo_outdated
-  - run_cargo_expand
-  - run_cargo_doc
   - run_ast_grep
   - run_llvm_objdump
   - query_tool_help
