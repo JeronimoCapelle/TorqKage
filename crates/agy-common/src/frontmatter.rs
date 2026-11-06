@@ -21,6 +21,7 @@ pub struct AgentFrontmatter {
     pub disallowed_dirs: Vec<String>,
     pub allowed_files: Vec<String>,
     pub disallowed_files: Vec<String>,
+    pub path_policies: Vec<crate::content_filter::PathPolicy>,
     pub directives: String,
 }
 
@@ -59,13 +60,86 @@ impl AgentFrontmatter {
         let mut disallowed_dirs = Vec::new();
         let mut allowed_files = Vec::new();
         let mut disallowed_files = Vec::new();
+        let mut path_policies: Vec<crate::content_filter::PathPolicy> = Vec::new();
 
         let mut current_list: Option<&mut Vec<String>> = None;
+        let mut in_path_policies = false;
 
         for line in frontmatter.lines() {
             let trimmed_line = line.trim();
             if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
                 continue;
+            }
+
+            // Top-level key detection
+            let is_top_level = !line.starts_with(char::is_whitespace) && !trimmed_line.starts_with('-');
+            if is_top_level {
+                in_path_policies = false;
+                current_list = None;
+            }
+
+            if in_path_policies {
+                if let Some(item) = trimmed_line.strip_prefix('-') {
+                    let item_trim = item.trim();
+                    if item_trim.starts_with('{') && item_trim.ends_with('}')
+                        && let Ok(pol) = serde_json::from_str::<crate::content_filter::PathPolicy>(item_trim)
+                    {
+                        path_policies.push(pol);
+                        continue;
+                    }
+
+                    let mut path = String::new();
+                    let mut filter = crate::content_filter::ContentFilterKind::CommentsOnly;
+                    let mut start_marker = None;
+                    let mut end_marker = None;
+
+                    for part in item_trim.split(',') {
+                        let part = part.trim();
+                        if let Some(p) = part.strip_prefix("path:") {
+                            p.trim().trim_matches(['"', '\'']).clone_into(&mut path);
+                        } else if let Some(f) = part.strip_prefix("filter:") {
+                            match f.trim().trim_matches(['"', '\'']) {
+                                "tests_only" | "tests" => filter = crate::content_filter::ContentFilterKind::TestsOnly,
+                                "delimited" => filter = crate::content_filter::ContentFilterKind::Delimited,
+                                _ => filter = crate::content_filter::ContentFilterKind::CommentsOnly,
+                            }
+                        } else if let Some(m) = part.strip_prefix("start_marker:") {
+                            start_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
+                        } else if let Some(m) = part.strip_prefix("end_marker:") {
+                            end_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
+                        }
+                    }
+
+                    if !path.is_empty() {
+                        path_policies.push(crate::content_filter::PathPolicy {
+                            path,
+                            filter,
+                            start_marker,
+                            end_marker,
+                        });
+                    }
+                    continue;
+                }
+
+                if let Some(last) = path_policies.last_mut() {
+                    if let Some(f) = trimmed_line.strip_prefix("filter:") {
+                        match f.trim().trim_matches(['"', '\'']) {
+                            "tests_only" | "tests" => last.filter = crate::content_filter::ContentFilterKind::TestsOnly,
+                            "delimited" => last.filter = crate::content_filter::ContentFilterKind::Delimited,
+                            _ => last.filter = crate::content_filter::ContentFilterKind::CommentsOnly,
+                        }
+                        continue;
+                    } else if let Some(p) = trimmed_line.strip_prefix("path:") {
+                        p.trim().trim_matches(['"', '\'']).clone_into(&mut last.path);
+                        continue;
+                    } else if let Some(m) = trimmed_line.strip_prefix("start_marker:") {
+                        last.start_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
+                        continue;
+                    } else if let Some(m) = trimmed_line.strip_prefix("end_marker:") {
+                        last.end_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
+                        continue;
+                    }
+                }
             }
 
             // List item handling
@@ -147,6 +221,13 @@ impl AgentFrontmatter {
                 } else {
                     current_list = Some(&mut disallowed_files);
                 }
+            } else if trimmed_line.starts_with("path_policies:") || trimmed_line.starts_with("pathPolicies:") {
+                if trimmed_line.ends_with("[]") {
+                    path_policies.clear();
+                    in_path_policies = false;
+                } else {
+                    in_path_policies = true;
+                }
             }
         }
 
@@ -167,6 +248,7 @@ impl AgentFrontmatter {
             disallowed_dirs,
             allowed_files,
             disallowed_files,
+            path_policies,
             directives,
         })
     }
@@ -196,6 +278,7 @@ impl AgentFrontmatter {
             disallowed_dirs: self.disallowed_dirs.clone(),
             allowed_files: self.allowed_files.clone(),
             disallowed_files: self.disallowed_files.clone(),
+            path_policies: self.path_policies.clone(),
         }
     }
 
@@ -207,6 +290,7 @@ impl AgentFrontmatter {
             && parsed.disallowed_dirs.is_empty()
             && parsed.allowed_files.is_empty()
             && parsed.disallowed_files.is_empty()
+            && parsed.path_policies.is_empty()
         {
             None
         } else {
@@ -220,6 +304,7 @@ impl AgentFrontmatter {
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::assert_is_empty,
+    clippy::indexing_slicing,
     reason = "Unit test assertions"
 )]
 mod tests {
@@ -263,6 +348,39 @@ Directives here.
         assert_eq!(manifest.native_tools, vec!["read_file"]);
         assert_eq!(manifest.mcp_tools, vec!["modify_code", "write_file"]);
         assert_eq!(manifest.directives, "# System Prompt\nDirectives here.\n");
+    }
+
+    #[test]
+    fn test_parse_agent_frontmatter_path_policies() {
+        let md = "---
+name: doc-author
+description: Technical writer
+allowed_dirs:
+  - docs
+  - src
+path_policies:
+  - path: src
+    filter: comments_only
+  - path: src/autogen.rs
+    filter: delimited
+    start_marker: \"// START\"
+    end_marker: \"// END\"
+---
+# Directives
+";
+        let manifest = AgentFrontmatter::parse(md).unwrap();
+        assert_eq!(manifest.name, "doc-author");
+        assert_eq!(manifest.allowed_dirs, vec!["docs", "src"]);
+        assert_eq!(manifest.path_policies.len(), 2);
+        assert_eq!(manifest.path_policies[0].path, "src");
+        assert_eq!(manifest.path_policies[0].filter, crate::content_filter::ContentFilterKind::CommentsOnly);
+        assert_eq!(manifest.path_policies[1].path, "src/autogen.rs");
+        assert_eq!(manifest.path_policies[1].filter, crate::content_filter::ContentFilterKind::Delimited);
+        assert_eq!(manifest.path_policies[1].start_marker.as_deref(), Some("// START"));
+        assert_eq!(manifest.path_policies[1].end_marker.as_deref(), Some("// END"));
+
+        let guard = manifest.to_guard();
+        assert_eq!(guard.path_policies.len(), 2);
     }
 
     #[test]

@@ -24,6 +24,8 @@ pub struct AgentGuard {
     pub allowed_files: Vec<String>,
     #[serde(default)]
     pub disallowed_files: Vec<String>,
+    #[serde(default)]
+    pub path_policies: Vec<crate::content_filter::PathPolicy>,
 }
 
 /// Common system metadata sent in `stdin` to every Antigravity hook.

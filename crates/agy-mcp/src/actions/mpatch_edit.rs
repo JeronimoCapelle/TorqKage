@@ -5,8 +5,8 @@ use std::path::Path;
 use agy_common::ProjectConfig;
 use mpatch::{patch_content_str, ApplyOptions};
 use crate::guards::{
-    check_agent_guard, check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
-    resolve_scoped_path_str,
+    check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
+    check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
 };
 use crate::models::{AgentGuard, ToolDefinition};
 
@@ -94,6 +94,15 @@ pub(crate) fn execute(
             "Patch applied to '{path_str}' with 0 net changes (identical content)."
         ));
     }
+
+    check_agent_path_policies(
+        workspace_root,
+        &safe_path,
+        &original,
+        &new_content,
+        agent_name,
+        agent_guards,
+    )?;
 
     std::fs::write(&safe_path, new_content.as_bytes())
         .map_err(|err| format!("Failed to write patched file '{}': {err}", safe_path.display()))?;
@@ -292,5 +301,46 @@ mod tests {
         assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
         let updated = std::fs::read_to_string(&file_path).unwrap();
         assert!(updated.contains("42"));
+    }
+
+    #[test]
+    fn test_mpatch_path_policy_enforcement() {
+        let temp = create_test_dir("mpatch-policy");
+        let src_dir = temp.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        let file_path = src_dir.join("lib.rs");
+        std::fs::write(&file_path, "pub fn calculate() -> u32 {\n    42\n}\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "modify_code".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "test-author".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                path_policies: vec![agy_common::PathPolicy::tests_only("src")],
+                ..Default::default()
+            },
+        );
+
+        // 1. Test author adds unit test block: allowed
+        let valid_patch = "<<<<<<< SEARCH\npub fn calculate() -> u32 {\n    42\n}\n=======\npub fn calculate() -> u32 {\n    42\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n>>>>>>> REPLACE";
+        let valid_args = json!({
+            "path": "src/lib.rs",
+            "patch": valid_patch
+        });
+        assert!(execute(&tool, &temp, &valid_args, Some("test-author"), &guards).is_ok());
+
+        // 2. Test author modifies production code: rejected
+        let tampered_patch = "<<<<<<< SEARCH\npub fn calculate() -> u32 {\n    42\n}\n=======\npub fn calculate() -> u32 {\n    100\n}\n>>>>>>> REPLACE";
+        let tampered_args = json!({
+            "path": "src/lib.rs",
+            "patch": tampered_patch
+        });
+        assert!(execute(&tool, &temp, &tampered_args, Some("test-author"), &guards).is_err());
     }
 }

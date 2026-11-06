@@ -14,6 +14,7 @@
 //! - [`supervisor`]: Process hygiene supervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`).
 //! - [`tools`]: Declarative `tools.toml` models, parser, and template inheritance engine.
 
+pub mod content_filter;
 pub mod error;
 pub mod fast_hash;
 pub mod frontmatter;
@@ -28,6 +29,7 @@ pub mod state;
 pub mod supervisor;
 pub mod tools;
 
+pub use content_filter::{ContentFilterKind, PathPolicy};
 pub use error::{AgyError, Result};
 pub use fast_hash::{
     FastBuildHasher, FastHashMap, FastHashSet, FastHasher, fast_map_new, fast_map_with_capacity,

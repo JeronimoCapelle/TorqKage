@@ -17,6 +17,9 @@ allowed_files:
 disallowed_dirs:
   - tests
   - benches
+path_policies:
+  - path: src
+    filter: comments_only
 tools: []
 inheritMcp: false
 mcpServers:

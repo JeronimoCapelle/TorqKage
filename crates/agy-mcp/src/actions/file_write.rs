@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use agy_common::ProjectConfig;
 use crate::guards::{
-    check_agent_guard, check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
-    resolve_scoped_path_str,
+    check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
+    check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
 };
 use crate::models::{AgentGuard, ToolDefinition};
 
@@ -57,6 +57,20 @@ pub(crate) fn execute(
     )?;
 
     check_agent_guard(workspace_root, &safe_path, agent_name, agent_guards)?;
+
+    let original = if safe_path.exists() {
+        std::fs::read_to_string(&safe_path).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    check_agent_path_policies(
+        workspace_root,
+        &safe_path,
+        &original,
+        content,
+        agent_name,
+        agent_guards,
+    )?;
 
     if let Some(parent) = safe_path.parent()
         && !parent.exists()
@@ -268,5 +282,43 @@ mod tests {
         });
         assert!(execute(&docs_tool, &temp, &doc_args, None, &guards).is_ok());
         assert!(temp.join("docs/rfcs/001.md").exists());
+    }
+
+    #[test]
+    fn test_file_write_path_policy_enforcement() {
+        let temp = create_test_dir("write-policy");
+        let tool = ToolDefinition {
+            name: "write_file".to_owned(),
+            allowed_directories: vec!["src".to_owned()],
+            ..Default::default()
+        };
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "doc-author".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                path_policies: vec![agy_common::PathPolicy::comments_only("src")],
+                ..Default::default()
+            },
+        );
+
+        let file_path = temp.join("src/lib.rs");
+        std::fs::create_dir_all(temp.join("src")).unwrap();
+        std::fs::write(&file_path, "pub fn add(a: i32, b: i32) -> i32 { a + b }").unwrap();
+
+        // 1. Doc author updates file adding comments: allowed
+        let valid_args = json!({
+            "path": "src/lib.rs",
+            "content": "/// Documentation\npub fn add(a: i32, b: i32) -> i32 { a + b }"
+        });
+        assert!(execute(&tool, &temp, &valid_args, Some("doc-author"), &guards).is_ok());
+
+        // 2. Doc author updates file tampering code: rejected
+        let tampered_args = json!({
+            "path": "src/lib.rs",
+            "content": "pub fn add(a: i32, b: i32) -> i32 { a + b + 1 }"
+        });
+        assert!(execute(&tool, &temp, &tampered_args, Some("doc-author"), &guards).is_err());
     }
 }

@@ -392,6 +392,48 @@ pub(crate) fn check_agent_guard(
     Ok(())
 }
 
+/// Enforces declarative agent path policies (e.g. `comments_only`, `tests_only`, `delimited`).
+///
+/// # Errors
+/// Returns an error if the agent attempts to modify forbidden content within a policy-guarded path.
+pub(crate) fn check_agent_path_policies(
+    workspace_root: &Path,
+    candidate: &Path,
+    original: &str,
+    new_content: &str,
+    agent_name: Option<&str>,
+    guards: &BTreeMap<String, AgentGuard>,
+) -> Result<(), String> {
+    let Some(agent) = agent_name else {
+        return Ok(());
+    };
+
+    let Some(guard) = guards.get(agent) else {
+        return Ok(());
+    };
+
+    if guard.path_policies.is_empty() {
+        return Ok(());
+    }
+
+    let relative = candidate
+        .strip_prefix(workspace_root)
+        .unwrap_or(candidate);
+    let rel_lossy = relative.to_string_lossy();
+
+    for policy in &guard.path_policies {
+        if matches_directory_scope(&rel_lossy, &policy.path)
+            || path_matches_pattern(&rel_lossy, &policy.path)
+        {
+            policy.verify(original, new_content).map_err(|err| {
+                format!("Security policy violation for agent '{agent}': {err}")
+            })?;
+        }
+    }
+
+    Ok(())
+}
+
 const COMMON_ROOT_DIRS: &[&str] = &[
     "src", "tests", "benches", "examples", "docs", "doc", ".git", ".jj", ".agy",
 ];
@@ -794,6 +836,7 @@ mod tests {
                 disallowed_dirs: vec!["tests".to_owned()],
                 allowed_files: Vec::new(),
                 disallowed_files: vec!["Cargo.toml".to_owned()],
+                ..Default::default()
             },
         );
 
@@ -804,6 +847,7 @@ mod tests {
                 disallowed_dirs: vec!["src".to_owned()],
                 allowed_files: vec!["ARCHITECTURE.md".to_owned()],
                 disallowed_files: Vec::new(),
+                ..Default::default()
             },
         );
 
@@ -820,6 +864,44 @@ mod tests {
         // Unrestricted agent
         assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok());
         assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
+    }
+
+    #[test]
+    fn test_check_agent_path_policies() {
+        let root = PathBuf::from("/workspace");
+        let mut guards = BTreeMap::new();
+
+        guards.insert(
+            "doc-author".to_owned(),
+            AgentGuard {
+                path_policies: vec![agy_common::PathPolicy::comments_only("src")],
+                ..Default::default()
+            },
+        );
+
+        guards.insert(
+            "test-author".to_owned(),
+            AgentGuard {
+                path_policies: vec![agy_common::PathPolicy::tests_only("src")],
+                ..Default::default()
+            },
+        );
+
+        let orig = "pub fn foo() -> u32 { 1 }";
+        let with_docs = "/// Doc comment\npub fn foo() -> u32 {\n    // Inline comment\n    1\n}";
+        let with_code_tamper = "pub fn foo() -> u32 { 2 }";
+
+        // doc-author: comments allowed, code edits blocked in src/
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_docs, Some("doc-author"), &guards).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("doc-author"), &guards).is_err());
+
+        // test-author: tests allowed in src/, production code edits blocked
+        let with_unit_test = "pub fn foo() -> u32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}";
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_unit_test, Some("test-author"), &guards).is_ok());
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("test-author"), &guards).is_err());
+
+        // unconfigured agent: edits allowed
+        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("coder"), &guards).is_ok());
     }
 
     #[test]
@@ -879,6 +961,7 @@ mod tests {
                 disallowed_dirs: vec!["tests".to_owned()],
                 allowed_files: Vec::new(),
                 disallowed_files: vec!["Cargo.toml".to_owned()],
+                ..Default::default()
             },
         );
         guards.insert(
@@ -888,6 +971,7 @@ mod tests {
                 disallowed_dirs: vec!["src".to_owned()],
                 allowed_files: vec!["ARCHITECTURE.md".to_owned()],
                 disallowed_files: Vec::new(),
+                ..Default::default()
             },
         );
 
