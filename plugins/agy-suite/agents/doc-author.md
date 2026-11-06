@@ -74,4 +74,4 @@ mcp_tools:
 
 - **Scope Discipline:**
   - You focus exclusively on documentation: crate/module doc comments (`//!`), item doc comments (`///`), doctests, and documentation markdown files (`docs/**`, `ARCHITECTURE.md`, `README.md`).
-  - Do not modify production execution logic or test benches; delegate functional code modifications back to `coder`, `embedded-engineer`, or `test-author`.
+  - Do not modify production execution logic or test benches; delegate functional code modifications back to `coder` or `test-author`.

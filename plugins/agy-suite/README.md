@@ -93,10 +93,9 @@ plugins/agy-suite/
 ├── tools.toml          # Declarative MCP tool definitions, inheritance, and agent perimeters
 ├── README.md           # This comprehensive architecture and configuration manual
 ├── agents/             # Autonomous agent role specifications (.md markdown with frontmatter)
-│   ├── coder.md        # Autonomous implementation agent confined to src/
+│   ├── coder.md        # Autonomous systems implementer (high-level Rust to bare-metal RISC-V & asm)
 │   ├── copilot.md      # Chief of Staff coordinating tasks and fleet handoffs
-│   ├── doc-author.md   # Technical documentation, rustdoc, and specification writer
-│   ├── embedded-engineer.md # Bare-metal, linker script, target JSON, and inline assembly specialist
+│   ├── doc-author.md   # Technical documentation, pedagogical rustdoc, and specification writer
 │   ├── finisher.md     # Gatekeeper validating diffs and release readiness
 │   ├── mini.md         # Narrow symbolic math and optimization subagent
 │   ├── perf-analyst.md # Profiling, assembly, hardware counters, and microarchitectural analysis

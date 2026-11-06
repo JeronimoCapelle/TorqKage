@@ -66,8 +66,7 @@ Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-
 
 | Agent | Responsibility | Permitted Directory Scope (Agent Frontmatter) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
 | :--- | :--- | :--- | :--- | :--- |
-| **`coder`** | Production systems implementation | `allowed_dirs = ["src"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`. |
-| **`embedded-engineer`** | Low-level target & embedded specialist | `allowed_dirs = ["src", "boards", "layout", "targets", "benches"]`<br>`disallowed_dirs = ["tests", "docs"]` | `vcs_conflicts` | Linker scripts (`link.ld`, `memory.x`), section memory maps, inline asm (`asm!`), target JSON specs, `cargo-size`, `cargo-nm`, `llvm-objdump`. |
+| **`coder`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, linker & asm inspection (`cargo-size`, `cargo-nm`, `cargo-asm`, `llvm-objdump`). |
 | **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, `cargo doc --no-deps`. |
 | **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), differential inspection (`llvm-objdump`). |
 | **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. |
@@ -127,8 +126,8 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
    - Autonomous tests are validated via mutation scoring (`run_mutation_tests`). Any test suite where synthetic mutants survive is rejected as ineffective/tautological.
 6. **Purification of Performance Profiling:**
    - `perf-analyst` strictly measures throughput, latency distributions, CPU execution pipeline ports (`analyze_llvm_mca`), disassembly (`run_cargo_asm`), cache misses (`run_cargo_perf`), and binary size (`run_cargo_bloat`). It is entirely decoupled from correctness/UB tools.
-7. **Hardware, Target & Documentation Separation:**
-   - Low-level targets, RISC-V runtime setup, linker scripts (`link.ld`, `memory.x`), section allocation (`.text`, `.data`, `.bss`, MMIO), and inline assembly are isolated to `embedded-engineer`.
+7. **Unified Systems Implementation & Documentation Separation:**
+   - Systems implementation across all abstraction tiers—from high-level business logic down to bare-metal RISC-V initialization, linker scripts (`link.ld`, `memory.x`), section allocation (`.text`, `.data`, `.bss`), and inline assembly—is unified in `coder`.
    - Technical rustdoc (`///`), architectural RFCs, register bitfield diagrams, and specifications are authored by `doc-author`.
 8. **Deterministic Pre-Release Gauntlet (`run_pre_release_gauntlet`):**
    - Rather than executing 6–8 sequential CLI commands across multiple LLM turns, the release gatekeeper executes `run_pre_release_gauntlet` in a single shot. This evaluates VCS conflicts, unit/integration tests, clippy `-D warnings`, rustfmt check, ancillary targets, and doc build in one pass, outputting a consolidated scorecard.
