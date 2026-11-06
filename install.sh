@@ -129,7 +129,7 @@ if [[ -L "${TARGET_PLUGIN_DIR}" ]]; then
     rm -f "${TARGET_PLUGIN_DIR}"
 fi
 mkdir -p "${TARGET_PLUGIN_DIR}/bin"
-mkdir -p "${TARGET_PLUGIN_DIR}/agents"
+rm -rf "${TARGET_PLUGIN_DIR}/agents" && mkdir -p "${TARGET_PLUGIN_DIR}/agents"
 mkdir -p "${TARGET_PLUGIN_DIR}/assets"
 
 # Copy declarative files and manifests
