@@ -6,8 +6,8 @@ mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
 pre_launch_checks:
-  - cargo_compilation
-  - test_compilation
+  - compilation
+  - tests
   - vcs_conflicts
 tools:
   - ask_question

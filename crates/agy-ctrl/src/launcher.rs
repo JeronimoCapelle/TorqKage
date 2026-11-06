@@ -359,8 +359,8 @@ mod tests {
             inherit_mcp: false,
             allowed_subagents: Vec::new(),
             pre_launch_checks: vec![
-                "cargo_compilation".to_owned(),
-                "test_compilation".to_owned(),
+                "compilation".to_owned(),
+                "tests".to_owned(),
                 "vcs_conflicts".to_owned(),
             ],
             native_tools: Vec::new(),

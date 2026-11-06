@@ -541,7 +541,7 @@ fn anchor_to_primary_scope(
     format!("{primary_scope}/{clean}")
 }
 
-/// Resolves a path string relative to agent and tool scopes, preserving backward compatibility.
+/// Resolves a path string relative to agent and tool scopes.
 ///
 /// If an agent or tool is confined to a specific directory (e.g., `src` or `docs`), this resolves
 /// relative paths (e.g., `"auth/hasher.rs"` or `"specs/rv32.md"`) to their scoped locations

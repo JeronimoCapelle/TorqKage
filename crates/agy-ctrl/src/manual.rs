@@ -221,9 +221,9 @@ fn agent_fleet_content() -> Vec<Line<'static>> {
         empty(),
         h2("Subagent Admission & Pre-Flight Checks"),
         text("Agents declare mandatory pre_launch_checks in YAML frontmatter:"),
-        text("  • cargo_compilation: Project must compile cleanly before finisher review"),
+        text("  • compilation: Project must compile cleanly before subagent admission"),
         text("  • vcs_conflicts: Zero unresolved Jujutsu/Git merge conflicts permitted"),
-        text("  • test_compilation: Test harnesses must compile without error"),
+        text("  • tests: Test harnesses must compile without error"),
         empty(),
     ]
 }

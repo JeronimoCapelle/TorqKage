@@ -537,7 +537,7 @@ inheritMcp: false
 allowed_subagents:
   - mini
 pre_launch_checks:
-  - cargo_compilation
+  - compilation
   - vcs_conflicts
 tools: []
 mcp_tools:
@@ -563,13 +563,13 @@ You are a test agent. Always pass tests.
         assert!(!manifest.inherit_mcp);
         assert_eq!(manifest.mcp_tools, vec!["run_cargo_clippy", "run_cargo_test"]);
         assert_eq!(manifest.allowed_subagents, vec!["mini"]);
-        assert_eq!(manifest.pre_launch_checks, vec!["cargo_compilation", "vcs_conflicts"]);
+        assert_eq!(manifest.pre_launch_checks, vec!["compilation", "vcs_conflicts"]);
         assert!(manifest.directives.contains("You are a test agent."));
 
         let serialized = manifest.serialize();
         assert!(serialized.contains("name: test-agent"));
         assert!(serialized.contains("pre_launch_checks:"));
-        assert!(serialized.contains("- cargo_compilation"));
+        assert!(serialized.contains("- compilation"));
         assert!(serialized.contains("mcp_tools:"));
         assert!(serialized.contains("- run_cargo_clippy"));
         assert!(serialized.contains("inheritMcp: false"));

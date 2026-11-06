@@ -262,11 +262,11 @@ impl GateCheck for WorkspaceCleanCheck {
 /// Evaluates pre-flight admission checks specified by name.
 ///
 /// Recognized check names:
-/// - `"cargo_compilation"` | `"cargo_check"` | `"compilation"` -> `ProjectGateCheck` (or `CargoCompilationCheck`)
-/// - `"test_compilation"` | `"cargo_test_compilation"` | `"tests"` -> `ProjectGateCheck` (or `CargoTestCompilationCheck`)
-/// - `"vcs_conflicts"` | `"conflicts"` -> `VcsConflictCheck`
-/// - `"workspace_clean"` | `"git_clean"` | `"jj_clean"` -> `WorkspaceCleanCheck`
-/// - `"linter"` | `"clippy"` -> `ProjectGateCheck` (linter gate)
+/// - `"vcs_conflicts"` -> `VcsConflictCheck`
+/// - `"workspace_clean"` -> `WorkspaceCleanCheck`
+/// - `"compilation"` -> `ProjectGateCheck` (or `CargoCompilationCheck`)
+/// - `"tests"` -> `ProjectGateCheck` (or `CargoTestCompilationCheck`)
+/// - `"linter"` -> `ProjectGateCheck` (linter gate)
 /// - Any custom gate name defined in `project.toml [gates.<name>]`
 ///
 /// # Errors
@@ -277,9 +277,9 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
 
     for name in check_names {
         match *name {
-            "vcs_conflicts" | "conflicts" => checks.push(Box::new(VcsConflictCheck)),
-            "workspace_clean" | "git_clean" | "jj_clean" => checks.push(Box::new(WorkspaceCleanCheck)),
-            "cargo_compilation" | "cargo_check" | "compilation" => {
+            "vcs_conflicts" => checks.push(Box::new(VcsConflictCheck)),
+            "workspace_clean" => checks.push(Box::new(WorkspaceCleanCheck)),
+            "compilation" => {
                 if let Some(gate) = project.gates.get("compilation") {
                     checks.push(Box::new(ProjectGateCheck::new(
                         "Compilation Check",
@@ -291,7 +291,7 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
                     checks.push(Box::new(CargoCompilationCheck));
                 }
             }
-            "test_compilation" | "cargo_test_compilation" | "tests" => {
+            "tests" => {
                 if let Some(gate) = project.gates.get("tests") {
                     checks.push(Box::new(ProjectGateCheck::new(
                         "Test Compilation Check",
@@ -303,7 +303,7 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
                     checks.push(Box::new(CargoTestCompilationCheck));
                 }
             }
-            "linter" | "clippy" => {
+            "linter" => {
                 if let Some(gate) = project.gates.get("linter") {
                     checks.push(Box::new(ProjectGateCheck::new(
                         "Linter Check",
@@ -398,13 +398,13 @@ mod tests {
 ---
 name: sentinel
 pre_launch_checks:
-  - cargo_compilation
+  - compilation
   - vcs_conflicts
 ---
 # Prompt
 ";
         let checks = parse_pre_launch_checks(sample);
-        assert_eq!(checks, vec!["cargo_compilation", "vcs_conflicts"]);
+        assert_eq!(checks, vec!["compilation", "vcs_conflicts"]);
 
         let empty_sample = "\
 ---

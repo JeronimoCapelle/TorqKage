@@ -111,15 +111,10 @@ pub struct RawTool {
     pub truncate_lines: Option<usize>,
     pub truncate_bytes: Option<usize>,
     pub emit_truncation_notice: Option<bool>,
-    pub attach_rustc_explain: Option<bool>,
     pub timeout_seconds: Option<u64>,
     pub require_permission_gate: Option<bool>,
     pub enforce_sandbox: Option<bool>,
     pub sandbox: Option<bool>,
-    pub require_git_clean: Option<bool>,
-    pub require_workspace_clean: Option<bool>,
-    pub require_clippy_clean: Option<bool>,
-    pub require_tests_passed: Option<bool>,
     pub require_gates: Option<Vec<String>>,
     pub skip_gates: Option<Vec<String>>,
     pub error_fallback: Option<String>,
@@ -291,30 +286,6 @@ pub fn merge_tool_with_category(
         gates.clear();
     } else {
         gates.retain(|g| !skip_set.iter().any(|s| s.eq_ignore_ascii_case(g)));
-    }
-
-    let legacy_workspace_clean = raw.require_git_clean.or(raw.require_workspace_clean)
-        .or_else(|| base?.require_git_clean.or(base?.require_workspace_clean))
-        .or_else(|| category?.require_git_clean.or(category?.require_workspace_clean))
-        .unwrap_or(false);
-    if legacy_workspace_clean && !gates.iter().any(|g| g == "workspace_clean" || g == "git_clean") {
-        gates.push("workspace_clean".to_owned());
-    }
-
-    let legacy_clippy = raw.require_clippy_clean
-        .or_else(|| base?.require_clippy_clean)
-        .or_else(|| category?.require_clippy_clean)
-        .unwrap_or(false);
-    if legacy_clippy && !gates.iter().any(|g| g == "linter" || g == "clippy") {
-        gates.push("linter".to_owned());
-    }
-
-    let legacy_tests = raw.require_tests_passed
-        .or_else(|| base?.require_tests_passed)
-        .or_else(|| category?.require_tests_passed)
-        .unwrap_or(false);
-    if legacy_tests && !gates.iter().any(|g| g == "tests") {
-        gates.push("tests".to_owned());
     }
 
     let preconditions = ToolPreconditions {

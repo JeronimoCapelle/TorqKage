@@ -34,7 +34,7 @@ impl DiagnosticsReport {
         // Plugin status
         if self.plugin_installed {
             let link_note = if self.is_symlink {
-                " (legacy symlink - press 'i' to copy standalone bundle)"
+                " (symlinked dev bundle - press 'i' to copy standalone bundle)"
             } else {
                 " (standalone copy)"
             };

@@ -80,7 +80,7 @@ pub(crate) fn evaluate_pre_tool_use(
                     return PreToolResponse::deny(reason);
                 }
             }
-            "tool_policy" | "permission_gate" => {
+            "tool_policy" => {
                 if policy_gate::is_tool_gated_in_config(tool_name, root) {
                     return PreToolResponse::ask(format!(
                         "Policy Gate: Tool '{tool_name}' requires interactive operator confirmation before execution."
@@ -93,7 +93,7 @@ pub(crate) fn evaluate_pre_tool_use(
                 }
             }
             _ => {
-                // Unknown native stage: ignored to ensure backward compatibility
+                // Non-native stages continue to declarative custom checks
             }
         }
     }
