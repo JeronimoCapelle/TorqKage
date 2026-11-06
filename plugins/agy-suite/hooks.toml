@@ -132,18 +132,11 @@ protected_patterns = [
 
 # Explicit tool names to protect.
 # If left empty `[]`, agy-hooks dynamically inspects `tools.toml` and protects
-# ALL tools flagged with `mutating = true`.
+# ALL tools flagged with `mutating = true`, as well as host IDE built-in mutation tools
+# (`write_file`, `edit_file`, `modify_code`).
+# Target file paths are automatically detected across all argument conventions (e.g. `path`,
+# `Path`, `destination`, `file`, etc.) without requiring parameter name configuration.
 protected_tools = []
-
-# Argument parameter keys inspected in the tool payload for target file paths.
-target_keys = [
-    "path",
-    "file_path",
-    "filePath",
-    "Path",
-    "target_file",
-    "file",
-]
 
 
 # ------------------------------------------------------------------------------

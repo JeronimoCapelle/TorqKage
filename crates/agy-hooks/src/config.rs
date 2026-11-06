@@ -60,7 +60,6 @@ pub(crate) struct ManifestGuardConfig {
     pub(crate) enabled: bool,
     pub(crate) protected_patterns: Vec<String>,
     pub(crate) protected_tools: Vec<String>,
-    pub(crate) target_keys: Vec<String>,
 }
 
 impl Default for ManifestGuardConfig {
@@ -79,14 +78,6 @@ impl Default for ManifestGuardConfig {
                 "Makefile".into(),
             ],
             protected_tools: Vec::new(),
-            target_keys: vec![
-                "path".into(),
-                "file_path".into(),
-                "filePath".into(),
-                "Path".into(),
-                "target_file".into(),
-                "file".into(),
-            ],
         }
     }
 }
@@ -337,8 +328,6 @@ fn apply_array_field(
             config.manifest_guard.protected_patterns = items.to_vec();
         } else if key == "protected_tools" {
             config.manifest_guard.protected_tools = items.to_vec();
-        } else if key == "target_keys" {
-            config.manifest_guard.target_keys = items.to_vec();
         }
     } else if section == "custom_check"
         && key == "command"
