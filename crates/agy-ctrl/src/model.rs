@@ -146,23 +146,13 @@ impl ToolItem {
     }
 
     #[must_use]
-    pub(crate) const fn require_git_clean(&self) -> bool {
-        self.preconditions.require_git_clean
+    pub(crate) fn required_gates(&self) -> &[String] {
+        &self.preconditions.require_gates
     }
 
     #[must_use]
-    pub(crate) const fn require_clippy_clean(&self) -> bool {
-        self.preconditions.require_clippy_clean
-    }
-
-    #[must_use]
-    pub(crate) const fn require_tests_passed(&self) -> bool {
-        self.preconditions.require_tests_passed
-    }
-
-    #[must_use]
-    pub(crate) const fn attach_rustc_explain(&self) -> bool {
-        self.formatting.attach_rustc_explain
+    pub(crate) const fn emit_truncation_notice(&self) -> bool {
+        self.formatting.emit_truncation_notice
     }
 
     /// Infers the logical category based on the tool name and action using generic semantic keywords.

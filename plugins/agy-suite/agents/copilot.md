@@ -43,7 +43,7 @@ mcp_tools:
   - run_cargo_run
   - run_cargo_test
   - run_cargo_clippy
-  - query_rustc_explain
+  - query_compiler_explain
   - jj_absorb_working_copy
   - jj_describe_revision
   - ensure_agent_workspace

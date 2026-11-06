@@ -1,10 +1,8 @@
-//! `cargo_json_diagnostics` action handler parsing compiler JSON streams and attaching rustc explanations.
+//! `cargo_json_diagnostics` action handler parsing compiler JSON streams.
 
 use std::path::Path;
 use std::process::Command;
-use agy_common::{
-    DEFAULT_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS, FastHashSet, SubprocessSupervisor,
-};
+use agy_common::SubprocessSupervisor;
 use crate::guards::truncate_output;
 use crate::models::ToolDefinition;
 
@@ -37,9 +35,7 @@ pub(crate) fn execute(
     let output = SubprocessSupervisor::run_supervised(cmd, tool.timeout_seconds)?;
 
     let stdout_str = String::from_utf8_lossy(&output.stdout);
-    let (rendered_diagnostics, error_codes, has_errors) = parse_cargo_json(&stdout_str);
-
-    let mut result_parts = Vec::new();
+    let (rendered_diagnostics, has_errors) = parse_cargo_json(&stdout_str);
 
     if rendered_diagnostics.is_empty() {
         if output.status.success() {
@@ -56,26 +52,7 @@ pub(crate) fn execute(
         return Ok(("Cargo verification failed with non-zero exit code.".to_owned(), true));
     }
 
-    result_parts.push(rendered_diagnostics.join("\n\n"));
-
-    // Attach rustc explanation for failing error codes (E0xxx) if enabled
-    if tool.attach_rustc_explain() && !error_codes.is_empty() {
-        let mut explanations = Vec::new();
-        for code in &error_codes {
-            if code.starts_with('E') && code.len() == 5
-                && let Some(explain_snippet) = fetch_rustc_explanation(code)
-            {
-                explanations.push(format!("### Explanation for {code}\n{explain_snippet}"));
-            }
-        }
-
-        if !explanations.is_empty() {
-            result_parts.push("\n---\n".to_owned());
-            result_parts.push(explanations.join("\n\n"));
-        }
-    }
-
-    let joined = result_parts.join("\n");
+    let joined = rendered_diagnostics.join("\n\n");
     let truncated = truncate_output(
         &joined,
         tool.truncate_lines.or(Some(120)),
@@ -86,9 +63,8 @@ pub(crate) fn execute(
     Ok((truncated, has_errors || !output.status.success()))
 }
 
-fn parse_cargo_json(stdout: &str) -> (Vec<String>, FastHashSet<String>, bool) {
+fn parse_cargo_json(stdout: &str) -> (Vec<String>, bool) {
     let mut diagnostics = Vec::new();
-    let mut error_codes = FastHashSet::default();
     let mut has_errors = false;
 
     for line in stdout.lines() {
@@ -106,10 +82,6 @@ fn parse_cargo_json(stdout: &str) -> (Vec<String>, FastHashSet<String>, bool) {
                 has_errors = true;
             }
 
-            if let Some(code_val) = message.get("code").and_then(|c| c.get("code")).and_then(serde_json::Value::as_str) {
-                error_codes.insert(code_val.to_owned());
-            }
-
             if let Some(rendered) = message.get("rendered").and_then(serde_json::Value::as_str) {
                 let clean = strip_ansi_escapes(rendered);
                 if !clean.trim().is_empty() {
@@ -119,23 +91,7 @@ fn parse_cargo_json(stdout: &str) -> (Vec<String>, FastHashSet<String>, bool) {
         }
     }
 
-    (diagnostics, error_codes, has_errors)
-}
-
-fn fetch_rustc_explanation(code: &str) -> Option<String> {
-    let mut cmd = Command::new("rustc");
-    cmd.args(["--explain", code]);
-    let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
-
-    if output.status.success() {
-        let text = String::from_utf8_lossy(&output.stdout);
-        // Take first preview lines of explanation
-        let lines: Vec<&str> = text.lines().take(DEFAULT_PREVIEW_LINES).collect();
-        if !lines.is_empty() {
-            return Some(lines.join("\n"));
-        }
-    }
-    None
+    (diagnostics, has_errors)
 }
 
 fn strip_ansi_escapes(input: &str) -> String {
@@ -172,12 +128,11 @@ mod tests {
     #[test]
     fn test_parse_cargo_json_compiler_message() {
         let json_line = r#"{"reason":"compiler-message","message":{"rendered":"error[E0308]: mismatched types\n --> src/main.rs:2:5","code":{"code":"E0308"},"level":"error"}}"#;
-        let (diags, codes, has_err) = parse_cargo_json(json_line);
+        let (diags, has_err) = parse_cargo_json(json_line);
 
         assert!(has_err);
         assert_eq!(diags.len(), 1);
         assert!(diags[0].contains("E0308"));
-        assert!(codes.contains("E0308"));
     }
 
     #[test]

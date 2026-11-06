@@ -222,12 +222,50 @@ impl GateCheck for VcsConflictCheck {
     }
 }
 
+/// Validates that no uncommitted modifications exist in the working copy.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WorkspaceCleanCheck;
+
+impl GateCheck for WorkspaceCleanCheck {
+    fn name(&self) -> &'static str {
+        "Workspace Clean Check"
+    }
+
+    fn execute(&self, workspace_root: &Path) -> GateCheckStatus {
+        if crate::JujutsuWorkspace::is_jj_repo(workspace_root) {
+            if !crate::JujutsuWorkspace::is_workspace_clean(workspace_root) {
+                return GateCheckStatus::Failed(
+                    "Working copy has uncommitted modifications (Jujutsu repository not clean).".to_owned(),
+                );
+            }
+            return GateCheckStatus::Passed;
+        }
+
+        if workspace_root.join(".git").exists() {
+            let mut cmd = Command::new("git");
+            cmd.args(["status", "--porcelain"]);
+            cmd.current_dir(workspace_root);
+            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                && out.status.success()
+                && !out.stdout.is_empty()
+            {
+                return GateCheckStatus::Failed(
+                    "Working copy has uncommitted modifications (Git status --porcelain not clean).".to_owned(),
+                );
+            }
+        }
+
+        GateCheckStatus::Passed
+    }
+}
+
 /// Evaluates pre-flight admission checks specified by name.
 ///
 /// Recognized check names:
 /// - `"cargo_compilation"` | `"cargo_check"` | `"compilation"` -> `ProjectGateCheck` (or `CargoCompilationCheck`)
 /// - `"test_compilation"` | `"cargo_test_compilation"` | `"tests"` -> `ProjectGateCheck` (or `CargoTestCompilationCheck`)
 /// - `"vcs_conflicts"` | `"conflicts"` -> `VcsConflictCheck`
+/// - `"workspace_clean"` | `"git_clean"` | `"jj_clean"` -> `WorkspaceCleanCheck`
 /// - `"linter"` | `"clippy"` -> `ProjectGateCheck` (linter gate)
 /// - Any custom gate name defined in `project.toml [gates.<name>]`
 ///
@@ -240,6 +278,7 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
     for name in check_names {
         match *name {
             "vcs_conflicts" | "conflicts" => checks.push(Box::new(VcsConflictCheck)),
+            "workspace_clean" | "git_clean" | "jj_clean" => checks.push(Box::new(WorkspaceCleanCheck)),
             "cargo_compilation" | "cargo_check" | "compilation" => {
                 if let Some(gate) = project.gates.get("compilation") {
                     checks.push(Box::new(ProjectGateCheck::new(

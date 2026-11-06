@@ -221,10 +221,6 @@ fn update_circuit_breaker(
 }
 
 fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> Result<(), String> {
-    if tool.require_git_clean() {
-        check_git_clean(workspace_root)?;
-    }
-
     let required_gates = tool.required_gates();
     if !required_gates.is_empty() {
         let gate_names: Vec<&str> = required_gates.iter().map(String::as_str).collect();
@@ -237,31 +233,6 @@ fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> R
                     errors.join("\n\n")
                 ));
             }
-        }
-    }
-
-    Ok(())
-}
-
-fn check_git_clean(workspace_root: &Path) -> Result<(), String> {
-    if agy_common::JujutsuWorkspace::is_jj_repo(workspace_root) {
-        if !agy_common::JujutsuWorkspace::is_workspace_clean(workspace_root) {
-            return Err("Pre-flight gate failed: 'require_workspace_clean' is enabled, but workspace has uncommitted modifications.".to_owned());
-        }
-        return Ok(());
-    }
-
-    if workspace_root.join(".git").exists() {
-        let mut cmd = Command::new("git");
-        cmd.args(["status", "--porcelain"]);
-        cmd.current_dir(workspace_root);
-        let git_out = SubprocessSupervisor::run_supervised(cmd, 10);
-
-        if let Ok(gout) = git_out
-            && gout.status.success()
-            && !gout.stdout.is_empty()
-        {
-            return Err("Pre-flight gate failed: 'require_workspace_clean' is enabled, but workspace has uncommitted modifications.".to_owned());
         }
     }
 
@@ -337,10 +308,11 @@ mod tests {
         let tool = ToolDefinition {
             name: "test_guarded_tool".to_owned(),
             preconditions: agy_common::tools::ToolPreconditions {
-                require_git_clean: true,
-                require_clippy_clean: true,
-                require_tests_passed: true,
-                ..Default::default()
+                require_gates: vec![
+                    "workspace_clean".to_owned(),
+                    "linter".to_owned(),
+                    "tests".to_owned(),
+                ],
             },
             ..Default::default()
         };

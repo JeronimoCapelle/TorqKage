@@ -27,7 +27,7 @@
 #    - `static_command`: Runs a fixed shell/CLI command without dynamic arguments.
 #    - `parameterized_command`: Runs CLI commands with validated, regex-checked parameters.
 #    - `cargo_json_diagnostics`: Executes cargo with `--message-format=json`, filters errors,
-#                               and automatically attaches `rustc --explain` descriptions.
+#                               and returns clean diagnostic spans.
 #    - `cli_manual`: Renders man-page style help text for available commands.
 #    - `project_state`: Synthesizes VCS revision, status, branch, and quality gate health.
 #    - `workspace_ensure`: Provisions or validates an isolated Jujutsu sparse workspace.
@@ -64,14 +64,13 @@
 #    - `truncate_lines`: Max lines returned before truncation.
 #    - `truncate_bytes`: Max bytes returned before truncation.
 #    - `emit_truncation_notice`: Appends a notice when output has been truncated.
-#    - `attach_rustc_explain`: Automatically appends compiler error explanations.
 #    - `timeout_seconds`: Process execution timeout before aborting.
 #
 # 7. PRECONDITIONS:
-#    - `require_workspace_clean`: Working tree must have zero uncommitted changes.
-#    - `require_clippy_clean`: Cargo clippy must pass with zero warnings.
-#    - `require_tests_passed`: All tests must be green before this tool can run.
-#    - `require_gates`: Array of gate names from `project.toml` that must succeed.
+#    - `require_gates`: Array of gate names that must succeed before tool execution.
+#      Supports native gates (`"workspace_clean"`, `"vcs_conflicts"`), standard project
+#      gates (`"compilation"`, `"linter"`, `"tests"`), or any custom gate in `project.toml`.
+#    - `skip_gates`: Array of gate names to exempt from category inheritance (or `["*"]`).
 #
 # 8. FALLBACKS & EXIT CODES:
 #    - `empty_fallback`: Text returned if command produces empty output.
@@ -112,7 +111,7 @@ timeout_seconds = 180
 [categories.release]
 category = "release"
 tracks_circuit_breaker = true
-require_gates = ["vcs_conflicts"]
+require_gates = ["workspace_clean", "vcs_conflicts", "linter", "tests"]
 timeout_seconds = 300
 
 [categories.filesystem]
@@ -277,13 +276,12 @@ output_capture = "exit_code_only"
 timeout_seconds = 60
 
 [tools.run_cargo_verification]
-description = "Runs cargo fast check and returns filtered JSON error spans with attached rustc explanations"
+description = "Runs cargo fast check and returns filtered compiler diagnostics and error spans"
 action = "cargo_json_diagnostics"
 category = "compilation"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "check", "--message-format=json"]
 output_capture = "json_spans"
-attach_rustc_explain = true
 timeout_seconds = 120
 
 [tools.run_cargo_clippy]
@@ -293,7 +291,6 @@ category = "compilation"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
 output_capture = "json_spans"
-attach_rustc_explain = true
 timeout_seconds = 120
 
 [tools.run_cargo_clippy_fix]
@@ -387,7 +384,6 @@ timeout_seconds = 45
 description = "Inspects and diffs the exposed public API surface of the crate against git revisions"
 action = "static_command"
 category = "release"
-require_workspace_clean = true
 command = ["cargo", "public-api", "diff"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -397,9 +393,6 @@ timeout_seconds = 60
 description = "Verifies semantic versioning contract rules against the published API baseline"
 action = "static_command"
 category = "release"
-require_workspace_clean = true
-require_clippy_clean = true
-require_tests_passed = true
 command = ["cargo", "semver-checks", "check-release"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -464,13 +457,13 @@ output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 30
 
-[tools.query_rustc_explain]
-description = "Retrieves the official rustc compiler explanation, error diagnostics, and erroneous/fixed code examples for a specific Rust error code (e.g. E0308)"
+[tools.query_compiler_explain]
+description = "Retrieves compiler diagnostic explanations, error rationale, and code examples for a compiler error code (e.g. E0308)"
 action = "parameterized_command"
 category = "diagnostics"
 command = ["rustc", "--explain"]
 args = [
-    { name = "error_code", required = true, regex = "^E[0-9]{4}$", description = "Standard rustc error code (e.g. 'E0308', 'E0382', 'E0502')" }
+    { name = "error_code", required = true, regex = "^[A-Za-z0-9_-]+$", description = "Standard compiler error code (e.g. 'E0308', 'E0382')" }
 ]
 output_capture = "both"
 truncate_lines = 150
@@ -510,7 +503,7 @@ timeout_seconds = 120
 description = "Extracts line and branch coverage summary via cargo llvm-cov"
 action = "static_command"
 category = "testing"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["cargo", "llvm-cov", "--summary-only"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -520,7 +513,7 @@ timeout_seconds = 180
 description = "Executes cargo-mutants to verify test assertions catch subtle injected bugs"
 action = "static_command"
 category = "testing"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["cargo", "mutants", "--no-shuffle"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -560,7 +553,7 @@ timeout_seconds = 60
 description = "Executes benchmark suites across Divan, Criterion2, and Gungraun with optional target/filter overrides"
 action = "parameterized_command"
 category = "profiling"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["cargo", "bench"]
 args = [
     { name = "bench_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--bench", description = "Specific benchmark target ('benchmark', 'criterion_bench', 'gungraun_bench')" },
@@ -594,7 +587,7 @@ timeout_seconds = 300
 description = "Generates CPU flame graphs to identify profiling hotspots and callstack bottlenecks"
 action = "static_command"
 category = "profiling"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["cargo", "flamegraph", "--root", "--deterministic"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -604,7 +597,7 @@ timeout_seconds = 240
 description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count) during test execution via Linux perf"
 action = "static_command"
 category = "profiling"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["perf", "stat", "-B", "cargo", "test"]
 output_capture = "stderr"
 truncate_lines = 50
@@ -623,7 +616,7 @@ timeout_seconds = 60
 description = "Executes black-box binary benchmarking via hyperfine with statistical timing and warmup"
 action = "static_command"
 category = "profiling"
-require_tests_passed = true
+require_gates = ["tests"]
 command = ["hyperfine", "--warmup", "3"]
 output_capture = "stdout"
 truncate_lines = 40
@@ -671,9 +664,6 @@ timeout_seconds = 30
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
 category = "release"
-require_workspace_clean = true
-require_clippy_clean = true
-require_tests_passed = true
 command = ["git-cliff", "--unreleased", "--strip", "header"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -803,7 +793,6 @@ timeout_seconds = 10
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
 action = "static_command"
 category = "release"
-require_clippy_clean = true
 command = ["cargo", "doc", "--no-deps"]
 output_capture = "both"
 truncate_lines = 100

@@ -76,12 +76,6 @@ pub struct ToolSandboxPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ToolPreconditions {
     #[serde(default)]
-    pub require_git_clean: bool,
-    #[serde(default)]
-    pub require_clippy_clean: bool,
-    #[serde(default)]
-    pub require_tests_passed: bool,
-    #[serde(default)]
     pub require_gates: Vec<String>,
 }
 
@@ -90,8 +84,6 @@ pub struct ToolPreconditions {
 pub struct ToolFormatting {
     #[serde(default)]
     pub emit_truncation_notice: bool,
-    #[serde(default)]
-    pub attach_rustc_explain: bool,
 }
 
 const fn default_timeout_seconds() -> u64 {
@@ -221,43 +213,15 @@ impl ToolDefinition {
         self.sandbox.ban_dangerous_files
     }
 
+    /// Resolves the list of quality gates required prior to tool execution.
     #[must_use]
-    pub const fn require_git_clean(&self) -> bool {
-        self.preconditions.require_git_clean
-    }
-
-    #[must_use]
-    pub const fn require_clippy_clean(&self) -> bool {
-        self.preconditions.require_clippy_clean
-    }
-
-    #[must_use]
-    pub const fn require_tests_passed(&self) -> bool {
-        self.preconditions.require_tests_passed
-    }
-
-    /// Resolves the list of quality gates required prior to tool execution,
-    /// synthesizing backwards-compatible `"linter"` and `"tests"` gates if legacy flags are set.
-    #[must_use]
-    pub fn required_gates(&self) -> Vec<String> {
-        let mut gates = self.preconditions.require_gates.clone();
-        if self.preconditions.require_clippy_clean && !gates.iter().any(|g| g == "linter") {
-            gates.push("linter".to_owned());
-        }
-        if self.preconditions.require_tests_passed && !gates.iter().any(|g| g == "tests") {
-            gates.push("tests".to_owned());
-        }
-        gates
+    pub fn required_gates(&self) -> &[String] {
+        &self.preconditions.require_gates
     }
 
     #[must_use]
     pub const fn emit_truncation_notice(&self) -> bool {
         self.formatting.emit_truncation_notice
-    }
-
-    #[must_use]
-    pub const fn attach_rustc_explain(&self) -> bool {
-        self.formatting.attach_rustc_explain
     }
 
     #[must_use]
@@ -329,16 +293,36 @@ pub fn merge_tool_with_category(
         gates.retain(|g| !skip_set.iter().any(|s| s.eq_ignore_ascii_case(g)));
     }
 
+    let legacy_workspace_clean = raw.require_git_clean.or(raw.require_workspace_clean)
+        .or_else(|| base?.require_git_clean.or(base?.require_workspace_clean))
+        .or_else(|| category?.require_git_clean.or(category?.require_workspace_clean))
+        .unwrap_or(false);
+    if legacy_workspace_clean && !gates.iter().any(|g| g == "workspace_clean" || g == "git_clean") {
+        gates.push("workspace_clean".to_owned());
+    }
+
+    let legacy_clippy = raw.require_clippy_clean
+        .or_else(|| base?.require_clippy_clean)
+        .or_else(|| category?.require_clippy_clean)
+        .unwrap_or(false);
+    if legacy_clippy && !gates.iter().any(|g| g == "linter" || g == "clippy") {
+        gates.push("linter".to_owned());
+    }
+
+    let legacy_tests = raw.require_tests_passed
+        .or_else(|| base?.require_tests_passed)
+        .or_else(|| category?.require_tests_passed)
+        .unwrap_or(false);
+    if legacy_tests && !gates.iter().any(|g| g == "tests") {
+        gates.push("tests".to_owned());
+    }
+
     let preconditions = ToolPreconditions {
-        require_git_clean: raw.require_git_clean.or(raw.require_workspace_clean).or_else(|| base?.require_git_clean.or(base?.require_workspace_clean)).or_else(|| category?.require_git_clean.or(category?.require_workspace_clean)).unwrap_or(false),
-        require_clippy_clean: raw.require_clippy_clean.or_else(|| base?.require_clippy_clean).or_else(|| category?.require_clippy_clean).unwrap_or(false),
-        require_tests_passed: raw.require_tests_passed.or_else(|| base?.require_tests_passed).or_else(|| category?.require_tests_passed).unwrap_or(false),
         require_gates: gates,
     };
 
     let formatting = ToolFormatting {
         emit_truncation_notice: raw.emit_truncation_notice.or_else(|| base?.emit_truncation_notice).or_else(|| category?.emit_truncation_notice).unwrap_or(false),
-        attach_rustc_explain: raw.attach_rustc_explain.or_else(|| base?.attach_rustc_explain).or_else(|| category?.attach_rustc_explain).unwrap_or(false),
     };
 
     ToolDefinition {
@@ -421,7 +405,7 @@ mod tests {
         assert_eq!(merged.description, "Override description");
         assert!(merged.mutating());
         assert!(merged.enforce_sandbox());
-        assert!(!merged.require_git_clean());
+        assert_eq!(merged.required_gates(), <&[String]>::default());
     }
 
     #[test]

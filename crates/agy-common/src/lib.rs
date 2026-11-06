@@ -36,7 +36,7 @@ pub use fast_hash::{
 pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
     CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, ProjectGateCheck,
-    VcsConflictCheck, evaluate_finisher_readiness, evaluate_pre_flight_checks,
+    VcsConflictCheck, WorkspaceCleanCheck, evaluate_finisher_readiness, evaluate_pre_flight_checks,
     find_agent_manifest_path, parse_pre_launch_checks,
 };
 pub use jujutsu::JujutsuWorkspace;

@@ -475,24 +475,18 @@ fn build_tool_guard_lines(tool: &crate::model::ToolItem) -> Vec<Line<'static>> {
         }
     };
 
+    let gates_label = if tool.required_gates().is_empty() {
+        "none".to_owned()
+    } else {
+        tool.required_gates().join(", ")
+    };
+
     vec![
         Line::from(vec![
             guard_check(tool.ban_dangerous_files()),
             Span::styled("ban_dangerous_files      ", Style::default().fg(Color::White)),
             guard_check(tool.enforce_workspace_bounds()),
             Span::styled("enforce_workspace_bounds", Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![
-            guard_check(tool.require_clippy_clean()),
-            Span::styled("require_clippy_clean     ", Style::default().fg(Color::White)),
-            guard_check(tool.require_tests_passed()),
-            Span::styled("require_tests_passed    ", Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![
-            guard_check(tool.require_git_clean()),
-            Span::styled("require_workspace_clean  ", Style::default().fg(Color::White)),
-            guard_check(tool.attach_rustc_explain()),
-            Span::styled("attach_rustc_explain    ", Style::default().fg(Color::White)),
         ]),
         Line::from(vec![
             guard_check(tool.mutating()),
@@ -503,6 +497,12 @@ fn build_tool_guard_lines(tool: &crate::model::ToolItem) -> Vec<Line<'static>> {
         Line::from(vec![
             guard_check(tool.enforce_sandbox()),
             Span::styled("enforce_sandbox (bwrap)  ", Style::default().fg(Color::LightCyan)),
+            guard_check(tool.emit_truncation_notice()),
+            Span::styled("emit_truncation_notice  ", Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("  require_gates: ", Style::default().fg(Color::Yellow)),
+            Span::styled(gates_label, Style::default().fg(Color::White)),
         ]),
     ]
 }

@@ -30,7 +30,7 @@ mcp_tools:
   - run_cargo_clippy_fix
   - run_cargo_fmt
   - run_cargo_expand
-  - query_rustc_explain
+  - query_compiler_explain
   - ast_grep_rewrite
   - jj_absorb_working_copy
   - query_tool_help
