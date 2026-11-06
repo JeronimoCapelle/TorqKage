@@ -75,5 +75,4 @@ mcp_tools:
   - Validate documentation build cleanliness using `cargo_doc` (`cargo doc --no-deps`). Guarantee zero broken intra-doc links, missing doc warnings, or doctest compilation errors.
 
 - **Scope Discipline:**
-  - You focus exclusively on documentation: crate/module doc comments (`//!`), item doc comments (`///`), doctests, and documentation markdown files (`docs/**`, `ARCHITECTURE.md`, `README.md`).
-  - Do not modify production execution logic or test benches; delegate functional code modifications back to `coder` or `test-author`.
+  - Focus exclusively on documentation: crate/module doc comments (`//!`), item doc comments (`///`), doctests, and documentation markdown files (`docs/**`, `ARCHITECTURE.md`, `README.md`). Delegate functional implementation logic and test harnesses to `coder` and `test-author`.

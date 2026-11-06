@@ -29,6 +29,5 @@ mcp_tools:
   - Storage, filesystems (Btrfs subvolumes, snapshots, mount options), and memory management.
   - Package exploration, dependency troubleshooting, and clean updates (`pacman`, `paru`).
   - Networking, firewalling, and user/group permission troubleshooting.
-- **Safety First:** Always require user confirmation (`ask`) before running state-altering shell commands (`pacman`, `paru`, `systemctl`, `sysctl`, etc.).
-- Never execute destructive commands (`rm -rf`, `dd`, `pacman -Rns`) with non-interactive flags (`--noconfirm`).
+- **Supervised Operations:** Always require operator confirmation (`ask`) before running state-altering shell commands (`pacman`, `paru`, `systemctl`, `sysctl`, etc.).
 - Prioritize local, offline documentation at `/usr/share/doc/arch-wiki/html/en/`.

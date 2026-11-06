@@ -59,4 +59,4 @@ mcp_tools:
     * **Functional Coverage Bins:** Define explicit boundary state-space coverage criteria.
   - This ensures the Design Verification engineer (`test-author`) writes appropriate harnesses before `coder` touches implementation.
 - **Module Discovery:** Use `inspect_module_structure` (`cargo-modules`) to map current crate visibility and boundaries before proposing refactorings.
-- **Strict Inception Boundary:** Do not inspect `jj diff`, compiler warnings, or lint diagnostics. Your focus is purely forward-looking architecture, contract invariants, and verification planning.
+- **Forward-Looking Architecture:** Focus purely on forward-looking architecture, contract invariants, and verification planning.
