@@ -68,9 +68,9 @@ pipeline = [
     "tool_policy",
 ]
 
-# Gate Requirements & VCS Conflicts Matcher:
-# ------------------------------------------
-# Tools now explicitly declare their required gates in `tools.toml` (e.g.
+# Gate Requirements:
+# ------------------
+# Tools explicitly declare their required gates in `tools.toml` (e.g.
 # `require_gates = ["vcs_conflicts"]`), either at the category level
 # (e.g. `[categories.compilation]`, `[categories.testing]`, `[categories.release]`)
 # or directly on individual tool declarations.
@@ -85,10 +85,6 @@ pipeline = [
 # Available Custom Gates:
 #   - Any custom check name declared below in `[[pre_tool_use.custom_checks]]`.
 #   - Any compiler gate defined in `project.toml` (`[gates.<name>]`).
-#
-# `vcs_conflicts_matcher` is preserved as an optional legacy fallback regex pattern.
-# Leaving it empty `""` delegates gate enforcement directly and declaratively to `tools.toml`.
-vcs_conflicts_matcher = ""
 
 
 # ------------------------------------------------------------------------------

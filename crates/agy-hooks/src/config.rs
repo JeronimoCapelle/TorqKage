@@ -20,7 +20,6 @@ pub(crate) struct CustomCheck {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreToolUseConfig {
     pub(crate) pipeline: Vec<String>,
-    pub(crate) vcs_conflicts_matcher: String,
     pub(crate) custom_checks: Vec<CustomCheck>,
 }
 
@@ -34,7 +33,6 @@ impl Default for PreToolUseConfig {
                 "vcs_conflicts".to_owned(),
                 "tool_policy".to_owned(),
             ],
-            vcs_conflicts_matcher: ".*compile.*|.*build.*|.*test.*|.*check.*|run_cargo_.*|run_mutation_tests|run_coverage_summary|run_quick_check".to_owned(),
             custom_checks: Vec::new(),
         }
     }
@@ -357,11 +355,7 @@ fn apply_string_field(
     val: &str,
     current_check: &mut Option<CustomCheck>,
 ) {
-    if (section == "pre_tool_use" || section == "vcs_conflicts")
-        && (key == "vcs_conflicts_matcher" || key == "matcher")
-    {
-        val.clone_into(&mut config.pre_tool_use.vcs_conflicts_matcher);
-    } else if section == "circuit_breaker" {
+    if section == "circuit_breaker" {
         if key == "max_strikes" {
             if let Ok(m) = val.parse::<usize>() {
                 config.circuit_breaker.max_strikes = m;
@@ -441,7 +435,6 @@ pipeline = [
     "vcs_conflicts",
     "tool_policy",
 ]
-vcs_conflicts_matcher = "run_cargo_.*|custom_tool"
 
 [[pre_tool_use.custom_checks]]
 name = "check_disk"
@@ -455,7 +448,6 @@ reason = "Disk is full"
         let parsed = parse_hooks_config(sample);
         assert_eq!(parsed.pre_tool_use.pipeline.len(), 4);
         assert_eq!(parsed.pre_tool_use.pipeline[0], "circuit_breaker");
-        assert_eq!(parsed.pre_tool_use.vcs_conflicts_matcher, "run_cargo_.*|custom_tool");
         assert_eq!(parsed.pre_tool_use.custom_checks.len(), 1);
         assert_eq!(parsed.pre_tool_use.custom_checks[0].name, "check_disk");
         assert_eq!(parsed.pre_tool_use.custom_checks[0].matcher, "modify_code|write_file");

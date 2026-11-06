@@ -74,11 +74,7 @@ pub(crate) fn evaluate_pre_tool_use(
                 }
             }
             "vcs_conflicts" => {
-                let requires_conflict_check = policy_gate::tool_requires_gate(tool_name, root, "vcs_conflicts")
-                    || (!config.pre_tool_use.vcs_conflicts_matcher.is_empty()
-                        && matches_pattern(tool_name, &config.pre_tool_use.vcs_conflicts_matcher));
-
-                if requires_conflict_check
+                if policy_gate::tool_requires_gate(tool_name, root, "vcs_conflicts")
                     && let Some(reason) = conflicts::detect_conflicts(root)
                 {
                     return PreToolResponse::deny(reason);
@@ -211,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn test_explicit_category_gate_triggers_vcs_conflicts_with_empty_matcher() {
+    fn test_explicit_category_gate_triggers_vcs_conflicts_and_custom_checks() {
         let temp_dir = std::env::temp_dir().join(format!("gate_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
         drop(std::fs::create_dir_all(&temp_dir));
         drop(std::fs::write(
@@ -235,9 +231,8 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
         assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "vcs_conflicts"));
         assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "custom_sentinel"));
 
-        // PreToolUse custom check with EMPTY matcher triggers purely via require_gates
+        // PreToolUse custom check triggers purely via declarative require_gates
         let mut config = HooksConfig::default();
-        config.pre_tool_use.vcs_conflicts_matcher = String::new();
         config.pre_tool_use.custom_checks.push(CustomCheck {
             name: "custom_sentinel".to_owned(),
             matcher: String::new(),

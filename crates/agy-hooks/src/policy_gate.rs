@@ -363,41 +363,6 @@ pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool 
         .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "tracks_circuit_breaker"))
 }
 
-/// Checks an attribute for a section header string in raw TOML content (helper & test compatibility).
-#[must_use]
-#[allow(dead_code, reason = "Legacy attribute checker preserved for tests and backward compatibility")]
-pub(crate) fn check_section_attribute(content: &str, section_header: &str, attribute: &str) -> bool {
-    let clean = section_header.trim().trim_start_matches('[').trim_end_matches(']');
-    let config = ParsedToolsConfig::from_str(content);
-    if let Some((kind, name)) = clean.split_once('.') {
-        match kind {
-            "tools" => config.is_tool_attribute(name, attribute),
-            "base_tools" => {
-                let entry = config.base_tools.get(name);
-                let cat = entry.and_then(|e| e.category.as_deref()).and_then(|c| config.categories.get(c));
-                match attribute {
-                    "mutating" => entry.and_then(|e| e.mutating).or_else(|| cat?.mutating).unwrap_or(false),
-                    "tracks_circuit_breaker" => entry.and_then(|e| e.tracks_circuit_breaker).or_else(|| cat?.tracks_circuit_breaker).unwrap_or(false),
-                    "require_permission_gate" => entry.and_then(|e| e.require_permission_gate).or_else(|| cat?.require_permission_gate).unwrap_or(false),
-                    _ => false,
-                }
-            }
-            "categories" => {
-                let entry = config.categories.get(name);
-                match attribute {
-                    "mutating" => entry.and_then(|e| e.mutating).unwrap_or(false),
-                    "tracks_circuit_breaker" => entry.and_then(|e| e.tracks_circuit_breaker).unwrap_or(false),
-                    "require_permission_gate" => entry.and_then(|e| e.require_permission_gate).unwrap_or(false),
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    } else {
-        false
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "Unit test assertions")]
 mod tests {
@@ -511,8 +476,9 @@ mutating = true
 inherit = "base_tools.base_mutator"
 action = "static_command"
 "#;
-        assert!(check_section_attribute(sample, "[tools.child_tool]", "mutating"));
-        assert!(!check_section_attribute(sample, "[tools.child_tool]", "require_permission_gate"));
+        let config = ParsedToolsConfig::from_str(sample);
+        assert!(config.is_tool_attribute("child_tool", "mutating"));
+        assert!(!config.is_tool_attribute("child_tool", "require_permission_gate"));
     }
 
     #[test]
