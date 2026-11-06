@@ -1,6 +1,6 @@
 //! YAML frontmatter parsing and agent manifest extraction.
 
-use std::collections::HashSet;
+use crate::FastHashSet;
 
 /// Parsed metadata and body directives from an agent markdown document.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -132,7 +132,7 @@ impl AgentFrontmatter {
 
     /// Extracts the set of allowed MCP tools from the agent markdown.
     #[must_use]
-    pub fn extract_mcp_tools(content: &str) -> Option<HashSet<String>> {
+    pub fn extract_mcp_tools(content: &str) -> Option<FastHashSet<String>> {
         let parsed = Self::parse(content).ok()?;
         if parsed.mcp_tools.is_empty() {
             None

@@ -15,6 +15,7 @@
 //! - [`tools`]: Declarative `tools.toml` models, parser, and template inheritance engine.
 
 pub mod error;
+pub mod fast_hash;
 pub mod frontmatter;
 pub mod gatekeeper;
 pub mod jujutsu;
@@ -28,6 +29,10 @@ pub mod supervisor;
 pub mod tools;
 
 pub use error::{AgyError, Result};
+pub use fast_hash::{
+    FastBuildHasher, FastHashMap, FastHashSet, FastHasher, fast_map_new, fast_map_with_capacity,
+    fast_set_new, fast_set_with_capacity,
+};
 pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
     CargoCompilationCheck, CargoTestCompilationCheck, GateCheck, GateCheckStatus, ProjectGateCheck,

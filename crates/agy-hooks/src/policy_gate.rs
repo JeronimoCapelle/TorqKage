@@ -1,8 +1,9 @@
 //! Granular tool-level permission policy enforcement (`enforce-tool-policy`).
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use agy_common::{CircuitBreakerLedger, PreToolResponse, PreToolUseInput, WorkspaceResolver};
+use agy_common::{
+    CircuitBreakerLedger, FastHashMap, PreToolResponse, PreToolUseInput, WorkspaceResolver,
+};
 
 use crate::stdin;
 
@@ -85,9 +86,9 @@ pub(crate) struct ParsedToolEntry {
 /// Lightweight container for tools, base tools, and category templates parsed from `tools.toml`.
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ParsedToolsConfig {
-    pub(crate) tools: HashMap<String, ParsedToolEntry>,
-    pub(crate) base_tools: HashMap<String, ParsedToolEntry>,
-    pub(crate) categories: HashMap<String, ParsedToolEntry>,
+    pub(crate) tools: FastHashMap<String, ParsedToolEntry>,
+    pub(crate) base_tools: FastHashMap<String, ParsedToolEntry>,
+    pub(crate) categories: FastHashMap<String, ParsedToolEntry>,
 }
 
 impl ParsedToolsConfig {

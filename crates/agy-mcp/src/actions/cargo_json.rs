@@ -1,10 +1,9 @@
 //! `cargo_json_diagnostics` action handler parsing compiler JSON streams and attaching rustc explanations.
 
-use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 use agy_common::{
-    DEFAULT_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS, SubprocessSupervisor,
+    DEFAULT_PREVIEW_LINES, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS, FastHashSet, SubprocessSupervisor,
 };
 use crate::guards::truncate_output;
 use crate::models::ToolDefinition;
@@ -87,9 +86,9 @@ pub(crate) fn execute(
     Ok((truncated, has_errors || !output.status.success()))
 }
 
-fn parse_cargo_json(stdout: &str) -> (Vec<String>, HashSet<String>, bool) {
+fn parse_cargo_json(stdout: &str) -> (Vec<String>, FastHashSet<String>, bool) {
     let mut diagnostics = Vec::new();
-    let mut error_codes = HashSet::new();
+    let mut error_codes = FastHashSet::default();
     let mut has_errors = false;
 
     for line in stdout.lines() {

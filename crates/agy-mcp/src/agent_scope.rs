@@ -1,8 +1,8 @@
 //! Agent scoping and tool allowlisting for `agy-mcp`.
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
+use agy_common::FastHashSet;
 
 /// Resolves the requested agent from command line arguments, environment variables, or `.pipeline/active_agent.json`.
 #[must_use]
@@ -69,11 +69,11 @@ fn read_active_agent_from_state(workspace_root: &Path) -> Option<String> {
 /// Reads directly from the agent Markdown frontmatter (`mcp_tools:`).
 /// If no agent file exists or if no tools are listed, returns an empty set (air-gapped default deny).
 #[must_use]
-pub(crate) fn resolve_allowed_tools(workspace_root: &Path, agent_name: &str) -> HashSet<String> {
+pub(crate) fn resolve_allowed_tools(workspace_root: &Path, agent_name: &str) -> FastHashSet<String> {
     parse_tools_from_agent_files(workspace_root, agent_name).unwrap_or_default()
 }
 
-fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Option<HashSet<String>> {
+fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Option<FastHashSet<String>> {
     let path = agy_common::find_agent_manifest_path(workspace_root, agent_name)?;
     if path.is_file()
         && let Ok(content) = fs::read_to_string(&path)
@@ -87,7 +87,7 @@ fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Opti
 
 /// Extracts tools listed under `mcp_tools:` or `mcpTools:` in the YAML frontmatter.
 #[must_use]
-pub(crate) fn extract_mcp_tools_from_markdown(content: &str) -> Option<HashSet<String>> {
+pub(crate) fn extract_mcp_tools_from_markdown(content: &str) -> Option<FastHashSet<String>> {
     agy_common::frontmatter::AgentFrontmatter::extract_mcp_tools(content)
 }
 

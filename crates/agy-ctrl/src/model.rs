@@ -1,8 +1,8 @@
 //! Data models, YAML frontmatter parser/serializer, and tool catalog definitions.
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use agy_common::FastHashSet;
 use agy_common::tools::{
     RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
     ToolSafetyPolicy, ToolSandboxPolicy, resolve_tools,
@@ -495,7 +495,7 @@ pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
     }
 
     let mut agents = Vec::new();
-    let mut seen_names = HashSet::new();
+    let mut seen_names = FastHashSet::default();
 
     for dir in candidates {
         let Ok(entries) = fs::read_dir(&dir) else { continue };
