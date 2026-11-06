@@ -202,6 +202,15 @@ timeout_seconds = 5
 prefix = "### [AUTOMATED WAKE CONTEXT]: Git Working Tree Status\n"
 fallback = "Git tree clean (0 uncommitted changes)."
 
+[[session_start.injections]]
+name = "finisher_unreleased_changelog"
+matcher = "finisher"
+command = ["git-cliff", "--unreleased", "--strip", "header", "HEAD~8..HEAD"]
+max_lines = 25
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Unreleased Conventional Commits Preview (git-cliff)\n"
+fallback = "No unreleased conventional commits found in recent range."
+
 
 # ------------------------------------------------------------------------------
 # 6. SESSION STOP HANDOFF RECORDING
