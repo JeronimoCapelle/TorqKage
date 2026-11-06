@@ -7,6 +7,16 @@ permissionMode: acceptEdits
 commandExecutionPolicy: off
 pre_launch_checks:
   - vcs_conflicts
+allowed_dirs:
+  - src
+  - boards
+  - layout
+  - targets
+  - benches
+  - crates
+disallowed_dirs:
+  - tests
+  - docs
 tools: []
 inheritMcp: false
 mcpServers:

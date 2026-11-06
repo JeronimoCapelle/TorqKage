@@ -5,6 +5,8 @@ effort: low
 mainAgent: true
 subagent: true
 inheritMcp: false
+disallowed_dirs:
+  - "*"
 mcpServers:
   - name: agy-tools
     command: agy-mcp

@@ -5,6 +5,8 @@ effort: high
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+allowed_dirs:
+  - "*"
 tools:
   - view_file
   - grep_search

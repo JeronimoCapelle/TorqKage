@@ -47,7 +47,7 @@ pub use limits::{
     DEFAULT_VCS_QUERY_TIMEOUT_SECS, PROCESS_KILL_GRACE_WAIT,
 };
 pub use models::{
-    CircuitBreakerLedger, CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision,
+    AgentGuard, CircuitBreakerLedger, CommonHookPayload, EmptyResponse, HandoffRecord, HookDecision,
     InjectStep, PipelineHandoff, PostInvocationInput, PostInvocationResponse, PostToolUseInput,
     PreInvocationInput, PreInvocationResponse, PreToolResponse, PreToolUseInput, SessionStartInput,
     SessionStartResponse, SystemMessagePayload, StopInput, StopResponse, ToolCallPayload,

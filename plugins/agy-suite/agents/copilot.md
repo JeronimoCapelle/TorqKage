@@ -5,6 +5,8 @@ effort: medium
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
+disallowed_dirs:
+  - "*"
 allowed_subagents:
   - mini
   - coder

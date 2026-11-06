@@ -13,6 +13,19 @@ pub enum HookDecision {
     ForceAsk,
 }
 
+/// Declarative path and directory guards scoped to a specific agent role.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct AgentGuard {
+    #[serde(default)]
+    pub allowed_dirs: Vec<String>,
+    #[serde(default)]
+    pub disallowed_dirs: Vec<String>,
+    #[serde(default)]
+    pub allowed_files: Vec<String>,
+    #[serde(default)]
+    pub disallowed_files: Vec<String>,
+}
+
 /// Common system metadata sent in `stdin` to every Antigravity hook.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

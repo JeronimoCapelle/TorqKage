@@ -7,6 +7,8 @@ permissionMode: plan
 commandExecutionPolicy: off
 pre_launch_checks:
   - vcs_conflicts
+disallowed_dirs:
+  - "*"
 tools: []
 inheritMcp: false
 mcpServers:

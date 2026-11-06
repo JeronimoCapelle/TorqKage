@@ -6,6 +6,12 @@ permissionMode: acceptEdits
 commandExecutionPolicy: off
 pre_launch_checks:
   - vcs_conflicts
+allowed_dirs:
+  - src
+disallowed_dirs:
+  - tests
+  - benches
+  - docs
 mainAgent: true
 subagent: true
 tools: []

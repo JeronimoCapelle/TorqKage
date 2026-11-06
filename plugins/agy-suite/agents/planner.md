@@ -7,6 +7,15 @@ permissionMode: acceptEdits
 commandExecutionPolicy: off
 allowed_subagents:
   - mini
+allowed_dirs:
+  - docs
+  - .scratchpad
+allowed_files:
+  - ARCHITECTURE.md
+disallowed_dirs:
+  - src
+  - tests
+  - benches
 tools:
   - ask_question
   - invoke_subagent

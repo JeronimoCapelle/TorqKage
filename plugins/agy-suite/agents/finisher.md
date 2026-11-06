@@ -9,6 +9,8 @@ pre_launch_checks:
   - compilation
   - tests
   - vcs_conflicts
+allowed_dirs:
+  - "*"
 tools:
   - ask_question
 inheritMcp: false

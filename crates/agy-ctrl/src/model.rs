@@ -314,6 +314,10 @@ pub(crate) struct AgentManifest {
     pub(crate) mcp_tools: Vec<String>,
     pub(crate) allowed_subagents: Vec<String>,
     pub(crate) pre_launch_checks: Vec<String>,
+    pub(crate) allowed_dirs: Vec<String>,
+    pub(crate) disallowed_dirs: Vec<String>,
+    pub(crate) allowed_files: Vec<String>,
+    pub(crate) disallowed_files: Vec<String>,
     pub(crate) directives: String,
     pub(crate) modified: bool,
 }
@@ -392,6 +396,30 @@ impl AgentManifest {
                 out.push_str(&format!("  - {check}\n"));
             }
         }
+        if !self.allowed_dirs.is_empty() {
+            out.push_str("allowed_dirs:\n");
+            for dir in &self.allowed_dirs {
+                out.push_str(&format!("  - {dir}\n"));
+            }
+        }
+        if !self.disallowed_dirs.is_empty() {
+            out.push_str("disallowed_dirs:\n");
+            for dir in &self.disallowed_dirs {
+                out.push_str(&format!("  - {dir}\n"));
+            }
+        }
+        if !self.allowed_files.is_empty() {
+            out.push_str("allowed_files:\n");
+            for file in &self.allowed_files {
+                out.push_str(&format!("  - {file}\n"));
+            }
+        }
+        if !self.disallowed_files.is_empty() {
+            out.push_str("disallowed_files:\n");
+            for file in &self.disallowed_files {
+                out.push_str(&format!("  - {file}\n"));
+            }
+        }
         if !self.inherit_mcp {
             out.push_str("inheritMcp: false\n");
         }
@@ -458,6 +486,10 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
         mcp_tools: parsed.mcp_tools,
         allowed_subagents: parsed.allowed_subagents,
         pre_launch_checks: parsed.pre_launch_checks,
+        allowed_dirs: parsed.allowed_dirs,
+        disallowed_dirs: parsed.disallowed_dirs,
+        allowed_files: parsed.allowed_files,
+        disallowed_files: parsed.disallowed_files,
         directives: parsed.directives,
         modified: false,
     })

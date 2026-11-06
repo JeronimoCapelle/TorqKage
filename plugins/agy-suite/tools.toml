@@ -300,68 +300,13 @@ inherit = "base_tools.file_creator"
 description = "Creates a new file strictly within the canonical workspace bounds"
 
 # ==============================================================================
-# DECLARATIVE PER-AGENT PATH & DIRECTORY GUARDS
+# PER-AGENT PATH & DIRECTORY GUARDS
 # ==============================================================================
-# `agy-mcp` inspects the caller's agent identity (passed via `--agent <name>`)
-# and strictly confines file write and modify operations to the paths declared below.
-#
-# Rules:
-#   - `allowed_dirs`:    Array of directories where modifications are permitted.
-#                        Use `["*"]` to allow unrestricted workspace writes.
-#   - `disallowed_dirs`: Array of directories where modifications are forbidden.
-#   - `allowed_files`:   Specific individual files permitted even if parent dir is not.
+# In agy-suite, per-agent file modification boundaries (`allowed_dirs`,
+# `disallowed_dirs`, `allowed_files`, `disallowed_files`) are defined directly
+# within the YAML frontmatter of each agent's manifest (`plugins/agy-suite/agents/*.md`).
+# `agy-mcp` automatically discovers and enforces these agent-level perimeters.
 
-# Coder: Focused strictly on production code in src/
-[agent_guards.coder]
-allowed_dirs = ["src"]
-disallowed_dirs = ["tests", "benches", "docs"]
-
-# Test-Author: Focused strictly on test suites, mocks, and benchmarks
-[agent_guards.test-author]
-allowed_dirs = ["tests", "benches"]
-disallowed_dirs = ["src", "docs"]
-
-# Planner: Focused on specifications, architecture documents, and scratchpads
-[agent_guards.planner]
-allowed_dirs = ["docs", ".scratchpad"]
-allowed_files = ["ARCHITECTURE.md"]
-disallowed_dirs = ["src", "tests", "benches"]
-
-# Copilot: Interactive Chief of Staff and workflow navigator (read-only orchestration)
-[agent_guards.copilot]
-disallowed_dirs = ["*"]
-
-# Embedded-Engineer: Low-level target specialist, linker scripts, layouts, and inline assembly
-[agent_guards.embedded-engineer]
-allowed_dirs = ["src", "boards", "layout", "targets", "benches", "crates"]
-disallowed_dirs = ["tests", "docs"]
-
-# Doc-Author: Technical documentation, specifications, RFCs, and rustdoc
-[agent_guards.doc-author]
-allowed_dirs = ["docs", "specs", "src"]
-allowed_files = ["README.md", "ARCHITECTURE.md"]
-disallowed_dirs = ["tests", "benches"]
-
-# Finisher: Gatekeeper validating release readiness across the whole tree
-[agent_guards.finisher]
-allowed_dirs = ["*"]
-
-# Mini: Narrow math/symbolic agent (strictly read-only container)
-[agent_guards.mini]
-disallowed_dirs = ["*"]
-
-# Perf-Analyst: Benchmarking and hardware profiling agent
-[agent_guards.perf-analyst]
-allowed_dirs = ["benches", "docs", ".agy/artifacts"]
-disallowed_dirs = ["src", "tests"]
-
-# Spec-Checker: Read-only auditor cross-referencing docs against implementation
-[agent_guards.spec-checker]
-disallowed_dirs = ["*"]
-
-# Sysadmin: High-reasoning Arch Linux system administration and environment troubleshooter
-[agent_guards.sysadmin]
-allowed_dirs = ["*"]
 
 # --- Compilation & Compiler Diagnostics ---
 

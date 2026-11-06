@@ -17,6 +17,10 @@ pub struct AgentFrontmatter {
     pub pre_launch_checks: Vec<String>,
     pub native_tools: Vec<String>,
     pub mcp_tools: Vec<String>,
+    pub allowed_dirs: Vec<String>,
+    pub disallowed_dirs: Vec<String>,
+    pub allowed_files: Vec<String>,
+    pub disallowed_files: Vec<String>,
     pub directives: String,
 }
 
@@ -25,6 +29,11 @@ impl AgentFrontmatter {
     ///
     /// # Errors
     /// Returns an error if the opening or closing `---` fences are missing.
+    #[allow(
+        clippy::too_many_lines,
+        clippy::cognitive_complexity,
+        reason = "Sequential line-by-line frontmatter parser"
+    )]
     pub fn parse(content: &str) -> Result<Self, String> {
         let trimmed = content.trim_start();
         let rest = trimmed.strip_prefix("---").ok_or_else(|| "Missing leading '---'".to_owned())?;
@@ -46,6 +55,10 @@ impl AgentFrontmatter {
         let mut pre_launch_checks = Vec::new();
         let mut native_tools = Vec::new();
         let mut mcp_tools = Vec::new();
+        let mut allowed_dirs = Vec::new();
+        let mut disallowed_dirs = Vec::new();
+        let mut allowed_files = Vec::new();
+        let mut disallowed_files = Vec::new();
 
         let mut current_list: Option<&mut Vec<String>> = None;
 
@@ -110,6 +123,30 @@ impl AgentFrontmatter {
                 } else {
                     current_list = Some(&mut mcp_tools);
                 }
+            } else if trimmed_line.starts_with("allowed_dirs:") || trimmed_line.starts_with("allowedDirs:") {
+                if trimmed_line.ends_with("[]") {
+                    allowed_dirs.clear();
+                } else {
+                    current_list = Some(&mut allowed_dirs);
+                }
+            } else if trimmed_line.starts_with("disallowed_dirs:") || trimmed_line.starts_with("disallowedDirs:") {
+                if trimmed_line.ends_with("[]") {
+                    disallowed_dirs.clear();
+                } else {
+                    current_list = Some(&mut disallowed_dirs);
+                }
+            } else if trimmed_line.starts_with("allowed_files:") || trimmed_line.starts_with("allowedFiles:") {
+                if trimmed_line.ends_with("[]") {
+                    allowed_files.clear();
+                } else {
+                    current_list = Some(&mut allowed_files);
+                }
+            } else if trimmed_line.starts_with("disallowed_files:") || trimmed_line.starts_with("disallowedFiles:") {
+                if trimmed_line.ends_with("[]") {
+                    disallowed_files.clear();
+                } else {
+                    current_list = Some(&mut disallowed_files);
+                }
             }
         }
 
@@ -126,6 +163,10 @@ impl AgentFrontmatter {
             pre_launch_checks,
             native_tools,
             mcp_tools,
+            allowed_dirs,
+            disallowed_dirs,
+            allowed_files,
+            disallowed_files,
             directives,
         })
     }
@@ -145,6 +186,32 @@ impl AgentFrontmatter {
     #[must_use]
     pub fn extract_pre_launch_checks(content: &str) -> Vec<String> {
         Self::parse(content).map_or_default(|f| f.pre_launch_checks)
+    }
+
+    /// Converts the parsed frontmatter into an `AgentGuard`.
+    #[must_use]
+    pub fn to_guard(&self) -> crate::models::AgentGuard {
+        crate::models::AgentGuard {
+            allowed_dirs: self.allowed_dirs.clone(),
+            disallowed_dirs: self.disallowed_dirs.clone(),
+            allowed_files: self.allowed_files.clone(),
+            disallowed_files: self.disallowed_files.clone(),
+        }
+    }
+
+    /// Extracts an `AgentGuard` from an agent Markdown document if any boundaries are defined.
+    #[must_use]
+    pub fn extract_guard(content: &str) -> Option<crate::models::AgentGuard> {
+        let parsed = Self::parse(content).ok()?;
+        if parsed.allowed_dirs.is_empty()
+            && parsed.disallowed_dirs.is_empty()
+            && parsed.allowed_files.is_empty()
+            && parsed.disallowed_files.is_empty()
+        {
+            None
+        } else {
+            Some(parsed.to_guard())
+        }
     }
 }
 
@@ -196,6 +263,34 @@ Directives here.
         assert_eq!(manifest.native_tools, vec!["read_file"]);
         assert_eq!(manifest.mcp_tools, vec!["modify_code", "write_file"]);
         assert_eq!(manifest.directives, "# System Prompt\nDirectives here.\n");
+    }
+
+    #[test]
+    fn test_parse_agent_frontmatter_guards() {
+        let md = "---
+name: coder
+allowed_dirs:
+  - src
+disallowed_dirs:
+  - tests
+  - benches
+allowed_files:
+  - ARCHITECTURE.md
+disallowed_files:
+  - Cargo.toml
+---
+Directives";
+        let manifest = AgentFrontmatter::parse(md).unwrap();
+        assert_eq!(manifest.allowed_dirs, vec!["src"]);
+        assert_eq!(manifest.disallowed_dirs, vec!["tests", "benches"]);
+        assert_eq!(manifest.allowed_files, vec!["ARCHITECTURE.md"]);
+        assert_eq!(manifest.disallowed_files, vec!["Cargo.toml"]);
+
+        let guard = manifest.to_guard();
+        assert_eq!(guard.allowed_dirs, vec!["src"]);
+        assert_eq!(guard.disallowed_dirs, vec!["tests", "benches"]);
+        assert_eq!(guard.allowed_files, vec!["ARCHITECTURE.md"]);
+        assert_eq!(guard.disallowed_files, vec!["Cargo.toml"]);
     }
 
     #[test]

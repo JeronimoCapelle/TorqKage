@@ -1,8 +1,11 @@
 //! Agent scoping and tool allowlisting for `agy-mcp`.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use agy_common::FastHashSet;
+use agy_common::frontmatter::AgentFrontmatter;
+use crate::models::AgentGuard;
 
 /// Resolves the requested agent from command line arguments, environment variables, or `.pipeline/active_agent.json`.
 #[must_use]
@@ -88,7 +91,60 @@ fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Opti
 /// Extracts tools listed under `mcp_tools:` or `mcpTools:` in the YAML frontmatter.
 #[must_use]
 pub(crate) fn extract_mcp_tools_from_markdown(content: &str) -> Option<FastHashSet<String>> {
-    agy_common::frontmatter::AgentFrontmatter::extract_mcp_tools(content)
+    AgentFrontmatter::extract_mcp_tools(content)
+}
+
+/// Discovers and parses `AgentGuard` configurations directly from agent Markdown frontmatters.
+#[must_use]
+pub(crate) fn resolve_agent_guards(
+    workspace_root: &Path,
+    active_agent: Option<&str>,
+) -> BTreeMap<String, AgentGuard> {
+    let mut guards = BTreeMap::new();
+
+    let mut candidate_dirs = vec![
+        workspace_root.join("plugins/agy-suite/agents"),
+        workspace_root.join(".gemini/config/plugins/agy-suite/agents"),
+        workspace_root.join(".agents/agents"),
+    ];
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_p = std::path::PathBuf::from(home);
+        candidate_dirs.push(home_p.join(".gemini/config/plugins/agy-suite/agents"));
+        candidate_dirs.push(home_p.join(".gemini/config/agents"));
+    }
+
+    for dir in candidate_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "md")
+                    && let Ok(content) = fs::read_to_string(&path)
+                    && let Ok(frontmatter) = AgentFrontmatter::parse(&content)
+                    && !frontmatter.name.is_empty()
+                {
+                    let name = frontmatter.name.clone();
+                    let guard = frontmatter.to_guard();
+                    guards.entry(name).or_insert(guard);
+                }
+            }
+        }
+    }
+
+    // Ensure active agent is loaded if not already found in directory scans
+    if let Some(agent) = active_agent
+        && !guards.contains_key(agent)
+        && let Some(path) = agy_common::find_agent_manifest_path(workspace_root, agent)
+        && let Ok(content) = fs::read_to_string(&path)
+        && let Ok(frontmatter) = AgentFrontmatter::parse(&content)
+    {
+        guards.insert(agent.to_owned(), frontmatter.to_guard());
+    }
+
+    guards
 }
 
 #[cfg(test)]

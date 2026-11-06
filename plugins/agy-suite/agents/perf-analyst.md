@@ -8,6 +8,13 @@ commandExecutionPolicy: off
 pre_launch_checks:
   - compilation
   - vcs_conflicts
+allowed_dirs:
+  - benches
+  - docs
+  - .agy/artifacts
+disallowed_dirs:
+  - src
+  - tests
 allowed_subagents:
   - mini
 tools:
