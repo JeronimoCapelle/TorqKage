@@ -29,7 +29,10 @@ pub mod state;
 pub mod supervisor;
 pub mod tools;
 
-pub use content_filter::{BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig};
+pub use content_filter::{
+    BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig, check_agent_guard_direct,
+    check_agent_path_policies_direct, matches_directory_scope, path_matches_pattern,
+};
 pub use error::{AgyError, Result};
 pub use fast_hash::{
     FastBuildHasher, FastHashMap, FastHashSet, FastHasher, fast_map_new, fast_map_with_capacity,

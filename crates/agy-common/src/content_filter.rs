@@ -196,9 +196,6 @@ pub struct PathPolicy {
     pub path: String,
     /// The content filter kind enforced on matching files.
     pub filter: ContentFilterKind,
-    /// Optional agent role this policy binds to (e.g. `"doc-author"`). None = applies to all agents.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub agent: Option<String>,
     /// Optional opening marker for delimited sections (e.g. `"// BEGIN TESTS"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub start_marker: Option<String>,
@@ -224,7 +221,6 @@ impl Default for PathPolicy {
         Self {
             path: String::new(),
             filter: ContentFilterKind::CommentsOnly,
-            agent: None,
             start_marker: None,
             end_marker: None,
             line_comments: Vec::new(),
@@ -242,13 +238,7 @@ impl PathPolicy {
         Self {
             path: path.into(),
             filter: ContentFilterKind::CommentsOnly,
-            agent: None,
-            start_marker: None,
-            end_marker: None,
-            line_comments: Vec::new(),
-            block_comments: Vec::new(),
-            test_attributes: Vec::new(),
-            test_prefixes: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -258,13 +248,7 @@ impl PathPolicy {
         Self {
             path: path.into(),
             filter: ContentFilterKind::TestsOnly,
-            agent: None,
-            start_marker: None,
-            end_marker: None,
-            line_comments: Vec::new(),
-            block_comments: Vec::new(),
-            test_attributes: Vec::new(),
-            test_prefixes: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -278,13 +262,9 @@ impl PathPolicy {
         Self {
             path: path.into(),
             filter: ContentFilterKind::Delimited,
-            agent: None,
             start_marker: Some(start_marker.into()),
             end_marker: Some(end_marker.into()),
-            line_comments: Vec::new(),
-            block_comments: Vec::new(),
-            test_attributes: Vec::new(),
-            test_prefixes: Vec::new(),
+            ..Default::default()
         }
     }
 
@@ -955,6 +935,199 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
     }
 
     out
+}
+
+/// Helper checking if a relative path falls within a directory scope.
+///
+/// Recognizes root-level directories (`src/lib.rs` in `src`) and containerized
+/// monorepo layouts (`crates/core/src/lib.rs`, `packages/web/src/app.ts`, `apps/api/src/main.go`).
+#[must_use]
+pub fn matches_directory_scope(rel_path: &str, scope: &str) -> bool {
+    let clean = scope.trim_matches(['/', '\\']);
+    if clean.is_empty() || clean == "*" {
+        return true;
+    }
+
+    // 1. Root-level match: e.g. "src/lib.rs" matches "src"
+    if rel_path == clean
+        || rel_path.starts_with(&format!("{clean}/"))
+        || rel_path.starts_with(&format!("{clean}\\"))
+    {
+        return true;
+    }
+
+    // 2. Monorepo container match: e.g. "crates/agy-mcp/src/main.rs" matches "src"
+    for prefix in &[
+        "crates/", "packages/", "plugins/", "apps/", "services/", "libs/", "modules/",
+        "crates\\", "packages\\", "plugins\\", "apps\\", "services\\", "libs\\", "modules\\",
+    ] {
+        if let Some(sub) = rel_path.strip_prefix(prefix)
+            && let Some((_container_item, item_rel)) = sub.split_once(['/', '\\'])
+            && (item_rel == clean
+                || item_rel.starts_with(&format!("{clean}/"))
+                || item_rel.starts_with(&format!("{clean}\\")))
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Helper checking if a path matches a wildcard pattern or glob expression.
+#[must_use]
+pub fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
+    let p = pattern.trim().replace('\\', "/");
+    let target = path_str.trim().replace('\\', "/");
+
+    if p == "*" || p.is_empty() {
+        return true;
+    }
+
+    // Directory wildcard e.g. "src/auth/**" or "src/auth/*"
+    if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
+        let prefix = prefix.trim_end_matches('/');
+        return target == prefix || target.starts_with(&format!("{prefix}/"));
+    }
+
+    // Suffix wildcard e.g. "*.pem" or "*_secret.json"
+    if let Some(suffix) = p.strip_prefix('*') {
+        return target.ends_with(suffix);
+    }
+
+    // Prefix wildcard e.g. ".env*"
+    if let Some(prefix) = p.strip_suffix('*') {
+        return target.starts_with(prefix);
+    }
+
+    target == p
+}
+
+/// Returns an error if the agent is restricted and the target path violates the agent's guard boundaries.
+///
+/// # Errors
+/// Returns a descriptive error message if the path violates `disallowed_files`, `disallowed_dirs`,
+/// or falls outside `allowed_dirs` and `allowed_files`.
+pub fn check_agent_guard_direct(
+    workspace_root: &Path,
+    candidate: &Path,
+    agent_name: Option<&str>,
+    guard: Option<&crate::models::AgentGuard>,
+) -> Result<(), String> {
+    let Some(agent) = agent_name else {
+        return Ok(());
+    };
+    let Some(guard) = guard else {
+        return Ok(());
+    };
+
+    let relative = candidate
+        .strip_prefix(workspace_root)
+        .unwrap_or(candidate);
+    let rel_lossy = relative.to_string_lossy();
+
+    // 1. Check disallowed files
+    for disallowed_file in &guard.disallowed_files {
+        if rel_lossy == *disallowed_file {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is not permitted to modify file '{rel_lossy}'."
+            ));
+        }
+    }
+
+    // 2. Check disallowed directories
+    for disallowed_dir in &guard.disallowed_dirs {
+        if matches_directory_scope(&rel_lossy, disallowed_dir) {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{disallowed_dir}/'."
+            ));
+        }
+    }
+
+    // 3. Check allowed files
+    let matches_allowed_file = guard.allowed_files.iter().any(|f| rel_lossy == *f);
+    if matches_allowed_file {
+        return Ok(());
+    }
+
+    // 4. Check allowed directories
+    if !guard.allowed_dirs.is_empty() {
+        if guard.allowed_dirs.iter().any(|d| d == "*") {
+            return Ok(());
+        }
+
+        let is_allowed = guard.allowed_dirs.iter().any(|dir| {
+            matches_directory_scope(&rel_lossy, dir)
+        });
+
+        if !is_allowed {
+            return Err(format!(
+                "Security policy violation: Agent '{agent}' is restricted to directories {:?} or files {:?}, but '{rel_lossy}' was requested.",
+                guard.allowed_dirs, guard.allowed_files
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+/// Enforces declarative agent path policies (e.g. `comments_only`, `tests_only`, `delimited`).
+///
+/// Supports language-agnostic syntax resolution via `project.toml` and auto-detection.
+///
+/// # Errors
+/// Returns an error if the agent attempts to modify forbidden content within a policy-guarded path.
+pub fn check_agent_path_policies_direct(
+    workspace_root: &Path,
+    candidate: &Path,
+    original: &str,
+    new_content: &str,
+    agent_name: Option<&str>,
+    guard: Option<&crate::models::AgentGuard>,
+    project: Option<&crate::project::ProjectConfig>,
+) -> Result<(), String> {
+    let relative = candidate
+        .strip_prefix(workspace_root)
+        .unwrap_or(candidate);
+    let rel_lossy = relative.to_string_lossy();
+
+    // 1. Collect candidate policies from agent frontmatter
+    let mut applicable_policies: Vec<(Option<String>, PathPolicy)> = Vec::new();
+    if let Some(g) = guard {
+        for p in &g.path_policies {
+            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
+                applicable_policies.push((agent_name.map(str::to_owned), p.clone()));
+            }
+        }
+    }
+
+    // 2. Collect candidate policies from project.toml (workspace-wide)
+    if let Some(proj) = project {
+        for p in proj.all_path_policies() {
+            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
+                applicable_policies.push((agent_name.map(str::to_owned), p));
+            }
+        }
+    }
+
+    if applicable_policies.is_empty() {
+        return Ok(());
+    }
+
+    let project_syntax = project.and_then(|p| p.policies.syntax.as_ref());
+    let language = project.and_then(|p| p.project.language.as_deref());
+
+    for (effective_agent, policy) in &applicable_policies {
+        let syntax = policy.effective_syntax(candidate, project_syntax, language);
+        policy
+            .verify_with_syntax(candidate, original, new_content, &syntax)
+            .map_err(|err| {
+                let role = effective_agent.as_deref().unwrap_or("operator");
+                format!("Security policy violation for agent '{role}': {err}")
+            })?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

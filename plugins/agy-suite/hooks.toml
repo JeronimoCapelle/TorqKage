@@ -57,12 +57,14 @@
 # Recommended pipeline order:
 #   1. circuit_breaker   (Fail-fast on repeated compiler loops)
 #   2. manifest_guard     (Deterministic path/manifest security)
-#   3. subagent_admission (Enforce quality prerequisites before agent spawn)
-#   4. vcs_conflicts      (Ensure tree integrity before running compilation)
-#   5. tool_policy        (Prompt operator only if all prior guards pass)
+#   3. path_policies      (Enforce agent directory boundaries and content policies)
+#   4. subagent_admission (Enforce quality prerequisites before agent spawn)
+#   5. vcs_conflicts      (Ensure tree integrity before running compilation)
+#   6. tool_policy        (Prompt operator only if all prior guards pass)
 pipeline = [
     "circuit_breaker",
     "manifest_guard",
+    "path_policies",
     "subagent_admission",
     "vcs_conflicts",
     "tool_policy",

@@ -334,62 +334,8 @@ pub(crate) fn check_agent_guard(
     agent_name: Option<&str>,
     guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<(), String> {
-    let Some(agent) = agent_name else {
-        return Ok(());
-    };
-
-    let Some(guard) = guards.get(agent) else {
-        return Ok(());
-    };
-
-    let relative = candidate
-        .strip_prefix(workspace_root)
-        .unwrap_or(candidate);
-    let rel_lossy = relative.to_string_lossy();
-
-    // 1. Check disallowed files
-    for disallowed_file in &guard.disallowed_files {
-        if rel_lossy == *disallowed_file {
-            return Err(format!(
-                "Security policy violation: Agent '{agent}' is not permitted to modify file '{rel_lossy}'."
-            ));
-        }
-    }
-
-    // 2. Check disallowed directories
-    for disallowed_dir in &guard.disallowed_dirs {
-        if matches_directory_scope(&rel_lossy, disallowed_dir) {
-            return Err(format!(
-                "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{disallowed_dir}/'."
-            ));
-        }
-    }
-
-    // 3. Check allowed files
-    let matches_allowed_file = guard.allowed_files.iter().any(|f| rel_lossy == *f);
-    if matches_allowed_file {
-        return Ok(());
-    }
-
-    // 4. Check allowed directories
-    if !guard.allowed_dirs.is_empty() {
-        if guard.allowed_dirs.iter().any(|d| d == "*") {
-            return Ok(());
-        }
-
-        let is_allowed = guard.allowed_dirs.iter().any(|dir| {
-            matches_directory_scope(&rel_lossy, dir)
-        });
-
-        if !is_allowed {
-            return Err(format!(
-                "Security policy violation: Agent '{agent}' is restricted to directories {:?} or files {:?}, but '{rel_lossy}' was requested.",
-                guard.allowed_dirs, guard.allowed_files
-            ));
-        }
-    }
-
-    Ok(())
+    let guard = agent_name.and_then(|a| guards.get(a));
+    agy_common::check_agent_guard_direct(workspace_root, candidate, agent_name, guard)
 }
 
 /// Enforces declarative agent path policies (e.g. `comments_only`, `tests_only`, `delimited`).
@@ -407,58 +353,21 @@ pub(crate) fn check_agent_path_policies(
     guards: &BTreeMap<String, AgentGuard>,
     project: Option<&agy_common::ProjectConfig>,
 ) -> Result<(), String> {
-    let relative = candidate
-        .strip_prefix(workspace_root)
-        .unwrap_or(candidate);
-    let rel_lossy = relative.to_string_lossy();
-
-    // 1. Collect candidate policies from agent frontmatter
-    let mut applicable_policies: Vec<(Option<String>, agy_common::PathPolicy)> = Vec::new();
-    if let Some(agent) = agent_name
-        && let Some(guard) = guards.get(agent)
-    {
-        for p in &guard.path_policies {
-            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
-                applicable_policies.push((Some(agent.to_owned()), p.clone()));
-            }
-        }
-    }
-
-    // 2. Collect candidate policies from project.toml
-    if let Some(proj) = project {
-        for p in proj.all_path_policies() {
-            let matches_agent = p.agent.is_none() || p.agent.as_deref() == agent_name;
-            if matches_agent
-                && (matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path))
-            {
-                let eff_agent = p.agent.clone().or_else(|| agent_name.map(str::to_owned));
-                applicable_policies.push((eff_agent, p));
-            }
-        }
-    }
-
-    if applicable_policies.is_empty() {
-        return Ok(());
-    }
-
-    let project_syntax = project.and_then(|p| p.policies.syntax.as_ref());
-    let language = project.and_then(|p| p.project.language.as_deref());
-
-    for (effective_agent, policy) in &applicable_policies {
-        let syntax = policy.effective_syntax(candidate, project_syntax, language);
-        policy
-            .verify_with_syntax(candidate, original, new_content, &syntax)
-            .map_err(|err| {
-                let role = effective_agent.as_deref().unwrap_or("operator");
-                format!("Security policy violation for agent '{role}': {err}")
-            })?;
-    }
-
-    Ok(())
+    let guard = agent_name.and_then(|a| guards.get(a));
+    agy_common::check_agent_path_policies_direct(
+        workspace_root,
+        candidate,
+        original,
+        new_content,
+        agent_name,
+        guard,
+        project,
+    )
 }
 
 const COMMON_ROOT_DIRS: &[&str] = &[
-    "src", "tests", "benches", "examples", "docs", "doc", ".git", ".jj", ".agy",
+    "src", "lib", "pkg", "app", "cmd", "tests", "test", "spec", "benches", "examples",
+    "docs", "doc", "include", "scripts", "bin", ".git", ".jj", ".agy",
 ];
 
 /// Helper attempting to resolve a scoped path within declared monorepo subcrate containers.
@@ -932,7 +841,6 @@ mod tests {
         proj.path_policies.push(agy_common::PathPolicy {
             path: "app".to_owned(),
             filter: agy_common::ContentFilterKind::CommentsOnly,
-            agent: Some("doc-author".to_owned()),
             ..Default::default()
         });
 

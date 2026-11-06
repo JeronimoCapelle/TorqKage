@@ -333,14 +333,13 @@ mod tests {
             ..Default::default()
         };
 
-        // Declarative project.toml defining a custom path policy without modifying agent frontmatter
+        // Declarative project.toml defining a workspace path policy
         let project_toml = r#"
 [project]
 name = "py-app"
 language = "python"
 
 [[path_policies]]
-agent = "doc-author"
 path = "app"
 filter = "comments_only"
 "#;

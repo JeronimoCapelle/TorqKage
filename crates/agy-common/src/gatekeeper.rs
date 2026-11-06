@@ -123,7 +123,7 @@ impl GateCheck for CargoCompilationCheck {
                     let diag = truncated.join("\n");
                     GateCheckStatus::Failed(format!(
                         "Project compilation failed (`cargo check --all-targets`).\n\
-                         Finisher requires 100% clean compilation before review.\n\n\
+                         100% clean compilation required before subagent launch.\n\n\
                          [Compiler Output]:\n{diag}"
                     ))
                 }
@@ -164,7 +164,7 @@ impl GateCheck for CargoTestCompilationCheck {
                     let diag = truncated.join("\n");
                     GateCheckStatus::Failed(format!(
                         "Test suite compilation failed (`cargo test --no-run`).\n\
-                         All tests must compile before calling finisher.\n\n\
+                         All tests must compile before subagent launch.\n\n\
                          [Compiler Output]:\n{diag}"
                     ))
                 }
@@ -196,7 +196,7 @@ impl GateCheck for VcsConflictCheck {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
                 if !stdout.is_empty() {
                     return GateCheckStatus::Failed(format!(
-                        "Unresolved Jujutsu conflict in active commit (@: {stdout}). Resolve conflicts before finisher review."
+                        "Unresolved Jujutsu conflict in active commit (@: {stdout}). Resolve conflicts before subagent launch."
                     ));
                 }
             }
@@ -367,12 +367,19 @@ pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Opti
     let mut candidates = vec![
         workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
         workspace_root.join(format!(".agents/agents/{agent_name}.md")),
+        workspace_root.join(format!(".agents/{agent_name}.md")),
+        workspace_root.join(format!(".gemini/agents/{agent_name}.md")),
+        workspace_root.join(format!("agents/{agent_name}.md")),
+        workspace_root.join(format!(".agy/agents/{agent_name}.md")),
     ];
 
     if let Ok(home) = std::env::var("HOME") {
         let home_path = std::path::PathBuf::from(home);
         candidates.push(home_path.join(format!(".gemini/config/plugins/agy-suite/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
+        candidates.push(home_path.join(format!(".gemini/agents/{agent_name}.md")));
+        candidates.push(home_path.join(format!(".agents/agents/{agent_name}.md")));
+        candidates.push(home_path.join(format!(".agents/{agent_name}.md")));
     }
 
     let found = candidates.into_iter().find(|p| p.is_file());

@@ -305,11 +305,15 @@ impl ProjectConfig {
                 if cfg.docs.paths.is_empty() {
                     cfg.docs.paths = Self::detect_default_docs_paths(workspace_root);
                 }
+                if cfg.project.language.is_none() {
+                    let inferred = Self::infer_from_workspace(workspace_root);
+                    cfg.project.language = inferred.project.language;
+                }
                 return cfg;
             }
         }
 
-        let mut cfg = Self::default();
+        let mut cfg = Self::infer_from_workspace(workspace_root);
         cfg.docs.paths = Self::detect_default_docs_paths(workspace_root);
         cfg
     }
@@ -823,7 +827,6 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
     } else if section == "path_policies" {
         if let Some(last) = config.path_policies.last_mut() {
             match key {
-                "agent" => last.agent = Some(clean_str.to_owned()),
                 "path" => clean_str.clone_into(&mut last.path),
                 "filter" => match clean_str {
                     "comments_only" | "comments" => {
@@ -1004,15 +1007,13 @@ line_comments = ["#"]
 test_prefixes = ["test_"]
 
 [[path_policies]]
-agent = "doc-author"
 path = "src"
 filter = "comments_only"
 block_comment_start = '"""'
 block_comment_end = '"""'
 
 [[path_policies]]
-agent = "test-author"
-path = "src"
+path = "tests"
 filter = "tests_only"
 "##;
 
@@ -1026,15 +1027,13 @@ filter = "tests_only"
 
         let policies = parsed.all_path_policies();
         assert_eq!(policies.len(), 2);
-        assert_eq!(policies[0].agent.as_deref(), Some("doc-author"));
         assert_eq!(policies[0].path, "src");
         assert_eq!(policies[0].filter, crate::content_filter::ContentFilterKind::CommentsOnly);
         assert_eq!(policies[0].block_comments.len(), 1);
         assert_eq!(policies[0].block_comments[0].start, "\"\"\"");
         assert_eq!(policies[0].block_comments[0].end, "\"\"\"");
 
-        assert_eq!(policies[1].agent.as_deref(), Some("test-author"));
-        assert_eq!(policies[1].path, "src");
+        assert_eq!(policies[1].path, "tests");
         assert_eq!(policies[1].filter, crate::content_filter::ContentFilterKind::TestsOnly);
     }
 

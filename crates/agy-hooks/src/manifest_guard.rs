@@ -6,14 +6,27 @@ use std::path::Path;
 use agy_common::{PreToolResponse, PreToolUseInput};
 use crate::config::HooksConfig;
 
-const fn is_default_fallback_mutation_tool(name: &str) -> bool {
+pub(crate) fn is_default_fallback_mutation_tool(name: &str) -> bool {
     let bytes = name.as_bytes();
-    matches!(bytes, b"file_write" | b"write_file" | b"mpatch_edit" | b"modify_code" | b"edit_file")
+    if matches!(bytes, b"file_write" | b"write_file" | b"mpatch_edit" | b"modify_code" | b"edit_file") {
+        return true;
+    }
+    let lower = name.to_ascii_lowercase();
+    lower.contains("write")
+        || lower.contains("edit")
+        || lower.contains("modify")
+        || lower.contains("patch")
+        || lower.contains("create")
+        || lower.contains("append")
+        || lower.contains("delete")
+        || lower.contains("remove")
+        || lower.contains("overwrite")
+        || lower.contains("replace")
 }
 
 fn is_path_key(key: &str) -> bool {
     let k = key.to_ascii_lowercase();
-    k.contains("path") || k.contains("file") || k == "target" || k == "dest" || k == "destination"
+    k.contains("path") || k.contains("file") || k == "dest" || k == "destination"
 }
 
 fn is_candidate_path(s: &str) -> bool {
@@ -25,7 +38,7 @@ fn is_candidate_path(s: &str) -> bool {
 ///
 /// Priority 1: Inspect keys matching common path or file conventions (`path`, `Path`, `file`, `dest`, etc.).
 /// Priority 2: If no semantic path keys are present, inspect any single-line string values in the arguments.
-fn extract_candidate_paths(args: &serde_json::Value) -> Vec<&str> {
+pub(crate) fn extract_candidate_paths(args: &serde_json::Value) -> Vec<&str> {
     let mut candidates = Vec::new();
 
     if let serde_json::Value::Object(map) = args {

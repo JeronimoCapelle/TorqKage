@@ -29,6 +29,7 @@ impl Default for PreToolUseConfig {
             pipeline: vec![
                 "circuit_breaker".to_owned(),
                 "manifest_guard".to_owned(),
+                "path_policies".to_owned(),
                 "subagent_admission".to_owned(),
                 "vcs_conflicts".to_owned(),
                 "tool_policy".to_owned(),

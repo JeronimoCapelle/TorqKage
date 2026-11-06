@@ -139,6 +139,15 @@ impl AgentFrontmatter {
                     } else if let Some(m) = trimmed_line.strip_prefix("end_marker:") {
                         last.end_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
                         continue;
+                    } else if let Some(items) = trimmed_line.strip_prefix("line_comments:") {
+                        last.line_comments = parse_inline_yaml_list(items);
+                        continue;
+                    } else if let Some(items) = trimmed_line.strip_prefix("test_attributes:") {
+                        last.test_attributes = parse_inline_yaml_list(items);
+                        continue;
+                    } else if let Some(items) = trimmed_line.strip_prefix("test_prefixes:") {
+                        last.test_prefixes = parse_inline_yaml_list(items);
+                        continue;
                     }
                 }
             }
@@ -298,6 +307,15 @@ impl AgentFrontmatter {
             Some(parsed.to_guard())
         }
     }
+}
+
+fn parse_inline_yaml_list(s: &str) -> Vec<String> {
+    let trimmed = s.trim().trim_matches(['[', ']']);
+    trimmed
+        .split(',')
+        .map(|item| item.trim().trim_matches(['"', '\'']).to_owned())
+        .filter(|item| !item.is_empty())
+        .collect()
 }
 
 #[cfg(test)]
