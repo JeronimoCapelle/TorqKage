@@ -40,15 +40,16 @@ All autonomous agents and human contributors operating within this repository or
 +-----------------------------------------------------------------------------------+
 | 1. tools.toml (The Agent's Hands)                                                 |
 |    - Declares MCP tools exposed to agents, base templates, actions, and limits.   |
-|    - Defines per-agent blast perimeters ([agent_guards.<agent>]).                 |
+|    - Language-agnostic declarative catalog with codeless gate execution.          |
 +-----------------------------------------------------------------------------------+
 | 2. hooks.toml (The Runtime's Rules)                                               |
 |    - Declares lifecycle interception pipeline (<1ms native Rust execution).       |
 |    - Circuit breaker strike logic, manifest mutation guards, conflict sentries.  |
+|    - Declarative Turn 1 wake context injections ([[session_start.injections]]).   |
 +-----------------------------------------------------------------------------------+
 | 3. project.toml (The Codebase's Identity)                                         |
 |    - Declarative contracts for the target repository.                             |
-|    - Compiler gates, test harness checks, workspace containers, build cache       |
+|    - Pre-invocation gates ([gates.<name>]), workspace containers, build cache     |
 |      bind mounts, documentation paths, and security allow/deny rules.             |
 +-----------------------------------------------------------------------------------+
 ```
@@ -61,17 +62,17 @@ All autonomous agents and human contributors operating within this repository or
 
 ## 3. Agent Fleet Perimeters & Blast Boundaries
 
-Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-Privilege Model**:
+Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-Privilege Model**, with boundaries and pre-launch checks unified directly in each agent's Markdown frontmatter:
 
-| Agent | Responsibility | Permitted Directory Scope (`tools.toml`) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
+| Agent | Responsibility | Permitted Directory Scope (Agent Frontmatter) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
 | :--- | :--- | :--- | :--- | :--- |
 | **`coder`** | Production systems implementation | `allowed_dirs = ["src"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`. |
 | **`embedded-engineer`** | Low-level target & embedded specialist | `allowed_dirs = ["src", "boards", "layout", "targets", "benches"]`<br>`disallowed_dirs = ["tests", "docs"]` | `vcs_conflicts` | Linker scripts (`link.ld`, `memory.x`), section memory maps, inline asm (`asm!`), target JSON specs, `cargo-size`, `cargo-nm`, `llvm-objdump`. |
-| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, `cargo doc --no-deps`. |
+| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, `cargo doc --no-deps`. |
 | **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), differential inspection (`llvm-objdump`). |
 | **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. |
 | **`copilot`** | Interactive Chief of Staff & Orchestrator | **Strictly read-only** (`disallowed_dirs = ["*"]`) | None | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection (zero direct code mutation). |
-| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | `compilation`, `tests`, `vcs_conflicts` | Deterministic pass/fail audit via single-pass `run_pre_release_gauntlet`, mutation scoring, mandated proof checks, git-cliff changelog. |
+| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff triage, mutation scoring, mandated proof checks, git-cliff changelog. |
 | **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, clippy, cargo-deny, semver-checks. |
 | **`perf-analyst`** | Hardware profiling & benchmarks | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]` | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat (purified of correctness tools). |
 | **`mini`** | Symbolic math & calculation | **Strictly air-gapped** (`disallowed_dirs = ["*"]`) | None | `eval_symbolic_math` (SymPy) inside isolated container only. |
@@ -141,10 +142,27 @@ When `invoke_subagent` is called, `agy-hooks` evaluates the `subagent_admission`
 2. Gates are evaluated:
    - Built-in VCS conflict check (`vcs_conflicts` blocks invocation if merge conflict markers are detected).
    - Built-in workspace cleanliness check (`workspace_clean`).
-   - Declarative project gates matched against `project.toml [gates.<name>]` (e.g. `compilation`, `tests`, `linter`, `fmt`).
+   - Declarative project gates matched against `project.toml [gates.<name>]` (e.g. `compilation`, `tests`, `linter`, `fmt`). Any gate check (such as code formatters or test suites) can be configured purely in TOML without modifying compiled Rust binaries.
 3. If any gate check fails:
    - Admission is **denied** before burning LLM tokens.
    - Diagnostic output is returned to the calling agent with specific failure lines to guide remediation.
+
+### 5.1 Declarative Wake Context Injections (`[[session_start.injections]]`)
+
+To prevent autonomous agents from wasting 5–10 LLM turns and tens of thousands of tokens running repetitive CLI commands on wake-up:
+1. `hooks.toml` defines declarative wake injections matching agent names or patterns:
+   ```toml
+   [[session_start.injections]]
+   name = "finisher_diff_summary"
+   matcher = "finisher"
+   command = ["jj", "diff", "--summary"]
+   max_lines = 40
+   timeout_seconds = 5
+   prefix = "### [AUTOMATED WAKE CONTEXT]: Active Workspace Diff Summary\n"
+   fallback = "Working copy has no uncommitted modifications."
+   ```
+2. When the agent is invoked, `agy-hooks` intercepts `SessionStart` (Turn 1), executes the configured command under strict timeouts, bounds the output line count, and injects the live ground truth directly into the agent's wake prompt.
+3. The agent starts Turn 1 with immediate awareness of diff summaries, parent commit stats, and VCS hygiene without firing a single MCP tool call.
 
 ---
 
