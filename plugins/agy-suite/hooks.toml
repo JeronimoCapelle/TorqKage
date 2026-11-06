@@ -167,6 +167,41 @@ inject_wake_state = true
 # Injects project documentation paths and recommended search tool from `project.toml`.
 inject_documentation = true
 
+# ------------------------------------------------------------------------------
+# 5b. DECLARATIVE WAKE CONTEXT INJECTIONS
+# ------------------------------------------------------------------------------
+# Executes pre-configured host CLI queries on SessionStart (Turn 1) and injects
+# structured output directly into the agent's initial prompt.
+#
+# Eliminates token waste and round-trip tool execution for standard triage data
+# (e.g. diffs, commit logs, VCS state) that the agent unconditionally requires.
+
+[[session_start.injections]]
+name = "finisher_diff_summary"
+matcher = "finisher"
+command = ["jj", "diff", "--summary"]
+max_lines = 40
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Active Workspace Diff Summary\n"
+fallback = "Working copy has no uncommitted modifications."
+
+[[session_start.injections]]
+name = "finisher_parent_commit"
+matcher = "finisher"
+command = ["jj", "show", "@-", "--stat"]
+max_lines = 30
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Parent Revision (@-) Summary\n"
+
+[[session_start.injections]]
+name = "finisher_git_status"
+matcher = "finisher"
+command = ["git", "status", "--short"]
+max_lines = 20
+timeout_seconds = 5
+prefix = "### [AUTOMATED WAKE CONTEXT]: Git Working Tree Status\n"
+fallback = "Git tree clean (0 uncommitted changes)."
+
 
 # ------------------------------------------------------------------------------
 # 6. SESSION STOP HANDOFF RECORDING

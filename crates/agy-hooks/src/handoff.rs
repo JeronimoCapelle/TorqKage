@@ -68,7 +68,11 @@ pub(crate) fn execute_record_handoff() {
 ///
 /// Reads `.agy/state/handoff.json` (or `.agy/state/last_handoff.md`) if present and emits a `systemMessage` step
 /// providing immediate continuity context for the starting conversation session.
-#[allow(clippy::format_push_string, reason = "Building injection prompt message")]
+#[allow(
+    clippy::format_push_string,
+    clippy::too_many_lines,
+    reason = "Building injection prompt message and evaluating declarative wake context"
+)]
 pub(crate) fn execute_inject_wake() {
     let input: SessionStartInput = read_stdin_payload();
 
@@ -89,7 +93,7 @@ pub(crate) fn execute_inject_wake() {
     let project = agy_common::ProjectConfig::detect_or_load(&root);
     let tool_name = project.docs.tool_name.as_deref().unwrap_or("query_project_spec");
 
-    let resp = if config.session_start.inject_wake_state
+    let mut resp = if config.session_start.inject_wake_state
         && json_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&json_handoff)
         && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
@@ -140,6 +144,69 @@ pub(crate) fn execute_inject_wake() {
     } else {
         SessionStartResponse::default()
     };
+
+    // Resolve active agent identity to match targeted injections
+    let active_agent = std::env::var("AGY_AGENT")
+        .or_else(|_| std::env::var("MCP_SCOPE"))
+        .ok()
+        .or_else(|| {
+            let json_path = paths.active_agent_file();
+            if json_path.is_file()
+                && let Ok(content) = std::fs::read_to_string(&json_path)
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
+            {
+                return Some(name.to_owned());
+            }
+            let txt_path = paths.state_dir().join("active_agent");
+            if txt_path.is_file()
+                && let Ok(content) = std::fs::read_to_string(&txt_path)
+            {
+                let name = content.trim();
+                if !name.is_empty() {
+                    return Some(name.to_owned());
+                }
+            }
+            None
+        })
+        .unwrap_or_default();
+
+    // Evaluate declarative custom wake injections from hooks.toml
+    for injection in &config.session_start.injections {
+        if !crate::config::matches_pattern(&active_agent, &injection.matcher) {
+            continue;
+        }
+
+        if let Some(binary) = injection.command.first() {
+            let args = injection.command.get(1..).unwrap_or(&[]);
+            let mut cmd = Command::new(binary);
+            cmd.args(args);
+            cmd.current_dir(&root);
+
+            if let Ok(out) = agy_common::SubprocessSupervisor::run_supervised(cmd, injection.timeout_seconds) {
+                let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
+                let raw = if stdout.is_empty() { stderr } else { stdout };
+
+                if !raw.is_empty() {
+                    let lines: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).collect();
+                    let truncated: Vec<&str> = lines.iter().take(injection.max_lines).copied().collect();
+                    let mut content = truncated.join("\n");
+                    if lines.len() > injection.max_lines {
+                        content.push_str(&format!(
+                            "\n[... truncated {} additional lines ...]",
+                            lines.len().saturating_sub(injection.max_lines)
+                        ));
+                    }
+                    let msg = format!("{}{content}", injection.prefix);
+                    resp.inject_steps.push(InjectStep::system(msg));
+                } else if let Some(ref fallback) = injection.fallback {
+                    let msg = format!("{}{fallback}", injection.prefix);
+                    resp.inject_steps.push(InjectStep::system(msg));
+                }
+            }
+        }
+    }
 
     if let Ok(json) = serde_json::to_string(&resp) {
         println!("{json}");

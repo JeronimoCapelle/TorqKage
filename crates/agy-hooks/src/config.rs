@@ -98,12 +98,39 @@ impl Default for WipConfig {
     }
 }
 
+/// Declarative context injection for Turn 1 (`SessionStart`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct WakeInjection {
+    pub(crate) name: String,
+    pub(crate) matcher: String,
+    pub(crate) command: Vec<String>,
+    pub(crate) max_lines: usize,
+    pub(crate) timeout_seconds: u64,
+    pub(crate) prefix: String,
+    pub(crate) fallback: Option<String>,
+}
+
+impl Default for WakeInjection {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            matcher: "*".to_owned(),
+            command: Vec::new(),
+            max_lines: 40,
+            timeout_seconds: 5,
+            prefix: String::new(),
+            fallback: None,
+        }
+    }
+}
+
 /// Session start context & wake-up injection configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SessionStartConfig {
     pub(crate) enabled: bool,
     pub(crate) inject_wake_state: bool,
     pub(crate) inject_documentation: bool,
+    pub(crate) injections: Vec<WakeInjection>,
 }
 
 impl Default for SessionStartConfig {
@@ -112,6 +139,7 @@ impl Default for SessionStartConfig {
             enabled: true,
             inject_wake_state: true,
             inject_documentation: true,
+            injections: Vec::new(),
         }
     }
 }
@@ -198,11 +226,13 @@ pub(crate) fn matches_pattern(text: &str, pattern: &str) -> bool {
 }
 
 /// Parses a `hooks.toml` string into a structured `HooksConfig`.
+#[allow(clippy::too_many_lines, reason = "Declarative hooks.toml parser")]
 #[must_use]
 pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
     let mut config = HooksConfig::default();
     let mut current_section = "";
     let mut current_check: Option<CustomCheck> = None;
+    let mut current_injection: Option<WakeInjection> = None;
 
     let mut in_array = false;
     let mut array_key = String::new();
@@ -220,7 +250,14 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
                 let part = &trimmed[..end_idx];
                 extract_quoted_strings(part, &mut array_items);
                 in_array = false;
-                apply_array_field(&mut config, current_section, &array_key, &array_items, &mut current_check);
+                apply_array_field(
+                    &mut config,
+                    current_section,
+                    &array_key,
+                    &array_items,
+                    &mut current_check,
+                    &mut current_injection,
+                );
                 array_items.clear();
             } else {
                 extract_quoted_strings(trimmed, &mut array_items);
@@ -233,6 +270,9 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
             if let Some(check) = current_check.take() {
                 config.pre_tool_use.custom_checks.push(check);
             }
+            if let Some(inj) = current_injection.take() {
+                config.session_start.injections.push(inj);
+            }
             let section_name = trimmed.trim_matches(['[', ']']).trim();
             current_section = if section_name == "pre_tool_use.custom_checks" {
                 current_check = Some(CustomCheck {
@@ -244,6 +284,11 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
                     reason: "Declarative check condition failed".to_owned(),
                 });
                 "custom_check"
+            } else if section_name == "session_start.injections"
+                || section_name == "session_start.custom_injections"
+            {
+                current_injection = Some(WakeInjection::default());
+                "session_start_injection"
             } else {
                 "unknown"
             };
@@ -254,11 +299,18 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
             if let Some(check) = current_check.take() {
                 config.pre_tool_use.custom_checks.push(check);
             }
+            if let Some(inj) = current_injection.take() {
+                config.session_start.injections.push(inj);
+            }
             let section_name = trimmed.trim_matches(['[', ']']).trim();
-            current_section = if section_name == "pre_tool_use" {
-                "pre_tool_use"
-            } else {
-                "unknown"
+            current_section = match section_name {
+                "pre_tool_use" => "pre_tool_use",
+                "circuit_breaker" => "circuit_breaker",
+                "manifest_guard" => "manifest_guard",
+                "wip" => "wip",
+                "session_start" => "session_start",
+                "stop" => "stop",
+                _ => "unknown",
             };
             continue;
         }
@@ -273,7 +325,14 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
                     let inside = rest.get(..end_idx).unwrap_or("");
                     let mut items = Vec::new();
                     extract_quoted_strings(inside, &mut items);
-                    apply_array_field(&mut config, current_section, key, &items, &mut current_check);
+                    apply_array_field(
+                        &mut config,
+                        current_section,
+                        key,
+                        &items,
+                        &mut current_check,
+                        &mut current_injection,
+                    );
                 } else {
                     in_array = true;
                     key.clone_into(&mut array_key);
@@ -281,13 +340,23 @@ pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
                 }
             } else {
                 let clean_val = val.trim_matches(['"', '\'']);
-                apply_string_field(&mut config, current_section, key, clean_val, &mut current_check);
+                apply_string_field(
+                    &mut config,
+                    current_section,
+                    key,
+                    clean_val,
+                    &mut current_check,
+                    &mut current_injection,
+                );
             }
         }
     }
 
     if let Some(check) = current_check {
         config.pre_tool_use.custom_checks.push(check);
+    }
+    if let Some(inj) = current_injection {
+        config.session_start.injections.push(inj);
     }
 
     config
@@ -320,6 +389,7 @@ fn apply_array_field(
     key: &str,
     items: &[String],
     current_check: &mut Option<CustomCheck>,
+    current_injection: &mut Option<WakeInjection>,
 ) {
     if section == "pre_tool_use" && key == "pipeline" {
         config.pre_tool_use.pipeline = items.to_vec();
@@ -334,6 +404,11 @@ fn apply_array_field(
         && let Some(check) = current_check
     {
         check.command = items.to_vec();
+    } else if section == "session_start_injection"
+        && key == "command"
+        && let Some(inj) = current_injection
+    {
+        inj.command = items.to_vec();
     }
 }
 
@@ -343,6 +418,7 @@ fn apply_string_field(
     key: &str,
     val: &str,
     current_check: &mut Option<CustomCheck>,
+    current_injection: &mut Option<WakeInjection>,
 ) {
     if section == "circuit_breaker" {
         if key == "max_strikes" {
@@ -395,6 +471,26 @@ fn apply_string_field(
                 };
             }
             "reason" => val.clone_into(&mut check.reason),
+            _ => {}
+        }
+    } else if section == "session_start_injection"
+        && let Some(inj) = current_injection
+    {
+        match key {
+            "name" => val.clone_into(&mut inj.name),
+            "matcher" => val.clone_into(&mut inj.matcher),
+            "prefix" => val.clone_into(&mut inj.prefix),
+            "fallback" => inj.fallback = Some(val.to_owned()),
+            "max_lines" => {
+                if let Ok(n) = val.parse::<usize>() {
+                    inj.max_lines = n;
+                }
+            }
+            "timeout_seconds" => {
+                if let Ok(n) = val.parse::<u64>() {
+                    inj.timeout_seconds = n;
+                }
+            }
             _ => {}
         }
     }
