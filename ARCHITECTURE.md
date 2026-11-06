@@ -67,12 +67,12 @@ Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-
 | Agent | Responsibility | Permitted Directory Scope (Agent Frontmatter) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
 | :--- | :--- | :--- | :--- | :--- |
 | **`coder`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, `run_cargo_verification`, `run_cargo_test`, `run_cargo_clippy`. |
-| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, `cargo doc --no-deps`. |
-| **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), differential inspection (`llvm-objdump`). |
-| **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. |
-| **`copilot`** | Interactive Chief of Staff & Orchestrator | **Strictly read-only** (`disallowed_dirs = ["*"]`) | None | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection (zero direct code mutation). |
-| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff & changelog preview, binary size audit (`cargo-size`), mutation scoring, mandated proof checks. |
-| **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, clippy, cargo-deny, semver-checks. |
+| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, module structure, `cargo doc --no-deps`. |
+| **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), compiler explanations, differential inspection (`llvm-objdump`). |
+| **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. Pre-injected with workspace crate topology. |
+| **`copilot`** | Interactive Chief of Staff & Orchestrator | **Strictly read-only** (`disallowed_dirs = ["*"]`) | None | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection (zero direct code mutation). Pre-injected with active VCS status. |
+| **`finisher`** | Deterministic release gatekeeper | `allowed_dirs = ["*"]` (Advisory) | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff & changelog preview, binary size audit (`cargo-size`), supply-chain audit (`cargo-deny`), mutation scoring, mandated proof checks. |
+| **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, active diff inspection (`inspect_workspace_diff`), clippy, cargo-deny, semver-checks. |
 | **`perf-analyst`** | Hardware profiling & benchmarks | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]` | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat, section size & symbol mapping (`cargo-size`, `cargo-nm`). |
 | **`mini`** | Symbolic math & calculation | **Strictly air-gapped** (`disallowed_dirs = ["*"]`) | None | `eval_symbolic_math` (SymPy) inside isolated container only. |
 | **`sysadmin`** | Arch Linux / CachyOS admin | `allowed_dirs = ["*"]` | None | Host troubleshooting, systemd, pacman inspection (all mutating ops prompt `[y/n]`). |
@@ -150,18 +150,12 @@ When `invoke_subagent` is called, `agy-hooks` evaluates the `subagent_admission`
 
 To prevent autonomous agents from wasting 5–10 LLM turns and tens of thousands of tokens running repetitive CLI commands on wake-up:
 1. `hooks.toml` defines declarative wake injections matching agent names or patterns:
-   ```toml
-   [[session_start.injections]]
-   name = "finisher_diff_summary"
-   matcher = "finisher"
-   command = ["jj", "diff", "--summary"]
-   max_lines = 40
-   timeout_seconds = 5
-   prefix = "### [AUTOMATED WAKE CONTEXT]: Active Workspace Diff Summary\n"
-   fallback = "Working copy has no uncommitted modifications."
-   ```
-2. When the agent is invoked, `agy-hooks` intercepts `SessionStart` (Turn 1), executes the configured command under strict timeouts, bounds the output line count, and injects the live ground truth directly into the agent's wake prompt.
-3. The agent starts Turn 1 with immediate awareness of diff summaries, parent commit stats, and VCS hygiene without firing a single MCP tool call.
+   - **`copilot`**: Injects active Jujutsu working copy and commit status (`jj status --no-pager`) so it greets the user with immediate situational awareness.
+   - **`planner`**: Injects workspace crate topology (`cargo tree --depth 0 --workspace`) so it immediately knows all member crates and paths.
+   - **`spec-checker`**: Injects uncommitted file modifications (`git status --short`) pinpointing modified files awaiting spec auditing.
+   - **`finisher`**: Injects active workspace diff summary (`jj diff --summary`), parent revision stats (`jj show @- --stat`), git status (`git status --short`), and recent unreleased Conventional Commits changelog (`git-cliff`).
+2. When any matched agent is invoked, `agy-hooks` intercepts `SessionStart` (Turn 1), executes the configured command under strict timeouts, bounds the output line count, and injects the live ground truth directly into the agent's wake prompt.
+3. The agent starts Turn 1 with immediate awareness of essential ground truth without firing a single MCP tool call.
 
 ---
 
