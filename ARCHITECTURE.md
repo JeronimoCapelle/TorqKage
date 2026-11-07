@@ -188,11 +188,6 @@ agy-suite/
 ├── deny.toml           # Supply-chain security, RustSec advisories, and license policy
 ├── install.sh          # Self-contained bundle builder & Gemini plugin installer
 ├── .github/workflows/  # Continuous Integration (cargo check, cargo test, clippy -D warnings)
-├── config/             # Sanitized top-level declarative contract templates
-│   ├── tools.toml      # MCP tool definitions, inheritance templates, and security guards
-│   ├── hooks.toml      # Lifecycle pipeline, circuit breaker, and Turn-1 wake injections
-│   ├── project.toml    # Codebase quality gates, build cache mounts, and container layout
-│   └── agents/         # The 10 specialized agent profile specifications (.md)
 ├── crates/             # Native 4-crate Rust workspace
 │   ├── agy-common/     # Core domain models, project config, supervisor, Jujutsu, state
 │   ├── agy-mcp/        # Declarative MCP server, tool execution engine, agent guards
@@ -224,7 +219,7 @@ agy-suite/
 2. **`agy-mcp` (Declarative Model Context Protocol Daemon):**
    - Implements native Model Context Protocol (MCP 2024-11-05) over stdio JSON-RPC.
    - Dynamically parses `tools.toml`, synthesizes strict JSON Schemas, validates parameters against regex constraints, and enforces agent perimeter allowlists.
-   - Powered by 10 native action handlers: bounded file reading, atomic writing, `mpatch` fuzzy SEARCH/REPLACE block edits, file search, parameterized CLI execution, compiler NDJSON diagnostic extraction, and manpage-style manual lookups.
+   - Powered by 10 native action handlers: bounded file reading, atomic writing, `mpatch` fuzzy SEARCH/REPLACE block edits, in-process file search, parameterized CLI execution, compiler NDJSON diagnostic extraction, in-process manuals, project state inspection, and Jujutsu workspace lifecycle isolation.
 3. **`agy-hooks` (Featherweight Interception Runner):**
    - Ultra-fast native CLI (<1ms startup, <500KB RSS) executing Antigravity lifecycle events: `detect-wip`, `check-conflicts`, `check-subagent`, `enforce-tool-policy`, `record-handoff`, and `inject-wake`.
    - Protects critical build manifests (`Cargo.toml`) via `manifest_guard` and tracks consecutive compiler failure strikes via `circuit_breaker`.
@@ -245,13 +240,13 @@ The `agy-mcp` daemon replaces ambient shell access with 10 hardened native actio
 1. **`file_read`:** Bounded file reader with line-range slicing (`start_line`, `end_line`) and UTF-8-safe byte caps.
 2. **`file_write`:** Atomic writer enforcing directory perimeters and syntactic path policies.
 3. **`mpatch_edit`:** Precision fuzzy block patcher (`<<<< SEARCH / ==== / >>>> REPLACE`) eliminating destructive full-file rewrites.
-4. **`file_search`:** Bounded `rg` wrapper returning matching lines, column offsets, and context lines without flooding context buffers.
+4. **`file_search`:** In-process fast regex/substring pattern search across repository files and project doc trees without external dependencies.
 5. **`static_command`:** Parameterless invocation of fixed audit binaries (`cargo check`, `cargo test`, `git status`).
-6. **`parametrized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`).
-7. **`cli_manual`:** Intelligent system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and `rustc --explain` references directly into the agent's context.
-8. **Documentation & Specification Query Handlers:** Instant lookups across `docs/`, RFCs, and ISA specifications.
-9. **Pre-Flight Binary Verification:** Every tool declared in `tools.toml` is verified via `which` before reporting its schema to `agy`. Missing tools are dropped cleanly or report an unambiguous configuration error, preventing agent runtime panics.
-10. **Tool Inheritance & Output Slicing:** Base templates (`base_tools.*`) provide unified timeouts, output limits, and environment policies. Output streams capture `stdout`, `stderr`, or interleaved buffers with automatic fallback execution chains if an error occurs.
+6. **`parameterized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`).
+7. **`cargo_json_diagnostics`:** High-speed NDJSON diagnostic stream extractor parsing compiler diagnostics and errors into structured spans.
+8. **`cli_manual`:** In-process system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and `rustc --explain` references directly into the agent's context.
+9. **`project_state`:** In-process VCS status, branch detection, and uncommitted change inspector.
+10. **`workspace_ensure` / `workspace_inspect` / `workspace_merge`:** Jujutsu workspace lifecycle isolation handlers managing isolated branch revisions off `default@`.
 
 ---
 

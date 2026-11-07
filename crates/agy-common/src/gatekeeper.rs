@@ -296,12 +296,11 @@ pub fn find_agent_manifest_path(
     agent_name: &str,
 ) -> Option<std::path::PathBuf> {
     let mut candidates = vec![
-        workspace_root.join(format!("config/agents/{agent_name}.md")),
+        workspace_root.join(format!("agents/{agent_name}.md")),
         workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
         workspace_root.join(format!(".agents/agents/{agent_name}.md")),
         workspace_root.join(format!(".agents/{agent_name}.md")),
         workspace_root.join(format!(".gemini/agents/{agent_name}.md")),
-        workspace_root.join(format!("agents/{agent_name}.md")),
         workspace_root.join(format!(".agy/agents/{agent_name}.md")),
     ];
 
@@ -310,7 +309,6 @@ pub fn find_agent_manifest_path(
         candidates.push(home_path.join(format!(
             ".gemini/config/plugins/agy-suite/agents/{agent_name}.md"
         )));
-        candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".gemini/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".agents/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".agents/{agent_name}.md")));

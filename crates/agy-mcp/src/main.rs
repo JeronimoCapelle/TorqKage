@@ -8,7 +8,7 @@
 //! exposed tools dynamically based on the active agent's YAML frontmatter (`mcp_tools:`).
 //!
 //! ## Architecture
-//! - [`actions`]: 8 native action handlers (`file_read`, `file_write`, `mpatch_edit`, `static_cmd`, etc.).
+//! - [`actions`]: 10 native action handlers (`file_read`, `file_write`, `mpatch_edit`, `parameterized_cmd`, etc.).
 //! - [`agent_scope`]: Resolves active agent scope and enforces air-gapped default-deny tool allowlists.
 //! - [`config`]: Declarative `tools.toml` parser with template inheritance and security guard models.
 //! - [`guards`]: Path confinement, dangerous file sanitization, and UTF-8 truncation guards.
