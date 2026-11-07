@@ -47,7 +47,8 @@ pub(crate) fn find_agent_session_for_workspace(
     }
 
     let home = std::env::var("HOME").ok()?;
-    let db_path = PathBuf::from(home).join(".gemini/antigravity-cli/conversation_summaries.db");
+    let home_path = PathBuf::from(&home);
+    let db_path = home_path.join(".gemini/antigravity-cli/conversation_summaries.db");
     if !db_path.is_file() {
         return None;
     }
@@ -57,12 +58,12 @@ pub(crate) fn find_agent_session_for_workspace(
         .unwrap_or_else(|_| workspace_root.to_path_buf());
     let ws_lossy = ws_canonical.to_string_lossy();
 
-    // Query SQLite database for latest matching conversation
+    // Query SQLite database for latest matching conversation with at least 1 step
     let sql = format!(
         "SELECT conversation_id, agent_name, workspace_uris, last_modified_time, step_count, preview \
          FROM conversation_summaries \
-         WHERE agent_name = '{}' AND workspace_uris LIKE '%{}%' \
-         ORDER BY last_modified_time DESC LIMIT 1;",
+         WHERE agent_name = '{}' AND workspace_uris LIKE '%{}%' AND step_count > 0 \
+         ORDER BY last_modified_time DESC LIMIT 5;",
         agent_name.replace('\'', "''"),
         ws_lossy.replace('\'', "''")
     );
@@ -79,7 +80,17 @@ pub(crate) fn find_agent_session_for_workspace(
     }
 
     let items: Vec<SessionSummary> = serde_json::from_slice(&output.stdout).ok()?;
-    items.into_iter().next()
+    let convs_dir = home_path.join(".gemini/antigravity-cli/conversations");
+
+    // Only return a session if its backing SQLite database actually exists on disk
+    for item in items {
+        let conv_file = convs_dir.join(format!("{}.db", item.conversation_id));
+        if conv_file.is_file() {
+            return Some(item);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
