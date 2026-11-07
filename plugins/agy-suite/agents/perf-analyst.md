@@ -46,6 +46,14 @@ mcp_tools:
   - cargo_nm
   - hyperfine
   - llvm_mca
+  - load_trace
+  - execute_sql
+  - list_tables
+  - list_table_structure
+  - list_processes
+  - list_threads_in_process
+  - list_stdlib_modules
+  - slice_descendants_breakdown
   - write_file
   - query_tool_help
 ---
