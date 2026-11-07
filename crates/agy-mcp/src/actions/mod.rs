@@ -74,10 +74,15 @@ where
             let out = SubprocessSupervisor::run_supervised(cmd, timeout_seconds)?;
             if !out.status.success() {
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                if stderr.contains("Creating new namespace failed")
+                let is_bwrap_setup_failure = stderr.contains("bwrap:")
+                    || stderr.contains("Creating new namespace failed")
                     || stderr.contains("No permissions to create new namespace")
                     || stderr.contains("Setting up mount namespace failed")
-                {
+                    || stderr.contains("user namespace")
+                    || stderr.contains("Permission denied")
+                    || stderr.contains("Operation not permitted");
+
+                if is_bwrap_setup_failure {
                     if is_outer_sandbox() {
                         let mut fallback_cmd = Command::new(program);
                         fallback_cmd.args(base_args);

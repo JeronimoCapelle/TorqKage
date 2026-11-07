@@ -463,9 +463,19 @@ mod tests {
         assert!(out.contains("sandboxed_payload"));
     }
 
+    fn is_bwrap_functional() -> bool {
+        if which::which("bwrap").is_err() {
+            return false;
+        }
+        std::process::Command::new("bwrap")
+            .args(["--ro-bind", "/", "/", "--", "/bin/sh", "-c", "exit 0"])
+            .output()
+            .is_ok_and(|out| out.status.success())
+    }
+
     #[test]
     fn test_enforce_sandbox_via_bwrap() {
-        if which::which("bwrap").is_err() || which::which("python3").is_err() {
+        if !is_bwrap_functional() || which::which("python3").is_err() {
             return;
         }
         let temp = create_test_dir("sandbox_bwrap");
@@ -499,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_enforce_sandbox_blocks_network() {
-        if which::which("bwrap").is_err() || which::which("python3").is_err() {
+        if !is_bwrap_functional() || which::which("python3").is_err() {
             return;
         }
         let temp = create_test_dir("sandbox_network");
