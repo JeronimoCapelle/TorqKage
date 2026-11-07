@@ -60,6 +60,13 @@ pub(crate) fn execute(
         tool.enforce_file_target.as_deref(),
     )?;
 
+    if safe_path.is_dir() {
+        return Err(format!(
+            "Cannot write to '{}': target path is an existing directory",
+            safe_path.display()
+        ));
+    }
+
     check_agent_guard(workspace_root, &safe_path, agent_name, agent_guards)?;
 
     let original = if safe_path.exists() {

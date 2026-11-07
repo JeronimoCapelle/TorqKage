@@ -69,6 +69,13 @@ pub(crate) fn execute(
         ));
     }
 
+    if safe_path.is_dir() {
+        return Err(format!(
+            "Cannot modify '{}': target path is a directory, not a file",
+            safe_path.display()
+        ));
+    }
+
     let original = std::fs::read_to_string(&safe_path).map_err(|err| {
         format!(
             "Failed to read target file '{}': {err}",

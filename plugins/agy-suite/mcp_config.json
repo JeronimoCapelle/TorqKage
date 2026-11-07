@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "agy-tools": {
-      "command": "agy-mcp",
-      "args": ["--agent", "copilot"]
-    }
-  }
-}

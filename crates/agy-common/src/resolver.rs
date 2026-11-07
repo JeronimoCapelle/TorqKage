@@ -14,12 +14,18 @@ impl WorkspaceResolver {
     /// Correctly distinguishes primary repositories from Jujutsu secondary workspaces
     /// (e.g. `.agy/workspaces/<agent>`) by resolving pointer files in `.jj/repo`.
     ///
+    /// If `start_dir` is omitted and the process was launched inside an Antigravity plugin
+    /// installation directory (`PLUGIN_ROOT`), it automatically recovers the caller's actual
+    /// workspace root from `$PWD`.
+    ///
     /// # Errors
     /// Returns `AgyError::Io` if querying current directory or canonicalization fails.
     pub fn find_root(start_dir: Option<&Path>) -> Result<PathBuf> {
-        let current = match start_dir {
-            Some(p) => p.canonicalize().unwrap_or_else(|_| p.to_path_buf()),
-            None => std::env::current_dir()?,
+        let current = if let Some(p) = start_dir {
+            p.canonicalize().unwrap_or_else(|_| p.to_path_buf())
+        } else {
+            let cwd = std::env::current_dir()?;
+            Self::detect_plugin_sandbox_escape(&cwd).unwrap_or(cwd)
         };
 
         let mut candidate = current.as_path();
@@ -78,6 +84,39 @@ impl WorkspaceResolver {
         // Fallback to start_dir canonicalized
         current.canonicalize().map_err(AgyError::Io)
     }
+
+    /// Detects if `cwd` is locked inside an Antigravity plugin installation directory
+    /// and recovers the caller's actual project directory from `$PWD` if valid.
+    #[must_use]
+    pub fn detect_plugin_sandbox_escape(cwd: &Path) -> Option<PathBuf> {
+        let canon_cwd = cwd.canonicalize().ok()?;
+        let cwd_str = canon_cwd.to_string_lossy();
+
+        let is_in_plugin_dir = std::env::var("PLUGIN_ROOT").map_or_else(
+            |_| {
+                cwd_str.contains("/.gemini/config/plugins/")
+                    || cwd_str.contains("/.antigravity/plugins/")
+                    || cwd_str.contains("/.gemini/plugins/")
+            },
+            |plugin_root| {
+                Path::new(&plugin_root)
+                    .canonicalize()
+                    .is_ok_and(|canon_plugin| canon_cwd.starts_with(&canon_plugin))
+            },
+        );
+
+        if is_in_plugin_dir && let Ok(pwd_val) = std::env::var("PWD") {
+            let pwd_path = PathBuf::from(pwd_val);
+            if let Ok(canon_pwd) = pwd_path.canonicalize()
+                && canon_pwd.is_dir()
+                && !canon_pwd.starts_with(&canon_cwd)
+            {
+                return Some(canon_pwd);
+            }
+        }
+
+        None
+    }
 }
 
 #[cfg(test)]
@@ -119,5 +158,12 @@ mod tests {
         assert_eq!(resolved, main_repo.canonicalize().unwrap());
 
         drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_detect_plugin_sandbox_escape_inactive_outside_plugins() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // When running in a normal project directory, escape detection returns None
+        assert!(WorkspaceResolver::detect_plugin_sandbox_escape(&manifest_dir).is_none());
     }
 }

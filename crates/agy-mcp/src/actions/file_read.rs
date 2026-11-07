@@ -54,6 +54,13 @@ pub(crate) fn execute(
         tool.enforce_file_target.as_deref(),
     )?;
 
+    if safe_path.is_dir() {
+        return Err(format!(
+            "Cannot read '{}': path is a directory, not a regular file",
+            safe_path.display()
+        ));
+    }
+
     let raw_content = std::fs::read_to_string(&safe_path)
         .map_err(|err| format!("Failed to read file '{}': {err}", safe_path.display()))?;
 
@@ -165,6 +172,13 @@ mod tests {
         let doc_args = serde_json::json!({ "path": "specs/rv32.md" });
         let res_doc = execute(&docs_tool, &temp, &doc_args, None, &guards).expect("read doc");
         assert!(res_doc.contains("# RV32 Spec"));
+
+        // 4. Reading a directory produces clean actionable error without failing with raw OS error 21
+        let dir_path = temp.join("sub_dir");
+        std::fs::create_dir_all(&dir_path).unwrap();
+        let dir_args = serde_json::json!({ "path": "sub_dir" });
+        let dir_err = execute(&root_tool, &temp, &dir_args, None, &guards).unwrap_err();
+        assert!(dir_err.contains("is a directory, not a regular file"));
 
         drop(std::fs::remove_dir_all(&temp));
     }

@@ -137,7 +137,7 @@ cp "${PLUGIN_DIR}/plugin.json" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/tools.toml" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/hooks.toml" "${TARGET_PLUGIN_DIR}/"
 cp "${PLUGIN_DIR}/hooks.json" "${TARGET_PLUGIN_DIR}/"
-cp "${PLUGIN_DIR}/mcp_config.json" "${TARGET_PLUGIN_DIR}/"
+rm -f "${TARGET_PLUGIN_DIR}/mcp_config.json"
 if [[ -f "${PLUGIN_DIR}/project.toml" ]]; then
     cp "${PLUGIN_DIR}/project.toml" "${TARGET_PLUGIN_DIR}/"
 fi

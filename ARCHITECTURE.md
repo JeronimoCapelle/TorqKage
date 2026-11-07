@@ -197,7 +197,6 @@ agy-suite/
     └── agy-suite/      # Self-contained Antigravity plugin distribution bundle
         ├── plugin.json # Host manifest
         ├── hooks.json  # Host lifecycle hook bindings
-        ├── mcp_config.json # Host MCP stdio configuration
         ├── project.toml# Declarative project contracts and multi-language scaffolds
         ├── hooks.toml  # Lifecycle interception pipeline and circuit breaker rules
         ├── tools.toml  # Declarative MCP tool catalog and agent perimeters

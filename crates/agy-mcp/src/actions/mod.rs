@@ -134,6 +134,7 @@ pub(crate) fn dispatch_action(
     arguments: &serde_json::Value,
     agent_name: Option<&str>,
     agent_guards: &BTreeMap<String, AgentGuard>,
+    available_tools: &[ToolDefinition],
 ) -> Result<(String, bool), String> {
     evaluate_pre_flight_guards(tool, workspace_root)?;
 
@@ -169,7 +170,7 @@ pub(crate) fn dispatch_action(
 
         ToolAction::CargoJsonDiagnostics => cargo_json::execute(tool, workspace_root),
 
-        ToolAction::CliManual => Ok(cli_manual::execute(tool, arguments)),
+        ToolAction::CliManual => Ok(cli_manual::execute(tool, arguments, available_tools)),
 
         ToolAction::ProjectState => Ok(project_state::execute(workspace_root)),
 

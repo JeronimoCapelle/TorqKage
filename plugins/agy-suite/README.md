@@ -17,7 +17,7 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
 3. [Configuration Files & Lifecycle Roles](#configuration-files--lifecycle-roles)
    - [1. `plugin.json` (Host Manifest)](#1-pluginjson-host-manifest)
    - [2. `hooks.json` (Host Lifecycle Event Map)](#2-hooksjson-host-lifecycle-event-map)
-   - [3. `mcp_config.json` (Host MCP Server Config)](#3-mcp_configjson-host-mcp-server-config)
+   - [3. Agent Frontmatter MCP Server Bindings (`agents/*.md`)](#3-agent-frontmatter-mcp-server-bindings-agentsmd)
    - [4. `project.toml` (Ecosystem & Quality Gates)](#4-projecttoml-ecosystem--quality-gates)
    - [5. `hooks.toml` (Safety Pipeline & Interceptors)](#5-hookstoml-safety-pipeline--interceptors)
    - [6. `tools.toml` (Declarative MCP Tools)](#6-toolstoml-declarative-mcp-tools)
@@ -87,7 +87,6 @@ Within `plugins/agy-suite/` (and its mirrored installation directory `~/.gemini/
 plugins/agy-suite/
 ├── plugin.json         # Antigravity host plugin manifest (metadata, schema, logo)
 ├── hooks.json          # Antigravity hook registrations (PreToolUse, PreInvocation, etc.)
-├── mcp_config.json     # Antigravity MCP server launch definition (command, args)
 ├── project.toml        # Declarative ecosystem config (gates, paths, containers, security)
 ├── hooks.toml          # Declarative lifecycle pipeline rules (circuit breaker, guards)
 ├── tools.toml          # Declarative MCP tool definitions, inheritance, and agent perimeters
@@ -133,22 +132,20 @@ plugins/agy-suite/
   - `SessionStart`: Triggers `bin/agy-hooks inject-wake` on turn 1. Injects previous session handoffs, active VCS commit info, and project documentation paths.
   - `Stop`: Triggers `bin/agy-hooks record-handoff` when a session terminates. Saves `.agy/state/handoff.json` and `.agy/state/last_handoff.md`.
 
-### 3. `mcp_config.json` (Host MCP Server Config)
-- **Role:** Configures Antigravity to launch the declarative MCP server over `stdio`.
-- **Parser:** Antigravity MCP Client Manager.
-- **Contents:**
-  - Declares the `agy-tools` server:
-    ```json
-    {
-      "mcpServers": {
-        "agy-tools": {
-          "command": "agy-mcp",
-          "args": ["--agent", "copilot"]
-        }
-      }
-    }
+### 3. Agent Frontmatter MCP Server Bindings (`agents/*.md`)
+- **Role:** Configures Antigravity to launch `agy-mcp` scoped to the active agent directly in the user's project workspace.
+- **Parser:** Antigravity Agent Configuration Loader.
+- **Architecture:**
+  - Avoids dual-server namespace collisions (e.g. `agy-suite_agy-tools` vs `agy-tools`).
+  - Guarantees execution `cwd` binds to the user's active workspace rather than the plugin install directory.
+  - Spawns an air-gapped instance with `--agent <name>`, enforcing the exact tool allowlist (`mcp_tools: [...]`) and path perimeters for that agent:
+    ```yaml
+    inheritMcp: false
+    mcpServers:
+      - name: agy-tools
+        command: agy-mcp
+        args: ["--agent", "copilot"]
     ```
-  - Subagents override this via their individual markdown frontmatter to supply `--agent <name>`.
 
 ### 4. `project.toml` (Ecosystem & Quality Gates)
 - **Role:** The single source of truth for repository structure, language tooling, build caches, quality gates, and documentation paths.

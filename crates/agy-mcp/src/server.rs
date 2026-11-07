@@ -151,6 +151,7 @@ impl McpServer {
                     arguments,
                     self.agent.as_deref(),
                     &self.agent_guards,
+                    &self.tools,
                 ) {
                     Ok((text, err)) => (text, err),
                     Err(err_msg) => (err_msg, true),

@@ -41,7 +41,6 @@ agy-suite/
 └── plugins/
     └── agy-suite/                  # Antigravity native plugin distribution package
         ├── plugin.json             # Plugin metadata manifest
-        ├── mcp_config.json         # MCP server registration (agy-mcp daemon)
         ├── hooks.json              # Lifecycle hook event router (agy-hooks)
         ├── hooks.toml              # Declarative lifecycle pipeline and custom check rules
         ├── tools.toml              # Declarative MCP tool catalog and agent perimeters
@@ -114,7 +113,7 @@ flowchart TD
 The plugin resides in `plugins/agy-suite/` and can be installed globally into `~/.gemini/config/plugins/agy-suite/`:
 
 1. **`plugin.json`**: Registers the plugin name and description with Antigravity.
-2. **`mcp_config.json`**: Configures Antigravity to launch `agy-mcp` with `--agent copilot` as the default stdio MCP server.
+2. **`agents/*.md (mcpServers)`**: Configures Antigravity to launch `agy-mcp` with `--agent <name>` directly in the active project workspace, eliminating namespace collision and enforcing per-agent air-gapped security perimeters.
 3. **`hooks.json`**: Configures lifecycle hooks using wildcard routing (`"matcher": "*"`). All tool calls are routed through a single `agy-hooks pre-tool-use` call in <1ms.
 4. **`hooks.toml`**: Declarative configuration for the lifecycle hook pipeline (`circuit_breaker`, `subagent_admission`, `vcs_conflicts`, `tool_policy`) and optional custom declarative checks.
 5. **`tools.toml`**: The **single source of truth** for declarative tool definitions, inheritance templates, and security guard policies.
