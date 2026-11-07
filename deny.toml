@@ -69,7 +69,10 @@ deny = [
 ]
 
 # Crates skipped from duplicate version detection
-skip = []
+skip = [
+    { crate = "syn@2.0.119", reason = "Ecosystem transition between syn 2 and syn 3 across upstream proc-macro dependencies" },
+    { crate = "miniz_oxide@0.8.9", reason = "Upstream transitive divergence between png and flate2" },
+]
 
 # ==============================================================================
 # 4. SOURCES (Registry & Git Supply-Chain Restrictions)
