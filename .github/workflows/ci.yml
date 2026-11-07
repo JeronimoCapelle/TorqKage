@@ -9,7 +9,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-D warnings"
+  # Note: Do not set RUSTFLAGS: "-D warnings" here. Setting RUSTFLAGS in the environment
+  # overrides [target.*].rustflags in .cargo/config.toml, which strips --force-warn and
+  # breaks the Tier 3 lint architecture. Strict linting is enforced via `cargo clippy`.
 
 jobs:
   sanity:
@@ -49,6 +51,9 @@ jobs:
         uses: taiki-e/install-action@cargo-deny
 
       - name: Security, License & Banned Dependency Audit (cargo-deny)
+        env:
+          RUSTC_WRAPPER: ""
+          RUSTC_WORKSPACE_WRAPPER: ""
         run: cargo deny check
 
   quality-gate:
