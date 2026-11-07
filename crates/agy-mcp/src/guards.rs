@@ -844,8 +844,7 @@ mod tests {
         assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
     }
 
-    #[test]
-    fn test_check_agent_path_policies() {
+    fn setup_test_guards() -> (PathBuf, BTreeMap<String, AgentGuard>) {
         let root = PathBuf::from("/workspace");
         let mut guards = BTreeMap::new();
 
@@ -865,6 +864,12 @@ mod tests {
             },
         );
 
+        (root, guards)
+    }
+
+    #[test]
+    fn test_check_agent_path_policies_doc_author() {
+        let (root, guards) = setup_test_guards();
         let orig = "pub fn foo() -> u32 { 1 }";
         let with_docs = "/// Doc comment\npub fn foo() -> u32 {\n    // Inline comment\n    1\n}";
         let with_code_tamper = "pub fn foo() -> u32 { 2 }";
@@ -894,6 +899,13 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn test_check_agent_path_policies_test_author() {
+        let (root, guards) = setup_test_guards();
+        let orig = "pub fn foo() -> u32 { 1 }";
+        let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
         // test-author: tests allowed in src/, production code edits blocked
         let with_unit_test =
@@ -922,6 +934,13 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn test_check_agent_path_policies_unconfigured_agent() {
+        let (root, guards) = setup_test_guards();
+        let orig = "pub fn foo() -> u32 { 1 }";
+        let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
         // unconfigured agent: edits allowed
         assert!(
@@ -936,6 +955,11 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn test_check_agent_path_policies_declarative_project() {
+        let (root, guards) = setup_test_guards();
 
         // Declarative project.toml custom path policy for Python
         let mut proj = agy_common::ProjectConfig::default();
