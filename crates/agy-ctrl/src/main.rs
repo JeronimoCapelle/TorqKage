@@ -24,10 +24,6 @@
     clippy::print_stderr,
     reason = "CLI error diagnostics emit output to stderr"
 )]
-#![allow(
-    clippy::format_push_string,
-    reason = "Convenient markdown and diagnostic generation"
-)]
 
 mod app;
 mod installer;

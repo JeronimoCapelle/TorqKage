@@ -295,26 +295,7 @@ pub fn find_agent_manifest_path(
     workspace_root: &Path,
     agent_name: &str,
 ) -> Option<std::path::PathBuf> {
-    let mut candidates = vec![
-        workspace_root.join(format!("agents/{agent_name}.md")),
-        workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
-        workspace_root.join(format!(".agents/agents/{agent_name}.md")),
-        workspace_root.join(format!(".agents/{agent_name}.md")),
-        workspace_root.join(format!(".gemini/agents/{agent_name}.md")),
-        workspace_root.join(format!(".agy/agents/{agent_name}.md")),
-    ];
-
-    if let Ok(home) = std::env::var("HOME") {
-        let home_path = std::path::PathBuf::from(home);
-        candidates.push(home_path.join(format!(
-            ".gemini/config/plugins/agy-suite/agents/{agent_name}.md"
-        )));
-        candidates.push(home_path.join(format!(".gemini/agents/{agent_name}.md")));
-        candidates.push(home_path.join(format!(".agents/agents/{agent_name}.md")));
-        candidates.push(home_path.join(format!(".agents/{agent_name}.md")));
-    }
-
-    let found = candidates.into_iter().find(|p| p.is_file());
+    let found = crate::frontmatter::find_agent_manifest(workspace_root, agent_name);
     if found.is_none() {
         eprintln!(
             "[agy-common] Advisory: Agent manifest for '{agent_name}' not found across workspace or ~/.gemini/config."

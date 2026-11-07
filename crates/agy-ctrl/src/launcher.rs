@@ -3,6 +3,7 @@
 //! Interactive process launcher and pre-flight validation pipeline for dispatching `agy` sessions from `agy-ctrl`.
 
 use std::{
+    fmt::Write,
     io::{self, stdout},
     path::Path,
     process::{Command, ExitStatus, Stdio},
@@ -48,13 +49,13 @@ impl PreLaunchReport {
         if !self.errors.is_empty() {
             msg.push_str("\n❌ Blocking Errors:\n");
             for err in &self.errors {
-                msg.push_str(&format!("  • {err}\n"));
+                _ = writeln!(msg, "  • {err}");
             }
         }
         if !self.warnings.is_empty() {
             msg.push_str("\n⚠ Warnings:\n");
             for warn in &self.warnings {
-                msg.push_str(&format!("  • {warn}\n"));
+                _ = writeln!(msg, "  • {warn}");
             }
         }
         msg

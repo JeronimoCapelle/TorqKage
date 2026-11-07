@@ -1,5 +1,7 @@
 //! YAML frontmatter parsing and agent manifest extraction.
 
+use std::path::{Path, PathBuf};
+
 use crate::FastHashSet;
 
 /// Parsed metadata and body directives from an agent markdown document.
@@ -399,6 +401,62 @@ fn append_to_active_list(manifest: &mut AgentFrontmatter, list_kind: ActiveListK
         ActiveListKind::DisallowedFiles => &mut manifest.disallowed_files,
     };
     target.push(item.to_owned());
+}
+
+/// Returns the ordered list of candidate directories where agent manifests are located.
+///
+/// Precedence:
+/// 1. `<workspace>/agents`
+/// 2. `<workspace>/plugins/agy-suite/agents`
+/// 3. `<workspace>/.agents/agents`
+/// 4. `<workspace>/.agents`
+/// 5. `<workspace>/.gemini/agents`
+/// 6. `<workspace>/.agy/agents`
+/// 7. `~/.gemini/config/plugins/agy-suite/agents`
+/// 8. `~/.gemini/agents`
+/// 9. `~/.agents/agents`
+/// 10. `~/.agents`
+#[must_use]
+pub fn candidate_agent_directories(workspace_root: &Path) -> Vec<PathBuf> {
+    let mut dirs = vec![
+        workspace_root.join("agents"),
+        workspace_root.join("plugins/agy-suite/agents"),
+        workspace_root.join(".agents/agents"),
+        workspace_root.join(".agents"),
+        workspace_root.join(".gemini/agents"),
+        workspace_root.join(".agy/agents"),
+    ];
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_p = PathBuf::from(home);
+        dirs.push(home_p.join(".gemini/config/plugins/agy-suite/agents"));
+        dirs.push(home_p.join(".gemini/agents"));
+        dirs.push(home_p.join(".agents/agents"));
+        dirs.push(home_p.join(".agents"));
+    }
+
+    dirs
+}
+
+/// Discovers an agent markdown file across candidate locations by its name.
+#[must_use]
+pub fn find_agent_manifest(workspace_root: &Path, agent_name: &str) -> Option<PathBuf> {
+    let file_name = if Path::new(agent_name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
+    {
+        agent_name.to_owned()
+    } else {
+        format!("{agent_name}.md")
+    };
+
+    for dir in candidate_agent_directories(workspace_root) {
+        let candidate = dir.join(&file_name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 #[cfg(test)]

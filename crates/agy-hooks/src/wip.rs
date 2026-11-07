@@ -3,7 +3,6 @@
 use std::{
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use agy_common::{PreInvocationInput, PreInvocationResponse, WorkspaceResolver};
@@ -48,64 +47,7 @@ fn detect_wip_changes(
     config: &crate::config::HooksConfig,
 ) -> PreInvocationResponse {
     let project = agy_common::ProjectConfig::detect_or_load(root);
-
-    let status_str = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
-        let jj_status = Command::new("jj")
-            .args(["--color=never", "diff", "--summary"])
-            .current_dir(root)
-            .output();
-
-        match jj_status {
-            Ok(output) if output.status.success() => {
-                let s = String::from_utf8_lossy(&output.stdout);
-                let filtered: Vec<&str> = s
-                    .lines()
-                    .filter(|l| {
-                        let t = l.trim();
-                        if t.is_empty() {
-                            return false;
-                        }
-                        let path_to_check = if let Some((_op, rest)) = t.split_once(' ') {
-                            rest.trim()
-                        } else {
-                            t
-                        };
-                        !project.is_ignored_or_cache_path(path_to_check)
-                    })
-                    .collect();
-                filtered.join("\n")
-            },
-            _ => String::new(),
-        }
-    } else {
-        let git_status = Command::new("git")
-            .args(["status", "-s"])
-            .current_dir(root)
-            .output();
-
-        match git_status {
-            Ok(output) if output.status.success() => {
-                let s = String::from_utf8_lossy(&output.stdout);
-                let filtered: Vec<&str> = s
-                    .lines()
-                    .filter(|l| {
-                        let t = l.trim();
-                        if t.is_empty() {
-                            return false;
-                        }
-                        let path_to_check = if let Some((_op, rest)) = t.split_once(' ') {
-                            rest.trim()
-                        } else {
-                            t
-                        };
-                        !project.is_ignored_or_cache_path(path_to_check)
-                    })
-                    .collect();
-                filtered.join("\n")
-            },
-            _ => String::new(),
-        }
-    };
+    let status_str = agy_common::JujutsuWorkspace::get_working_copy_diff_summary(root, &project);
 
     let trimmed = status_str.trim();
     if trimmed.is_empty() {

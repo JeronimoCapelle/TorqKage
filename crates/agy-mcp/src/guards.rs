@@ -31,29 +31,30 @@ pub(crate) fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
         }
     }
 
-    // Direct filename / component match (e.g. "firmware.bin" or "*.pem" matching inside directories)
+    // Direct filename / component match for exact names without wildcards
     if !p.contains('/')
         && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
+        && filename == p
     {
-        if filename == p {
-            return true;
-        }
-        if let Ok(glob) = globset::GlobBuilder::new(&p)
+        return true;
+    }
+
+    // Glob matching (e.g. "src/**/*.rs", "*.{pem,key}", "tests/*_test.rs")
+    if p.contains(['*', '?', '[', '{'])
+        && let Ok(glob) = globset::GlobBuilder::new(&p)
             .literal_separator(true)
             .build()
-            && glob.compile_matcher().is_match(filename)
+    {
+        let matcher = glob.compile_matcher();
+        if !p.contains('/')
+            && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
+            && matcher.is_match(filename)
         {
             return true;
         }
-    }
-
-    // Full glob matching (e.g. "src/**/*.rs", "*.{pem,key}", "tests/*_test.rs")
-    if let Ok(glob) = globset::GlobBuilder::new(&p)
-        .literal_separator(true)
-        .build()
-        && glob.compile_matcher().is_match(&target)
-    {
-        return true;
+        if matcher.is_match(&target) {
+            return true;
+        }
     }
 
     // Prefix wildcard fallback (e.g. ".env*")

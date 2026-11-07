@@ -518,6 +518,85 @@ impl JujutsuWorkspace {
             },
         }
     }
+
+    /// Collects working copy diff summary lines (e.g. `M src/main.rs`),
+    /// filtered by `project.is_ignored_or_cache_path()`.
+    /// Executes under `SubprocessSupervisor` timeout to prevent hanging on locks.
+    #[must_use]
+    pub fn get_working_copy_diff_summary(
+        root: &Path,
+        project: &crate::project::ProjectConfig,
+    ) -> String {
+        let lines = Self::get_working_copy_status_lines(root, project);
+        lines.join("\n")
+    }
+
+    /// Collects modified file paths in the working copy (via `jj diff --summary` or `git status -s`),
+    /// filtered by `project.is_ignored_or_cache_path()`.
+    /// Executes under `SubprocessSupervisor` timeout to prevent hanging on locks.
+    #[must_use]
+    pub fn get_modified_files(
+        root: &Path,
+        project: &crate::project::ProjectConfig,
+        max_files: usize,
+    ) -> Vec<String> {
+        let lines = Self::get_working_copy_status_lines(root, project);
+        let mut files = Vec::new();
+        for line in lines {
+            let path_to_check = if let Some((_, p)) = line.split_once(' ') {
+                p.trim()
+            } else {
+                line.trim()
+            };
+            if !path_to_check.is_empty() {
+                files.push(path_to_check.to_owned());
+                if files.len() >= max_files {
+                    break;
+                }
+            }
+        }
+        files
+    }
+
+    /// Helper retrieving filtered raw status lines from Jujutsu or Git under supervision.
+    fn get_working_copy_status_lines(
+        root: &Path,
+        project: &crate::project::ProjectConfig,
+    ) -> Vec<String> {
+        let raw_output = if Self::is_jj_repo(root) {
+            let mut cmd = Command::new("jj");
+            cmd.args(["--color=never", "diff", "--summary"]);
+            cmd.current_dir(root);
+            SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        } else {
+            let mut cmd = Command::new("git");
+            cmd.args(["status", "-s"]);
+            cmd.current_dir(root);
+            SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        };
+
+        let mut filtered = Vec::new();
+        if let Ok(output) = raw_output
+            && output.status.success()
+        {
+            let stdout_lossy = String::from_utf8_lossy(&output.stdout);
+            for line in stdout_lossy.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let path_to_check = if let Some((_, p)) = trimmed.split_once(' ') {
+                    p.trim()
+                } else {
+                    trimmed
+                };
+                if !project.is_ignored_or_cache_path(path_to_check) {
+                    filtered.push(trimmed.to_owned());
+                }
+            }
+        }
+        filtered
+    }
 }
 
 fn snapshot_workspace(ws_path: &Path) {

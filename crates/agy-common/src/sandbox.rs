@@ -6,22 +6,14 @@ use std::{path::Path, process::Command};
 
 /// Checks if the current process is already executing inside an outer sandbox or container.
 #[must_use]
-#[allow(
-    clippy::module_name_repetitions,
-    reason = "Descriptive function name clarifying outer sandbox detection"
-)]
-pub fn is_inside_outer_sandbox() -> bool {
-    is_inside_outer_sandbox_with(|var| std::env::var(var).is_ok())
+pub fn is_inside_container() -> bool {
+    is_inside_container_with(|var| std::env::var(var).is_ok())
 }
 
 /// Checks if the current process is already executing inside an outer sandbox or container
 /// using a custom environment variable lookup closure.
 #[must_use]
-#[allow(
-    clippy::module_name_repetitions,
-    reason = "Descriptive function name clarifying outer sandbox detection"
-)]
-pub fn is_inside_outer_sandbox_with<F>(env_lookup: F) -> bool
+pub fn is_inside_container_with<F>(env_lookup: F) -> bool
 where
     F: Fn(&str) -> bool,
 {
@@ -171,12 +163,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_inside_outer_sandbox_env() {
-        assert!(is_inside_outer_sandbox_with(
-            |var| var == "AGY_OUTER_SANDBOX"
-        ));
-        assert!(is_inside_outer_sandbox_with(|var| var == "SANDBOX"));
-        assert!(is_inside_outer_sandbox_with(|var| var == "CONTAINER"));
+    fn test_is_inside_container_env() {
+        assert!(is_inside_container_with(|var| var == "AGY_OUTER_SANDBOX"));
+        assert!(is_inside_container_with(|var| var == "SANDBOX"));
+        assert!(is_inside_container_with(|var| var == "CONTAINER"));
     }
 
     #[test]

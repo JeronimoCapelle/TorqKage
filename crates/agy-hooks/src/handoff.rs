@@ -1,6 +1,7 @@
 //! Session state handoff recording (`Stop`) and wake-up injection (`SessionStart`).
 
 use std::{
+    fmt::Write,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -72,10 +73,6 @@ pub(crate) fn execute_record_handoff() {
 ///
 /// Reads `.agy/state/handoff.json` (or `.agy/state/last_handoff.md`) if present and emits a `systemMessage` step
 /// providing immediate continuity context for the starting conversation session.
-#[allow(
-    clippy::format_push_string,
-    reason = "Appending formatted strings into injection message buffer"
-)]
 fn resolve_handoff_step(
     config: &crate::config::SessionStartConfig,
     paths: &agy_common::AgyStatePaths,
@@ -96,10 +93,11 @@ fn resolve_handoff_step(
     {
         let mut msg = handoff.to_injection_message();
         if config.inject_documentation && !project.docs.paths.is_empty() {
-            msg.push_str(&format!(
+            _ = write!(
+                msg,
                 "\n\n[DOCUMENTATION]: Available in [{}]. Use '{tool_name}' to search specifications.",
                 project.docs.paths.join(", ")
-            ));
+            );
         }
         return Some(InjectStep::system(msg));
     }
@@ -120,10 +118,11 @@ fn resolve_handoff_step(
             record.previous_agent, files_str, record.status
         );
         if config.inject_documentation && !project.docs.paths.is_empty() {
-            msg.push_str(&format!(
+            _ = write!(
+                msg,
                 " Documentation paths: [{}]. Use '{tool_name}' to search.",
                 project.docs.paths.join(", ")
-            ));
+            );
         }
         return Some(InjectStep::system(msg));
     }
@@ -166,10 +165,6 @@ fn resolve_active_agent(paths: &agy_common::AgyStatePaths) -> String {
         .unwrap_or_default()
 }
 
-#[allow(
-    clippy::format_push_string,
-    reason = "Appending formatted strings into injection message buffer"
-)]
 fn evaluate_custom_injections(
     root: &Path,
     active_agent: &str,
@@ -200,10 +195,11 @@ fn evaluate_custom_injections(
                         lines.iter().take(injection.max_lines).copied().collect();
                     let mut content = truncated.join("\n");
                     if lines.len() > injection.max_lines {
-                        content.push_str(&format!(
+                        _ = write!(
+                            content,
                             "\n[... truncated {} additional lines ...]",
                             lines.len().saturating_sub(injection.max_lines)
-                        ));
+                        );
                     }
                     let msg = format!("{}{content}", injection.prefix);
                     steps.push(InjectStep::system(msg));
@@ -263,43 +259,7 @@ fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
 
 fn collect_modified_files(root: &Path, max_files: usize) -> Vec<String> {
     let project = agy_common::ProjectConfig::detect_or_load(root);
-    let raw_output = if agy_common::JujutsuWorkspace::is_jj_repo(root) {
-        Command::new("jj")
-            .args(["--color=never", "diff", "--summary"])
-            .current_dir(root)
-            .output()
-    } else {
-        Command::new("git")
-            .args(["status", "-s"])
-            .current_dir(root)
-            .output()
-    };
-
-    let mut files = Vec::new();
-    if let Ok(out) = raw_output
-        && out.status.success()
-    {
-        let s = String::from_utf8_lossy(&out.stdout);
-        for line in s.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let (path, file_str) = if let Some((_, p)) = trimmed.split_once(' ') {
-                (p.trim(), p.trim().to_owned())
-            } else {
-                (trimmed, trimmed.to_owned())
-            };
-            if project.is_ignored_or_cache_path(path) {
-                continue;
-            }
-            files.push(file_str);
-            if files.len() >= max_files {
-                break;
-            }
-        }
-    }
-    files
+    agy_common::JujutsuWorkspace::get_modified_files(root, &project, max_files)
 }
 
 #[cfg(test)]

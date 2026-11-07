@@ -39,7 +39,7 @@ pub(crate) fn execute_supervised_command(
         timeout_seconds,
         enforce_sandbox,
         tool_name,
-        agy_common::sandbox::is_inside_outer_sandbox,
+        agy_common::sandbox::is_inside_container,
     )
 }
 

@@ -3,6 +3,7 @@
 //! In-deck plugin installation, directory copying, and host system prerequisite diagnostics.
 
 use std::{
+    fmt::Write,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -43,15 +44,17 @@ impl DiagnosticsReport {
             } else {
                 " (standalone copy)"
             };
-            out.push_str(&format!(
+            _ = write!(
+                out,
                 "✔ Plugin Status: Installed at {}{link_note}\n\n",
                 self.plugin_path.display()
-            ));
+            );
         } else {
-            out.push_str(&format!(
+            _ = write!(
+                out,
                 "✖ Plugin Status: NOT INSTALLED at {}\n  Press 'i' to copy and install now.\n\n",
                 self.plugin_path.display()
-            ));
+            );
         }
 
         // Host binaries
@@ -69,10 +72,11 @@ impl DiagnosticsReport {
             } else {
                 "[Optional]"
             };
-            out.push_str(&format!(
-                "{icon} {req_tag:<10} {:<16} — {}\n",
+            _ = writeln!(
+                out,
+                "{icon} {req_tag:<10} {:<16} — {}",
                 check.name, check.description
-            ));
+            );
         }
 
         out

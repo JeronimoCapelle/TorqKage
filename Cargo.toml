@@ -28,6 +28,7 @@ agy-common = { path = "crates/agy-common" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "1.2"
+toml_edit = "0.22"
 
 # Error Handling & Systems Utilities
 thiserror = "2.0"

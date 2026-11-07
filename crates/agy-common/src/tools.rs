@@ -412,11 +412,7 @@ pub fn merge_tool(name: String, base: Option<&RawTool>, raw: &RawTool) -> ToolDe
 /// Resolves inheritance for all tools defined in `RawToolsConfig`, merging category defaults,
 /// base tool templates, and concrete tool declarations.
 #[must_use]
-#[allow(
-    clippy::module_name_repetitions,
-    reason = "Explicit function name for clarity when imported unqualified"
-)]
-pub fn resolve_tools(config: &RawToolsConfig) -> Vec<ToolDefinition> {
+pub fn resolve(config: &RawToolsConfig) -> Vec<ToolDefinition> {
     let mut resolved = Vec::with_capacity(config.tools.len());
     for (name, raw_tool) in &config.tools {
         let base = raw_tool.inherit.as_deref().and_then(|key| {
@@ -508,7 +504,7 @@ mod tests {
             tools,
         };
 
-        let resolved = resolve_tools(&config);
+        let resolved = resolve(&config);
         assert_eq!(resolved.len(), 2);
 
         let clippy = resolved.iter().find(|t| t.name == "cargo_clippy").unwrap();

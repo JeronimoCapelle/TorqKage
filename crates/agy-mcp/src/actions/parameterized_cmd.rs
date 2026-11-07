@@ -112,7 +112,7 @@ pub(crate) fn execute(
         tool,
         workspace_root,
         arguments,
-        agy_common::sandbox::is_inside_outer_sandbox,
+        agy_common::sandbox::is_inside_container,
     )
 }
 
@@ -160,16 +160,17 @@ where
 
     let raw_text = format_captured_output(&output, tool);
 
-    // Apply error fallback if configured and process failed
-    let final_text = if is_error && tool.error_fallback.as_deref() == Some("token_smart_not_found")
+    // Apply declarative error fallback if configured and process failed
+    let final_text = if is_error
+        && let Some(fallback) = tool.error_fallback.as_deref()
+        && (raw_text.contains("could not find") || raw_text.contains("not found"))
     {
-        if raw_text.contains("could not find") || raw_text.contains("not found") {
-            format!(
-                "Item not found in module tree. Verify item path or inspect module tree via inspect_module_structure.\n\n{raw_text}"
-            )
+        let advice = if fallback == "token_smart_not_found" {
+            "Item not found in module tree. Verify item path or inspect module hierarchy."
         } else {
-            raw_text
-        }
+            fallback
+        };
+        format!("{advice}\n\n{raw_text}")
     } else {
         raw_text
     };

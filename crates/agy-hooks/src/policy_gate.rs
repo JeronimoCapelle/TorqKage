@@ -36,6 +36,7 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     };
 
     let tool_name = tc.name.as_str();
+    let tools_cfg = ParsedToolsConfig::load(root);
 
     // 0. Circuit Breaker Sentry: If consecutive failures exceed threshold, all mutating tools require explicit confirmation
     let mut ledger = CircuitBreakerLedger::load(root);
@@ -44,7 +45,7 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
         ledger.max_strikes = hooks_cfg.circuit_breaker.max_strikes;
     }
     if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
-        && is_mutating_tool(tool_name, root)
+        && tools_cfg.is_tool_attribute(tool_name, "mutating")
     {
         return PreToolResponse::ask(format!(
             "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
@@ -60,14 +61,14 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     }
 
     // 1. Check if tool is explicitly declared as requiring permission in tools.toml
-    if is_tool_gated_in_config(tool_name, root) {
+    if tools_cfg.is_tool_attribute(tool_name, "require_permission_gate") {
         return PreToolResponse::ask(format!(
             "Policy Gate: Tool '{tool_name}' requires interactive operator confirmation before execution."
         ));
     }
 
     // 2. Mutating tools that alter source code or repository manifests
-    if is_mutating_tool(tool_name, root) {
+    if tools_cfg.is_tool_attribute(tool_name, "mutating") {
         return PreToolResponse::ask(format!(
             "Policy Gate: Tool '{tool_name}' applies automated filesystem or code modifications. Confirm execution?"
         ));
@@ -278,52 +279,54 @@ impl ParsedToolsConfig {
 
         gates.iter().any(|g| g.eq_ignore_ascii_case(gate_name))
     }
-}
 
-fn find_config_for_tool(tool_name: &str, root: &Path) -> Option<ParsedToolsConfig> {
-    let ws_root = WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
-    let mut candidates = vec![
-        root.join("tools.toml"),
-        root.join("plugins/agy-suite/tools.toml"),
-        ws_root.join("tools.toml"),
-        ws_root.join("plugins/agy-suite/tools.toml"),
-    ];
+    /// Loads and merges `tools.toml` configuration by searching candidate locations.
+    #[must_use]
+    pub(crate) fn load(root: &Path) -> Self {
+        let ws_root =
+            WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
+        let mut candidates = vec![
+            root.join("tools.toml"),
+            root.join("plugins/agy-suite/tools.toml"),
+            ws_root.join("tools.toml"),
+            ws_root.join("plugins/agy-suite/tools.toml"),
+        ];
 
-    if let Ok(home) = std::env::var("HOME") {
-        candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml"));
-    }
+        if let Ok(home) = std::env::var("HOME") {
+            candidates
+                .push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml"));
+        }
 
-    for path in candidates {
-        if path.is_file()
-            && let Ok(content) = std::fs::read_to_string(&path)
-        {
-            let parsed = ParsedToolsConfig::from_str(&content);
-            if parsed.tools.contains_key(tool_name) {
-                return Some(parsed);
+        let mut merged = Self::default();
+        // Load in reverse order so higher-priority candidates overwrite lower-priority ones
+        for path in candidates.into_iter().rev() {
+            if path.is_file()
+                && let Ok(content) = std::fs::read_to_string(&path)
+            {
+                let parsed = Self::from_str(&content);
+                merged.tools.extend(parsed.tools);
+                merged.base_tools.extend(parsed.base_tools);
+                merged.categories.extend(parsed.categories);
             }
         }
+        merged
     }
-
-    None
 }
 
 /// Checks whether a tool is declared as a mutating tool in declarative configuration.
 pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
-    find_config_for_tool(tool_name, root)
-        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "mutating"))
+    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "mutating")
 }
 
 /// Inspects tools.toml (if present) for `require_permission_gate = true`.
 pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
-    find_config_for_tool(tool_name, root)
-        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "require_permission_gate"))
+    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "require_permission_gate")
 }
 
 /// Evaluates whether a tool requires a specific gate before execution.
 #[must_use]
 pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) -> bool {
-    find_config_for_tool(tool_name, root)
-        .is_some_and(|cfg| cfg.tool_requires_gate(tool_name, gate_name))
+    ParsedToolsConfig::load(root).tool_requires_gate(tool_name, gate_name)
 }
 
 /// Evaluates whether a tool failure tracks strikes against the circuit breaker ledger.
@@ -333,8 +336,7 @@ pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) 
     reason = "Declarative query utility for circuit breaker policy"
 )]
 pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool {
-    find_config_for_tool(tool_name, root)
-        .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "tracks_circuit_breaker"))
+    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "tracks_circuit_breaker")
 }
 
 #[cfg(test)]

@@ -1,10 +1,5 @@
 //! Declarative `hooks.toml` parser and hybrid configuration models.
 
-#![allow(
-    clippy::string_slice,
-    reason = "Line and character parser operates on ASCII delimiter offsets"
-)]
-
 use std::path::{Path, PathBuf};
 
 use agy_common::models::HookDecision;

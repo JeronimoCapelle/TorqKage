@@ -1,6 +1,7 @@
 //! Data models, YAML frontmatter parser/serializer, and tool catalog definitions.
 
 use std::{
+    fmt::Write,
     fs,
     path::{Path, PathBuf},
 };
@@ -9,7 +10,7 @@ use agy_common::{
     FastHashSet,
     tools::{
         RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
-        ToolSafetyPolicy, ToolSandboxPolicy, resolve_tools,
+        ToolSafetyPolicy, ToolSandboxPolicy, resolve,
     },
 };
 
@@ -249,7 +250,7 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
         fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     let raw: RawToolsConfig =
         toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
-    let defs = resolve_tools(&raw);
+    let defs = resolve(&raw);
     let mut items: Vec<ToolItem> = defs.into_iter().map(ToolItem::from_definition).collect();
     items.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(items)
@@ -258,7 +259,7 @@ pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String>
 /// Updates or removes `require_permission_gate = true` for the specified tool in a `tools.toml` file.
 ///
 /// # Errors
-/// Returns an error if reading or writing the file fails.
+/// Returns an error if reading, parsing, or writing the file fails.
 pub(crate) fn update_tool_permission_gate_in_file(
     file_path: &Path,
     tool_name: &str,
@@ -270,51 +271,25 @@ pub(crate) fn update_tool_permission_gate_in_file(
     let content = fs::read_to_string(file_path)
         .map_err(|e| format!("Failed to read {}: {e}", file_path.display()))?;
 
-    let header = format!("[tools.{tool_name}]");
-    let mut lines: Vec<String> = content.lines().map(ToOwned::to_owned).collect();
-    let mut in_section = false;
-    let mut found_gate_line = None;
-    let mut section_start_idx = None;
+    let mut doc = content
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("Failed to parse {}: {e}", file_path.display()))?;
 
-    for (idx, line) in lines.iter().enumerate() {
-        let trimmed = line.trim();
-        if trimmed == header {
-            in_section = true;
-            section_start_idx = Some(idx);
-            continue;
-        }
-        if in_section {
-            if trimmed.starts_with('[') {
-                break;
-            }
-            if trimmed.starts_with("require_permission_gate") {
-                found_gate_line = Some(idx);
-                break;
-            }
-        }
-    }
-
-    if let Some(gate_idx) = found_gate_line {
+    if let Some(tools) = doc
+        .get_mut("tools")
+        .and_then(toml_edit::Item::as_table_like_mut)
+        && let Some(tool_item) = tools
+            .get_mut(tool_name)
+            .and_then(toml_edit::Item::as_table_like_mut)
+    {
         if require_gate {
-            if let Some(line) = lines.get_mut(gate_idx) {
-                "require_permission_gate = true".clone_into(line);
-            }
-        } else if gate_idx < lines.len() {
-            lines.remove(gate_idx);
+            tool_item.insert("require_permission_gate", toml_edit::value(true));
+        } else {
+            tool_item.remove("require_permission_gate");
         }
-    } else if require_gate && let Some(start_idx) = section_start_idx {
-        lines.insert(
-            start_idx.saturating_add(1),
-            "require_permission_gate = true".to_owned(),
-        );
     }
 
-    let mut new_content = lines.join("\n");
-    if !new_content.ends_with('\n') {
-        new_content.push('\n');
-    }
-
-    fs::write(file_path, new_content)
+    fs::write(file_path, doc.to_string())
         .map_err(|e| format!("Failed to write {}: {e}", file_path.display()))?;
 
     Ok(())
@@ -400,20 +375,22 @@ impl AgentManifest {
     pub(crate) fn serialize(&self) -> String {
         let mut out = String::new();
         out.push_str("---\n");
-        out.push_str(&format!("name: {}\n", self.name));
-        out.push_str(&format!(
-            "description: \"{}\"\n",
+        _ = writeln!(out, "name: {}", self.name);
+        _ = writeln!(
+            out,
+            "description: \"{}\"",
             self.description.replace('"', "\\\"")
-        ));
-        out.push_str(&format!("effort: {}\n", self.effort));
+        );
+        _ = writeln!(out, "effort: {}", self.effort);
         if !self.permission_mode.is_empty() {
-            out.push_str(&format!("permissionMode: {}\n", self.permission_mode));
+            _ = writeln!(out, "permissionMode: {}", self.permission_mode);
         }
         if !self.command_execution_policy.is_empty() {
-            out.push_str(&format!(
-                "commandExecutionPolicy: {}\n",
+            _ = writeln!(
+                out,
+                "commandExecutionPolicy: {}",
                 self.command_execution_policy
-            ));
+            );
         }
         if self.role_flags.main_agent {
             out.push_str("mainAgent: true\n");
@@ -424,37 +401,37 @@ impl AgentManifest {
         if !self.allowed_subagents.is_empty() {
             out.push_str("allowed_subagents:\n");
             for sub in &self.allowed_subagents {
-                out.push_str(&format!("  - {sub}\n"));
+                _ = writeln!(out, "  - {sub}");
             }
         }
         if !self.pre_launch_checks.is_empty() {
             out.push_str("pre_launch_checks:\n");
             for check in &self.pre_launch_checks {
-                out.push_str(&format!("  - {check}\n"));
+                _ = writeln!(out, "  - {check}");
             }
         }
         if !self.allowed_dirs.is_empty() {
             out.push_str("allowed_dirs:\n");
             for dir in &self.allowed_dirs {
-                out.push_str(&format!("  - {dir}\n"));
+                _ = writeln!(out, "  - {dir}");
             }
         }
         if !self.disallowed_dirs.is_empty() {
             out.push_str("disallowed_dirs:\n");
             for dir in &self.disallowed_dirs {
-                out.push_str(&format!("  - {dir}\n"));
+                _ = writeln!(out, "  - {dir}");
             }
         }
         if !self.allowed_files.is_empty() {
             out.push_str("allowed_files:\n");
             for file in &self.allowed_files {
-                out.push_str(&format!("  - {file}\n"));
+                _ = writeln!(out, "  - {file}");
             }
         }
         if !self.disallowed_files.is_empty() {
             out.push_str("disallowed_files:\n");
             for file in &self.disallowed_files {
-                out.push_str(&format!("  - {file}\n"));
+                _ = writeln!(out, "  - {file}");
             }
         }
         if !self.inherit_mcp {
@@ -463,14 +440,14 @@ impl AgentManifest {
         out.push_str("mcpServers:\n");
         out.push_str("  - name: agy-tools\n");
         out.push_str("    command: agy-mcp\n");
-        out.push_str(&format!("    args: [\"--agent\", \"{}\"]\n", self.name));
+        _ = writeln!(out, "    args: [\"--agent\", \"{}\"]", self.name);
 
         if self.native_tools.is_empty() {
             out.push_str("tools: []\n");
         } else {
             out.push_str("tools:\n");
             for tool in &self.native_tools {
-                out.push_str(&format!("  - {tool}\n"));
+                _ = writeln!(out, "  - {tool}");
             }
         }
 
@@ -479,7 +456,7 @@ impl AgentManifest {
         } else {
             out.push_str("mcp_tools:\n");
             for tool in &self.mcp_tools {
-                out.push_str(&format!("  - {tool}\n"));
+                _ = writeln!(out, "  - {tool}");
             }
         }
         out.push_str("---\n\n");
@@ -538,34 +515,14 @@ pub(crate) fn parse_agent_markdown(
 
 /// Discovers and loads all agent manifests within the plugin or repository.
 pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
-    let mut candidates = Vec::new();
-
-    let ws_agents = workspace_root.join("agents");
-    if ws_agents.is_dir() {
-        candidates.push(ws_agents);
-    }
-
-    let plugin_agents = workspace_root.join("plugins/agy-suite/agents");
-    if plugin_agents.is_dir() {
-        candidates.push(plugin_agents);
-    }
-
-    let repo_agents = workspace_root.join(".agents/agents");
-    if repo_agents.is_dir() {
-        candidates.push(repo_agents);
-    }
-
-    if let Ok(home) = std::env::var("HOME") {
-        let home_plugin = PathBuf::from(home).join(".gemini/config/plugins/agy-suite/agents");
-        if home_plugin.is_dir() && !candidates.contains(&home_plugin) {
-            candidates.push(home_plugin);
-        }
-    }
-
+    let candidate_dirs = agy_common::frontmatter::candidate_agent_directories(workspace_root);
     let mut agents = Vec::new();
     let mut seen_names = FastHashSet::default();
 
-    for dir in candidates {
+    for dir in candidate_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
         let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
@@ -589,6 +546,7 @@ pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, reason = "Unit test assertions")]
 mod tests {
     use super::*;
 
@@ -680,5 +638,29 @@ You are a test agent. Always pass tests.
         assert!(serialized.contains("- tool_a"));
         assert!(serialized.contains("inheritMcp: false"));
         assert!(serialized.contains("You are a test agent."));
+    }
+
+    #[test]
+    fn test_update_tool_permission_gate_in_file() {
+        let temp_dir = std::env::temp_dir().join(format!("agy_test_gate_{}", std::process::id()));
+        drop(fs::create_dir_all(&temp_dir));
+        let toml_file = temp_dir.join("tools.toml");
+
+        let initial = "# Initial tools configuration\n[tools.run_tests]\n# Important comment to preserve\ndescription = \"Run tests\"\ncommand = [\"cargo\", \"test\"]\n";
+        fs::write(&toml_file, initial).unwrap();
+
+        // 1. Enable gate
+        update_tool_permission_gate_in_file(&toml_file, "run_tests", true).unwrap();
+        let content_enabled = fs::read_to_string(&toml_file).unwrap();
+        assert!(content_enabled.contains("require_permission_gate = true"));
+        assert!(content_enabled.contains("# Important comment to preserve"));
+
+        // 2. Disable gate
+        update_tool_permission_gate_in_file(&toml_file, "run_tests", false).unwrap();
+        let content_disabled = fs::read_to_string(&toml_file).unwrap();
+        assert!(!content_disabled.contains("require_permission_gate = true"));
+        assert!(content_disabled.contains("# Important comment to preserve"));
+
+        drop(fs::remove_dir_all(&temp_dir));
     }
 }

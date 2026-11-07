@@ -18,7 +18,6 @@
 
 pub mod content_filter;
 pub mod error;
-pub mod fast_hash;
 pub mod frontmatter;
 pub mod gatekeeper;
 pub mod jujutsu;
@@ -30,16 +29,11 @@ pub mod sandbox;
 pub mod state;
 pub mod supervisor;
 pub mod tools;
-
 pub use content_filter::{
     BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig, check_agent_guard_direct,
     check_agent_path_policies_direct, matches_directory_scope, path_matches_pattern,
 };
 pub use error::{AgyError, Result};
-pub use fast_hash::{
-    FastBuildHasher, FastHashMap, FastHashSet, FastHasher, fast_map_new, fast_map_with_capacity,
-    fast_set_new, fast_set_with_capacity,
-};
 pub use frontmatter::AgentFrontmatter;
 pub use gatekeeper::{
     GateCheck, GateCheckStatus, ProjectGateCheck, VcsConflictCheck, WorkspaceCleanCheck,
@@ -64,6 +58,10 @@ pub use project::{
     ProjectSecurityConfig, ProjectWorkspaceConfig, SecurityCategory,
 };
 pub use resolver::WorkspaceResolver;
-pub use sandbox::{build_bubblewrap_command, is_inside_outer_sandbox};
+pub use rustc_hash::{
+    FxBuildHasher, FxBuildHasher as FastBuildHasher, FxHashMap, FxHashMap as FastHashMap,
+    FxHashSet, FxHashSet as FastHashSet, FxHasher, FxHasher as FastHasher,
+};
+pub use sandbox::{build_bubblewrap_command, is_inside_container};
 pub use state::AgyStatePaths;
 pub use supervisor::{ChildGuard, SubprocessSupervisor};

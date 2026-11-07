@@ -2,7 +2,7 @@
 
 use std::path::Path;
 
-use agy_common::tools::{RawToolsConfig, ToolDefinition, resolve_tools};
+use agy_common::tools::{RawToolsConfig, ToolDefinition, resolve};
 
 /// Fully loaded and resolved tools configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -18,7 +18,7 @@ pub(crate) fn parse_full_config_str(
     toml_str: &str,
 ) -> Result<LoadedConfiguration, toml::de::Error> {
     let raw: RawToolsConfig = toml::from_str(toml_str)?;
-    let resolved_tools = resolve_tools(&raw);
+    let resolved_tools = resolve(&raw);
 
     Ok(LoadedConfiguration {
         tools: resolved_tools,

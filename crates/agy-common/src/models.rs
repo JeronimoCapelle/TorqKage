@@ -1,6 +1,9 @@
 //! `ProtoJSON` models and lifecycle event payload schemas for Antigravity hooks.
 
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Write,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -455,10 +458,6 @@ impl PipelineHandoff {
     }
 
     /// Formats an actionable prompt block for session context injection.
-    #[allow(
-        clippy::format_push_string,
-        reason = "Constructing human-readable prompt string"
-    )]
     #[must_use]
     pub fn to_injection_message(&self) -> String {
         let mut msg = format!(
@@ -466,22 +465,20 @@ impl PipelineHandoff {
             self.from_agent
         );
         if let Some(ref target) = self.target_agent {
-            msg.push_str(&format!(" to '{target}'"));
+            _ = write!(msg, " to '{target}'");
         }
-        msg.push_str(&format!(" (Status: {}).\n", self.status));
-        msg.push_str(&format!("Summary: {}\n", self.summary));
+        _ = writeln!(msg, " (Status: {}).", self.status);
+        _ = writeln!(msg, "Summary: {}", self.summary);
 
         if !self.deliverables.is_empty() {
-            msg.push_str(&format!(
-                "Deliverables / Specs: {}.\n",
+            _ = writeln!(
+                msg,
+                "Deliverables / Specs: {}.",
                 self.deliverables.join(", ")
-            ));
+            );
         }
         if !self.modified_files.is_empty() {
-            msg.push_str(&format!(
-                "Modified Files: {}.\n",
-                self.modified_files.join(", ")
-            ));
+            _ = writeln!(msg, "Modified Files: {}.", self.modified_files.join(", "));
         }
         msg
     }

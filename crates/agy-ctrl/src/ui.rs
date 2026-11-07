@@ -1,10 +1,6 @@
 //! Ratatui terminal rendering routines for the agy-ctrl control deck.
 
 #![allow(
-    clippy::indexing_slicing,
-    reason = "Ratatui layout splits produce fixed-length chunk slices"
-)]
-#![allow(
     clippy::too_many_lines,
     reason = "Terminal UI rendering pipelines for multi-pane layouts"
 )]
@@ -27,25 +23,25 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     let size = frame.area();
 
     // 1. Overall vertical layout: Header, Main View, Footer Status
-    let chunks = Layout::default()
+    let [header_area, main_area, footer_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3), // Header & Tab bar
             Constraint::Min(10),   // Active Tab View
             Constraint::Length(3), // Footer status bar
         ])
-        .split(size);
+        .areas(size);
 
-    draw_header(frame, app, chunks[0]);
+    draw_header(frame, app, header_area);
 
     match app.active_tab {
-        ActiveTab::FleetOverview => draw_fleet_matrix(frame, app, chunks[1]),
-        ActiveTab::ToolCatalog => draw_tool_catalog(frame, app, chunks[1]),
-        ActiveTab::DirectivesEditor => draw_directives_editor(frame, app, chunks[1]),
-        ActiveTab::Manual => draw_manual_view(frame, app, chunks[1]),
+        ActiveTab::FleetOverview => draw_fleet_matrix(frame, app, main_area),
+        ActiveTab::ToolCatalog => draw_tool_catalog(frame, app, main_area),
+        ActiveTab::DirectivesEditor => draw_directives_editor(frame, app, main_area),
+        ActiveTab::Manual => draw_manual_view(frame, app, main_area),
     }
 
-    draw_footer(frame, app, chunks[2]);
+    draw_footer(frame, app, footer_area);
 
     // Modals drawn on top of the frame if triggered
     if app.show_help {
@@ -102,14 +98,14 @@ fn render_header_status_line(app: &App) -> Line<'static> {
 }
 
 fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let header_chunks = Layout::default()
+    let [title_area, tabs_area, mod_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(32),
             Constraint::Min(40),
             Constraint::Length(24),
         ])
-        .split(area);
+        .areas(area);
 
     // Title
     let title_para = Paragraph::new(Line::from(vec![
@@ -132,7 +128,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded),
     );
-    frame.render_widget(title_para, header_chunks[0]);
+    frame.render_widget(title_para, title_area);
 
     // Tabs
     let tab_titles = vec![
@@ -161,7 +157,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         );
-    frame.render_widget(tabs, header_chunks[1]);
+    frame.render_widget(tabs, tabs_area);
 
     // Modified tracker & Sandbox state
     let mod_para = Paragraph::new(render_header_status_line(app))
@@ -171,20 +167,20 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         );
-    frame.render_widget(mod_para, header_chunks[2]);
+    frame.render_widget(mod_para, mod_area);
 }
 
 fn draw_fleet_matrix(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let main_chunks = Layout::default()
+    let [list_area, details_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Percentage(28), // Agent List
             Constraint::Percentage(72), // Capability Matrix & Tool Toggles
         ])
-        .split(area);
+        .areas(area);
 
-    draw_fleet_agent_list(frame, app, main_chunks[0]);
-    draw_fleet_agent_details(frame, app, main_chunks[1]);
+    draw_fleet_agent_list(frame, app, list_area);
+    draw_fleet_agent_details(frame, app, details_area);
 }
 
 fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -270,18 +266,18 @@ fn draw_fleet_agent_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
         return;
     };
 
-    let right_chunks = Layout::default()
+    let [meta_area, list_area, preview_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(6), // Metadata banner with session resumption & circuit breaker
             Constraint::Min(8),    // MCP Tools checklist
             Constraint::Length(4), // Tool description preview
         ])
-        .split(area);
+        .areas(area);
 
-    draw_agent_metadata_panel(frame, app, agent, right_chunks[0]);
-    draw_agent_tool_checklist(frame, app, agent, right_chunks[1]);
-    draw_agent_tool_preview(frame, app, right_chunks[2]);
+    draw_agent_metadata_panel(frame, app, agent, meta_area);
+    draw_agent_tool_checklist(frame, app, agent, list_area);
+    draw_agent_tool_preview(frame, app, preview_area);
 }
 
 fn render_session_spans(app: &App) -> (Span<'static>, Span<'static>) {
@@ -524,16 +520,16 @@ fn draw_agent_tool_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let chunks = Layout::default()
+    let [list_area, details_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Percentage(35), // Filtered Tool List
             Constraint::Percentage(65), // Detailed Policy & Guard Inspector
         ])
-        .split(area);
+        .areas(area);
 
-    draw_tool_catalog_list(frame, app, chunks[0]);
-    draw_tool_catalog_details(frame, app, chunks[1]);
+    draw_tool_catalog_list(frame, app, list_area);
+    draw_tool_catalog_details(frame, app, details_area);
 }
 
 fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -829,13 +825,13 @@ fn draw_manual_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
 }
 
 fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let footer_chunks = Layout::default()
+    let [shortcuts_area, status_area] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1), // Shortcuts line
             Constraint::Length(1), // Status message line
         ])
-        .split(area);
+        .areas(area);
 
     // Dynamic context-sensitive shortcuts
     let shortcuts = match app.active_tab {
@@ -922,7 +918,7 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
         ]),
     };
-    frame.render_widget(Paragraph::new(shortcuts), footer_chunks[0]);
+    frame.render_widget(Paragraph::new(shortcuts), shortcuts_area);
 
     // Live status message
     if let Some((ref msg, is_error)) = app.status_message {
@@ -931,7 +927,7 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
         } else {
             Style::default().fg(Color::Cyan)
         };
-        frame.render_widget(Paragraph::new(Span::styled(msg, style)), footer_chunks[1]);
+        frame.render_widget(Paragraph::new(Span::styled(msg, style)), status_area);
     }
 }
 
@@ -1126,30 +1122,28 @@ const fn compute_scroll_window(
     clippy::arithmetic_side_effects,
     reason = "Modal centered rectangle percentage layout"
 )]
-#[allow(
-    clippy::indexing_slicing,
-    reason = "Layout split returns array matching constraints length"
-)]
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let pad_y = 100_u16.saturating_sub(percent_y) / 2;
-    let popup_layout = Layout::default()
+    let [_top, center_v, _bottom] = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Percentage(pad_y),
             Constraint::Percentage(percent_y),
             Constraint::Percentage(pad_y),
         ])
-        .split(r);
+        .areas(r);
 
     let pad_x = 100_u16.saturating_sub(percent_x) / 2;
-    Layout::default()
+    let [_left, center_h, _right] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Percentage(pad_x),
             Constraint::Percentage(percent_x),
             Constraint::Percentage(pad_x),
         ])
-        .split(popup_layout[1])[1]
+        .areas(center_v);
+
+    center_h
 }
 
 #[cfg(test)]
