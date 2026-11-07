@@ -256,6 +256,7 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
 #[allow(clippy::print_stderr, reason = "Advisory notice when agent manifest is missing")]
 pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Option<std::path::PathBuf> {
     let mut candidates = vec![
+        workspace_root.join(format!("config/agents/{agent_name}.md")),
         workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
         workspace_root.join(format!(".agents/agents/{agent_name}.md")),
         workspace_root.join(format!(".agents/{agent_name}.md")),

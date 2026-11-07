@@ -182,17 +182,23 @@ Enforced across all tools (`read_project_file`, `write_file`, `modify_code`, `se
 ```
 agy-suite/
 ├── ARCHITECTURE.md     # Canonical system architecture and invariant manual (this file)
-├── README.md           # Repository overview and quickstart guide
-├── Cargo.toml          # Workspace root manifest (DO NOT EDIT AUTONOMOUSLY)
-├── deny.toml           # Supply-chain security and license policy (DO NOT EDIT)
+├── README.md           # Repository overview, visual workflow, and quickstart guide
+├── Cargo.toml          # Workspace root manifest (strict pedantic lints, zero warnings)
+├── deny.toml           # Supply-chain security, RustSec advisories, and license policy
 ├── install.sh          # Self-contained bundle builder & Gemini plugin installer
-├── crates/
+├── .github/workflows/  # Continuous Integration (cargo check, cargo test, clippy -D warnings)
+├── config/             # Sanitized top-level declarative contract templates
+│   ├── tools.toml      # MCP tool definitions, inheritance templates, and security guards
+│   ├── hooks.toml      # Lifecycle pipeline, circuit breaker, and Turn-1 wake injections
+│   ├── project.toml    # Codebase quality gates, build cache mounts, and container layout
+│   └── agents/         # The 10 specialized agent profile specifications (.md)
+├── crates/             # Native 4-crate Rust workspace
 │   ├── agy-common/     # Core domain models, project config, supervisor, Jujutsu, state
 │   ├── agy-mcp/        # Declarative MCP server, tool execution engine, agent guards
 │   ├── agy-hooks/      # High-assurance lifecycle interceptors (<1ms native execution)
-│   └── agy-ctrl/       # Ratatui 0.29 TUI dashboard, fleet matrix, and installer
+│   └── agy-ctrl/       # Ratatui 0.29 TUI dashboard, fleet matrix, and session explorer
 └── plugins/
-    └── agy-suite/      # Self-contained Antigravity plugin bundle
+    └── agy-suite/      # Self-contained Antigravity plugin distribution bundle
         ├── plugin.json # Host manifest
         ├── hooks.json  # Host lifecycle hook bindings
         ├── mcp_config.json # Host MCP stdio configuration
@@ -200,5 +206,35 @@ agy-suite/
         ├── hooks.toml  # Lifecycle interception pipeline and circuit breaker rules
         ├── tools.toml  # Declarative MCP tool catalog and agent perimeters
         ├── README.md   # Plugin documentation and customization cookbook
-        └── agents/     # Fleet specifications (coder, copilot, finisher, etc.)
+        ├── bin/        # Bundled native binaries (graphtrail, perfetto-mcp-rs, agy-*)
+        └── agents/     # Fleet specifications (coder, copilot, doc-author, finisher, etc.)
 ```
+
+---
+
+## 8. High-Assurance Systems Architecture: The 4 Crates & Sandboxing
+
+### 8.1 The 4 Crates Architecture
+1. **`agy-common` (Systems Foundation):**
+   - **`SubprocessSupervisor`:** Enforces process tree lifecycle containment via `libc::prctl(PR_SET_PDEATHSIG, SIGTERM)` and process groups (`setpgid(0, 0)`). Guaranteed elimination of orphaned compiler tasks when parent processes exit.
+   - **`JujutsuWorkspace`:** Dynamic management of isolated Jujutsu workspaces at `.agy/workspaces/<agent>/`, snapshotting, and atomic rebase/squash merging with rollback (`jj op restore`).
+   - **`ContentFilter`:** Language-agnostic syntactic path policies (`comments_only`, `tests_only`, `delimited`) preventing cross-boundary modifications during autonomous runs.
+   - **`AgyStatePaths`:** Canonical management of `.agy/` state directories, circuit breaker ledgers, and handoff bridges.
+2. **`agy-mcp` (Declarative Model Context Protocol Daemon):**
+   - Implements native Model Context Protocol (MCP 2024-11-05) over stdio JSON-RPC.
+   - Dynamically parses `tools.toml`, synthesizes strict JSON Schemas, validates parameters against regex constraints, and enforces agent perimeter allowlists.
+   - Powered by 10 native action handlers: bounded file reading, atomic writing, `mpatch` fuzzy SEARCH/REPLACE block edits, file search, parameterized CLI execution, compiler NDJSON diagnostic extraction, and manpage-style manual lookups.
+3. **`agy-hooks` (Featherweight Interception Runner):**
+   - Ultra-fast native CLI (<1ms startup, <500KB RSS) executing Antigravity lifecycle events: `detect-wip`, `check-conflicts`, `check-subagent`, `enforce-tool-policy`, `record-handoff`, and `inject-wake`.
+   - Protects critical build manifests (`Cargo.toml`) via `manifest_guard` and tracks consecutive compiler failure strikes via `circuit_breaker`.
+4. **`agy-ctrl` (Interactive Ratatui 0.29 Terminal Deck):**
+   - Standalone terminal dashboard providing interactive Fleet Matrix navigation, declarative tool catalog inspection, real-time circuit breaker status with single-key reset (`c` / `Shift-K`), and SQLite session resumption.
+
+### 8.2 Bubblewrap Container-Grade Sandboxing
+- Untrusted execution (such as SymPy mathematical evaluation in `eval_symbolic_math`) is precision-jailed inside Bubblewrap (`bwrap --unshare-all`).
+- Runs with completely private PID, IPC, and network namespaces (`CLONE_NEWNET`, no loopback or gateway, zero outbound sockets).
+- Filesystem mounted as read-only with a synthetic in-memory `tmpfs` root, eliminating host filesystem leakage or data exfiltration.
+
+### 8.3 Self-Contained Plugin Code Intelligence
+- **`graphtrail` (Tree-sitter AST Code Graph):** Bundled standalone Rust binary (`plugins/agy-suite/bin/graphtrail`) exposing cross-file caller/callee indexing, dead code discovery, and blast-radius impact analysis via `query_code_graph` and `sync_code_graph`.
+- **`perfetto-mcp-rs` (Systems Trace Analysis):** Bundled standalone MCP server (`plugins/agy-suite/bin/perfetto-mcp-rs`) giving `perf-analyst` deep PerfettoSQL introspection into Linux kernel ftrace, thread scheduler switches, and lock contention without browser clutter.

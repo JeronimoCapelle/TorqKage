@@ -103,6 +103,7 @@ pub(crate) fn resolve_agent_guards(
     let mut guards = BTreeMap::new();
 
     let mut candidate_dirs = vec![
+        workspace_root.join("config/agents"),
         workspace_root.join("plugins/agy-suite/agents"),
         workspace_root.join(".gemini/config/plugins/agy-suite/agents"),
         workspace_root.join(".agents/agents"),

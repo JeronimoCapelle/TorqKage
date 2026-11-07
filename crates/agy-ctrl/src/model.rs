@@ -501,6 +501,11 @@ pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<
 pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
     let mut candidates = Vec::new();
 
+    let config_agents = workspace_root.join("config/agents");
+    if config_agents.is_dir() {
+        candidates.push(config_agents);
+    }
+
     let plugin_agents = workspace_root.join("plugins/agy-suite/agents");
     if plugin_agents.is_dir() {
         candidates.push(plugin_agents);

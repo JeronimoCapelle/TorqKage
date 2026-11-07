@@ -1,5 +1,6 @@
 # agy-suite
 
+[![CI](https://github.com/owner/agy-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/owner/agy-suite/actions/workflows/ci.yml)
 [![Rust Edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
@@ -14,8 +15,14 @@
 `agy-suite` is organized as a unified 4-crate Rust workspace paired with an Antigravity plugin:
 
 ```
-projects/rust/agy-suite/
-├── Cargo.toml                      # Workspace manifest (strict lints, deny policies)
+agy-suite/
+├── Cargo.toml                      # Workspace manifest (strict pedantic lints, deny policies)
+├── ARCHITECTURE.md                 # Master canonical architecture & invariant specification
+├── config/                         # Sanitized top-level declarative contract templates
+│   ├── tools.toml                  # Single source of truth for tools, schemas & guards
+│   ├── hooks.toml                  # Lifecycle pipeline, circuit breaker & Turn-1 wake rules
+│   ├── project.toml                # Project admission gates & build cache mounts
+│   └── agents/                     # 10 specialized agent profile specifications (.md)
 ├── crates/
 │   ├── agy-common/                 # Shared primitives, bwrap builder, Jujutsu isolation, ProtoJSON models
 │   ├── agy-mcp/                    # Persistent JSON-RPC 2.0 stdio MCP daemon (bounded native actions)
@@ -27,10 +34,12 @@ projects/rust/agy-suite/
         ├── mcp_config.json         # MCP server registration (agy-mcp daemon)
         ├── hooks.json              # Lifecycle hook event router (agy-hooks)
         ├── hooks.toml              # Declarative lifecycle pipeline and custom check rules
-        ├── tools.toml              # CANONICAL single source of truth for tools & guard policies
+        ├── tools.toml              # Declarative MCP tool catalog and agent perimeters
+        ├── bin/                    # Bundled native binaries (graphtrail, perfetto-mcp-rs, agy-*)
         └── agents/                 # Specialized agent profiles (YAML frontmatter + system prompts)
             ├── coder.md
             ├── copilot.md
+            ├── doc-author.md
             ├── finisher.md
             ├── mini.md
             ├── perf-analyst.md
@@ -82,10 +91,10 @@ flowchart TD
 
 | Crate | Binary / Library | Primary Role & Capabilities |
 | :--- | :--- | :--- |
-| **[`agy-common`](file:///home/infinite/projects/rust/agy-suite/crates/agy-common)** | Library | Shared systems primitives, typed error hierarchy (`AgyError`), Bubblewrap jail builder (`build_bubblewrap_command`), outer container/PID detection, SubprocessSupervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`), Jujutsu workspace isolation (`JujutsuWorkspace`), workspace root resolution (`WorkspaceResolver`), admission gates (`GateCheck`), and ProtoJSON hook serialization models. |
-| **[`agy-mcp`](file:///home/infinite/projects/rust/agy-suite/crates/agy-mcp)** | Binary (`agy-mcp`) | Persistent JSON-RPC 2.0 stdio Model Context Protocol daemon. Exposes tools declared in `plugins/agy-suite/tools.toml`. Enforces agent scoping from YAML frontmatter (`mcp_tools:`), path confinement, dangerous file sanitization, and the 2-strike compiler failure circuit breaker. Implements 8 native action handlers (`file_read`, `file_write`, `mpatch_edit`, `static_cmd`, `parameterized_cmd`, `file_search`, `cargo_json`, `cli_manual`). |
-| **[`agy-hooks`](file:///home/infinite/projects/rust/agy-suite/crates/agy-hooks)** | Binary (`agy-hooks`) | Featherweight lifecycle event runner (<1ms startup, <500KB RSS). Runs ephemerally per hook event triggered by Antigravity: `detect-wip` (working copy change detector), `check-conflicts` (merge conflict blocker), `check-subagent` (dynamic admission gates), `enforce-tool-policy` (operator confirmation gate), `record-handoff` (session state writer), and `inject-wake` (Turn-1 wake-up state injector). |
-| **[`agy-ctrl`](file:///home/infinite/projects/rust/agy-suite/crates/agy-ctrl)** | Binary (`agy-ctrl`) | Offline Ratatui 0.29 terminal control deck. Provides an interactive Fleet Matrix, declarative MCP Tool Catalog inspector, SQLite past conversation session discovery (`~/.gemini/antigravity-cli/conversation_summaries.db`), pre-launch quality gate evaluation, and atomic Save & Validate (`F2`) pipeline. |
+| **[`agy-common`](crates/agy-common)** | Library | Shared systems primitives, typed error hierarchy (`AgyError`), Bubblewrap jail builder (`build_bubblewrap_command`), outer container/PID detection, SubprocessSupervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`), Jujutsu workspace isolation (`JujutsuWorkspace`), workspace root resolution (`WorkspaceResolver`), admission gates (`GateCheck`), and ProtoJSON hook serialization models. |
+| **[`agy-mcp`](crates/agy-mcp)** | Binary (`agy-mcp`) | Persistent JSON-RPC 2.0 stdio Model Context Protocol daemon. Exposes tools declared in `plugins/agy-suite/tools.toml`. Enforces agent scoping from YAML frontmatter (`mcp_tools:`), path confinement, dangerous file sanitization, and the 2-strike compiler failure circuit breaker. Implements 8 native action handlers (`file_read`, `file_write`, `mpatch_edit`, `static_cmd`, `parameterized_cmd`, `file_search`, `cargo_json`, `cli_manual`). |
+| **[`agy-hooks`](crates/agy-hooks)** | Binary (`agy-hooks`) | Featherweight lifecycle event runner (<1ms startup, <500KB RSS). Runs ephemerally per hook event triggered by Antigravity: `detect-wip` (working copy change detector), `check-conflicts` (merge conflict blocker), `check-subagent` (dynamic admission gates), `enforce-tool-policy` (operator confirmation gate), `record-handoff` (session state writer), and `inject-wake` (Turn-1 wake-up state injector). |
+| **[`agy-ctrl`](crates/agy-ctrl)** | Binary (`agy-ctrl`) | Offline Ratatui 0.29 terminal control deck. Provides an interactive Fleet Matrix, declarative MCP Tool Catalog inspector, SQLite past conversation session discovery (`~/.gemini/antigravity-cli/conversation_summaries.db`), pre-launch quality gate evaluation, and atomic Save & Validate (`F2`) pipeline. |
 
 ---
 
@@ -110,7 +119,7 @@ The plugin resides in `plugins/agy-suite/` and can be installed globally into `~
 
 ### 1. How to Add a New MCP Tool
 
-You **do not need to modify Rust code** or recompile anything to add a new tool. Simply edit [`plugins/agy-suite/tools.toml`](file:///home/infinite/projects/rust/agy-suite/plugins/agy-suite/tools.toml):
+You **do not need to modify Rust code** or recompile anything to add a new tool. Simply edit [`plugins/agy-suite/tools.toml`](plugins/agy-suite/tools.toml):
 
 ```toml
 [tools.my_new_tool]
@@ -138,7 +147,7 @@ Once saved:
 
 ### 2. How to Add a New Specialized Agent
 
-Create a new Markdown file in [`plugins/agy-suite/agents/<name>.md`](file:///home/infinite/projects/rust/agy-suite/plugins/agy-suite/agents/):
+Create a new Markdown file in [`plugins/agy-suite/agents/<name>.md`](plugins/agy-suite/agents/):
 
 ```markdown
 ---
@@ -173,7 +182,7 @@ Once saved:
 
 ### 3. How to Add a New Pre-Launch Quality Gate
 
-1. Implement the `GateCheck` trait in [`crates/agy-common/src/gatekeeper.rs`](file:///home/infinite/projects/rust/agy-suite/crates/agy-common/src/gatekeeper.rs):
+1. Implement the `GateCheck` trait in [`crates/agy-common/src/gatekeeper.rs`](crates/agy-common/src/gatekeeper.rs):
    ```rust
    pub struct MySecurityGate;
    impl GateCheck for MySecurityGate {
@@ -218,11 +227,11 @@ cp -r plugins/agy-suite/* ~/.gemini/config/plugins/agy-suite/
 1. **Zero Ambient Shell Authority:**
    Coding agents have no access to raw bash or shell pipes. All operations are mediated through native Rust action handlers or argument-vector command execution via `std::process::Command` without shell expansion (`sh -c`).
 2. **Container & Nested Sandbox Detection:**
-   [`agy_common::sandbox::is_inside_outer_sandbox()`](file:///home/infinite/projects/rust/agy-suite/crates/agy-common/src/sandbox.rs#L14) inspects `AGY_OUTER_SANDBOX`, container markers (`/.dockerenv`), `/proc/1/cgroup`, and nested PID namespaces. If already inside a container, inner Bubblewrap calls are bypassed cleanly to prevent namespace creation failures.
+   [`agy_common::sandbox::is_inside_outer_sandbox()`](crates/agy-common/src/sandbox.rs) inspects `AGY_OUTER_SANDBOX`, container markers (`/.dockerenv`), `/proc/1/cgroup`, and nested PID namespaces. If already inside a container, inner Bubblewrap calls are bypassed cleanly to prevent namespace creation failures.
 3. **Subprocess Orphan Prevention:**
-   [`SubprocessSupervisor`](file:///home/infinite/projects/rust/agy-suite/crates/agy-common/src/supervisor.rs#L66) configures child processes with Linux `libc::prctl(PR_SET_PDEATHSIG, SIGTERM)` and places them in their own process group via `libc::setpgid(0, 0)`. If a parent agent or daemon is killed, all child subprocesses receive `SIGTERM` immediately, preventing orphaned background compiler tasks.
+   [`SubprocessSupervisor`](crates/agy-common/src/supervisor.rs) configures child processes with Linux `libc::prctl(PR_SET_PDEATHSIG, SIGTERM)` and places them in their own process group via `libc::setpgid(0, 0)`. If a parent agent or daemon is killed, all child subprocesses receive `SIGTERM` immediately, preventing orphaned background compiler tasks.
 4. **2-Strike Compiler Failure Circuit Breaker:**
-   If mutating operations break the compiler or test suite across 2 consecutive turns, `CircuitBreakerLedger` trips. Mutating tools are immediately blocked until a successful verification pass or manual reset via `agy-hooks reset-circuit-breaker`.
+   If mutating operations break the compiler or test suite across 2 consecutive turns, `CircuitBreakerLedger` trips. Mutating tools are immediately blocked until a successful verification pass or manual reset via `agy-ctrl` (`c` / `Shift-K`) or `agy-ctrl reset-breaker`.
 5. **Jujutsu Workspace Isolation:**
    When launching agents in isolated mode, `agy-ctrl` creates a lightweight, sparse Jujutsu workspace at `.agy/workspaces/<agent>`. The shared `target/` build cache is symlinked, and work is committed to independent revisions off `default@`, keeping the main working tree pristine.
 
@@ -244,14 +253,4 @@ cp -r plugins/agy-suite/* ~/.gemini/config/plugins/agy-suite/
 
 ## 📜 Canonical Architecture Documentation
 
-For complete systems specifications, formal security bounds, and historical technical debt audits, consult the brain artifacts in the conversation directory:
-
-- [`00_INDEX.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/00_INDEX.md) — Master sitemap, crate taxonomy, and navigation guide.
-- [`01_core_architecture_and_security.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/01_core_architecture_and_security.md) — Security posture, token budgeting (~1,970 baseline), and 3-tier permission model.
-- [`02_declarative_mcp_and_tool_engine.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/02_declarative_mcp_and_tool_engine.md) — Detailed declarative `tools.toml` syntax, guards, and action handler implementations.
-- [`03_agent_fleet_and_lifecycle_hooks.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/03_agent_fleet_and_lifecycle_hooks.md) — Complete agent fleet profiles and lifecycle hook contracts.
-- [`04_control_deck_and_orchestration.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/04_control_deck_and_orchestration.md) — Ratatui 0.29 architecture, event loop, and Save & Validate pipeline.
-- [`05_systems_domains_and_verification.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/05_systems_domains_and_verification.md) — Low-level systems programming domains and the Verification Sandwich methodology.
-- [`06_skills_and_slash_commands_policy.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/06_skills_and_slash_commands_policy.md) — Rationale for native compiled tools over interpreted skills.
-- [`07_tool_installation_and_package_origin_audit.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/07_tool_installation_and_package_origin_audit.md) — Official Arch Linux, AUR, and precompiled binary provenance audit.
-- [`08_ideas_todos_and_mcp_evaluations.md`](file:///home/infinite/.gemini/antigravity-cli/brain/6030b881-9107-4730-a943-fe383688402a/08_ideas_todos_and_mcp_evaluations.md) — Roadmap, open debates, Offline Doc Gateway RFC, and curated external MCP server evaluations.
+For complete systems specifications, formal security bounds, the 10-agent fleet directory, and verification methodologies, consult [`ARCHITECTURE.md`](ARCHITECTURE.md).
