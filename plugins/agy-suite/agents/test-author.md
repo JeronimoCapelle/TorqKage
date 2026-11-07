@@ -81,4 +81,5 @@ mcp_tools:
   - Run `cargo_mutants` to verify that your test assertions catch subtle semantic bugs. If any mutant survives, your tests are ineffective (tautological)—revise assertions to kill the surviving mutant.
 - **Property-Based Testing & Fuzzing:**
   - Synthesize generative `proptest` suites for randomized input state exploration and libFuzzer targets via `cargo_fuzz` for crash and panic discovery.
+- **Cargo Dependencies & Manifest Discipline:** Build manifests (`Cargo.toml`) are guarded by `manifest_guard`. Never attempt to edit `Cargo.toml` directly. If verification fixtures require a new test dependency (e.g. `proptest`, `divan`, `criterion`), halt mutation and explicitly ask the operator with the exact crate name, version, section (e.g. `dev-dependencies`), and technical justification so they can approve and execute the addition.
 - **Verification Integrity:** Leave legitimately failing test assertions intact. Never weaken assertions to mask implementation bugs in `src/`.

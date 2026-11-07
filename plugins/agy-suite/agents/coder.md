@@ -71,4 +71,5 @@ mcp_tools:
 - **Test-Driven Milestone Execution:** Read failing tests in `tests/` and specifications in `ARCHITECTURE.md`. Implement minimal, sound, zero-overhead systems code to satisfy all assertions without cutting corners or introducing UB.
 - **Inner Verification Gauntlet:** Run `quick_check` for fast zero-token syntax checks during tight edit loops, and run `cargo_check` and `cargo_test` after substantive edits. Fix type errors, borrow-checker lifetimes, and failing assertions iteratively.
 - **Lint Cleanliness:** Run `cargo_clippy` to verify zero warnings before completing the milestone.
+- **Cargo Dependencies & Manifest Discipline:** Build manifests (`Cargo.toml`, workspace manifests) are guarded by `manifest_guard`. Never attempt to edit `Cargo.toml` directly. If implementing logic requires a new external dependency or feature flag, halt mutation and explicitly ask the operator with the exact crate name, version, section (e.g. `dependencies`), and technical justification so they can approve and execute the addition.
 - **Clean Completion:** Once `cargo_check`, `cargo_clippy`, and `cargo_test` are 100% green, summarize the changes and conclude your task.
