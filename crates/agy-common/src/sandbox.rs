@@ -107,37 +107,26 @@ pub fn build_bubblewrap_command(
         "--ro-bind",
         "/usr",
         "/usr",
+        "--ro-bind-try",
+        "/lib",
+        "/lib",
+        "--ro-bind-try",
+        "/lib64",
+        "/lib64",
+        "--ro-bind-try",
+        "/bin",
+        "/bin",
+        "--ro-bind-try",
+        "/sbin",
+        "/sbin",
+        "--ro-bind-try",
+        "/etc",
+        "/etc",
+        "--proc",
+        "/proc",
+        "--dev",
+        "/dev",
     ]);
-
-    if Path::new("/bin").is_symlink() {
-        cmd.args(["--symlink", "usr/bin", "/bin"]);
-    } else if Path::new("/bin").exists() {
-        cmd.args(["--ro-bind", "/bin", "/bin"]);
-    }
-
-    if Path::new("/lib").is_symlink() {
-        cmd.args(["--symlink", "usr/lib", "/lib"]);
-    } else if Path::new("/lib").exists() {
-        cmd.args(["--ro-bind", "/lib", "/lib"]);
-    }
-
-    if Path::new("/lib64").is_symlink() {
-        cmd.args(["--symlink", "usr/lib", "/lib64"]);
-    } else if Path::new("/lib64").exists() {
-        cmd.args(["--ro-bind", "/lib64", "/lib64"]);
-    }
-
-    if Path::new("/sbin").is_symlink() {
-        cmd.args(["--symlink", "usr/bin", "/sbin"]);
-    } else if Path::new("/sbin").exists() {
-        cmd.args(["--ro-bind", "/sbin", "/sbin"]);
-    }
-
-    if Path::new("/etc").exists() {
-        cmd.args(["--ro-bind-try", "/etc", "/etc"]);
-    }
-
-    cmd.args(["--proc", "/proc", "--dev", "/dev"]);
 
     // If workspace_root is an isolated subagent workspace (e.g. .agy/workspaces/<agent>),
     // mount the repo root and shared build caches so symlinks resolve correctly in bwrap

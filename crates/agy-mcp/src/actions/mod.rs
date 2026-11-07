@@ -65,8 +65,14 @@ where
     let (base_args, dynamic_args) = args;
     if enforce_sandbox {
         if which::which("bwrap").is_ok() {
+            let resolved_program = if program.contains('/') {
+                program.to_owned()
+            } else {
+                which::which(program)
+                    .map_or_else(|_| program.to_owned(), |p| p.to_string_lossy().into_owned())
+            };
             let cmd = agy_common::sandbox::build_bubblewrap_command(
-                program,
+                &resolved_program,
                 base_args,
                 dynamic_args,
                 workspace_root,
