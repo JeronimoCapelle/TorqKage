@@ -196,7 +196,7 @@ agy-suite/
 │   ├── agy-common/     # Core domain models, project config, supervisor, Jujutsu, state
 │   ├── agy-mcp/        # Declarative MCP server, tool execution engine, agent guards
 │   ├── agy-hooks/      # High-assurance lifecycle interceptors (<1ms native execution)
-│   └── agy-ctrl/       # Ratatui 0.29 TUI dashboard, fleet matrix, and session explorer
+│   └── agy-ctrl/       # Ratatui 0.30 TUI dashboard, fleet matrix, and session explorer
 └── plugins/
     └── agy-suite/      # Self-contained Antigravity plugin distribution bundle
         ├── plugin.json # Host manifest
@@ -227,7 +227,7 @@ agy-suite/
 3. **`agy-hooks` (Featherweight Interception Runner):**
    - Ultra-fast native CLI (<1ms startup, <500KB RSS) executing Antigravity lifecycle events: `detect-wip`, `check-conflicts`, `check-subagent`, `enforce-tool-policy`, `record-handoff`, and `inject-wake`.
    - Protects critical build manifests (`Cargo.toml`) via `manifest_guard` and tracks consecutive compiler failure strikes via `circuit_breaker`.
-4. **`agy-ctrl` (Interactive Ratatui 0.29 Terminal Deck):**
+4. **`agy-ctrl` (Interactive Ratatui 0.30 Terminal Deck):**
    - Standalone terminal dashboard providing interactive Fleet Matrix navigation, declarative tool catalog inspection, real-time circuit breaker status with single-key reset (`c` / `Shift-K`), and SQLite session resumption.
 
 ### 8.2 Bubblewrap Container-Grade Sandboxing

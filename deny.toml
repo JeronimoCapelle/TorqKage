@@ -17,10 +17,7 @@ yanked = "deny"
 unmaintained = "all"
 
 # Explicit advisory IDs to bypass (with rationale)
-ignore = [
-    # RUSTSEC-2024-0436: paste is archived by upstream author, required transitively by ratatui 0.29.0
-    "RUSTSEC-2024-0436",
-]
+ignore = []
 
 # ==============================================================================
 # 2. LICENSES (Strict Allowlist Policy)
