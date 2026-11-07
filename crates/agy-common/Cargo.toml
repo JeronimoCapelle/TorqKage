@@ -13,6 +13,8 @@ categories.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+command-group = { workspace = true }
+nix = { workspace = true, features = ["signal", "process"] }
 libc = { workspace = true }
 jiff = { workspace = true }
 rustc-hash = { workspace = true }

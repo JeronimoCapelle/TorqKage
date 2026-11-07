@@ -14,6 +14,8 @@
 //! - [`supervisor`]: Process hygiene supervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`).
 //! - [`tools`]: Declarative `tools.toml` models, parser, and template inheritance engine.
 
+#![forbid(unsafe_code)]
+
 pub mod content_filter;
 pub mod error;
 pub mod fast_hash;

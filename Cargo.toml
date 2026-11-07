@@ -32,6 +32,8 @@ toml = "1.2"
 # Error Handling & Systems Utilities
 thiserror = "2.0"
 which = "8.0"
+command-group = "5.0"
+nix = "0.27"
 libc = "0.2"
 mpatch = "1.8"
 jiff = "0.2"
@@ -61,7 +63,7 @@ proptest = "1.12"
 # WORKSPACE COMPILER LINTS
 # ==============================================================================
 [workspace.lints.rust]
-unsafe_code = "allow" # Allowed for low-level systems calls (prctl, setpgid in agy-common)
+unsafe_code = "forbid"
 non_ascii_idents = "forbid"
 let_underscore_drop = "deny"
 rust_2018_idioms = { level = "deny", priority = -1 }

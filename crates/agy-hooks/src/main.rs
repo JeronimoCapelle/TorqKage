@@ -16,6 +16,7 @@
 //! - `record-handoff`: Captures session state and modified files to `.agy/state/` upon session termination.
 //! - `inject-wake`: Injects prior handoff state into Turn 1 of new conversation sessions.
 
+#![forbid(unsafe_code)]
 #![allow(
     clippy::print_stdout,
     reason = "CLI hook tool emits ProtoJSON directly to stdout"

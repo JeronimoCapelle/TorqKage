@@ -108,7 +108,7 @@ pub(crate) fn resolve_agent_guards(
     let mut guards = BTreeMap::new();
 
     let mut candidate_dirs = vec![
-        workspace_root.join("config/agents"),
+        workspace_root.join("agents"),
         workspace_root.join("plugins/agy-suite/agents"),
         workspace_root.join(".gemini/config/plugins/agy-suite/agents"),
         workspace_root.join(".agents/agents"),
@@ -117,7 +117,7 @@ pub(crate) fn resolve_agent_guards(
     if let Ok(home) = std::env::var("HOME") {
         let home_p = std::path::PathBuf::from(home);
         candidate_dirs.push(home_p.join(".gemini/config/plugins/agy-suite/agents"));
-        candidate_dirs.push(home_p.join(".gemini/config/agents"));
+        candidate_dirs.push(home_p.join(".gemini/agents"));
     }
 
     for dir in candidate_dirs {

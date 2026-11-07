@@ -68,8 +68,8 @@ agy-suite/
 ```mermaid
 flowchart TD
     subgraph Host ["Host & Human Interaction"]
-        Operator["Human Operator (Terminal)"] <-->|"Ratatui 0.29 TUI"| Ctrl["agy-ctrl (Control Deck)"]
-        Ctrl -.->|"sqlite3 (-json)"| SQLite[("~/.gemini/antigravity-cli/\nconversation_summaries.db")]
+        Operator["Human Operator (Terminal)"] <-->|"Ratatui 0.30 TUI"| Ctrl["agy-ctrl (Control Deck)"]
+        Ctrl -.->|"rusqlite (in-process)"| SQLite[("~/.gemini/antigravity-cli/\nconversation_summaries.db")]
     end
 
     subgraph RuntimeBridge ["Orchestration & Sandbox Bridge"]
@@ -91,7 +91,7 @@ flowchart TD
     end
 
     subgraph ExecutionLayer ["Supervised Execution Layer"]
-        MCPDaemon -->|"SubprocessSupervisor\n(PR_SET_PDEATHSIG + setpgid)"| Supervisor["agy-common::SubprocessSupervisor"]
+        MCPDaemon -->|"SubprocessSupervisor\n(Process Group Isolation)"| Supervisor["agy-common::SubprocessSupervisor"]
         Supervisor -->|"bwrap --unshare-all (Optional)"| BwrapJail["Bubblewrap Sandbox"]
         BwrapJail --> NativeTools["Native Binaries (cargo, jj, ast-grep, etc.)"]
         MCPDaemon <-->|".agy/state/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
@@ -105,10 +105,10 @@ flowchart TD
 
 | Crate | Binary / Library | Primary Role & Capabilities |
 | :--- | :--- | :--- |
-| **[`agy-common`](crates/agy-common)** | Library | Shared systems primitives, typed error hierarchy (`AgyError`), Bubblewrap jail builder (`build_bubblewrap_command`), outer container/PID detection, SubprocessSupervisor with orphan prevention (`PR_SET_PDEATHSIG` + `setpgid`), Jujutsu workspace isolation (`JujutsuWorkspace`), workspace root resolution (`WorkspaceResolver`), admission gates (`GateCheck`), and ProtoJSON hook serialization models. |
-| **[`agy-mcp`](crates/agy-mcp)** | Binary (`agy-mcp`) | Persistent JSON-RPC 2.0 stdio Model Context Protocol daemon. Exposes tools declared in `plugins/agy-suite/tools.toml`. Enforces agent scoping from YAML frontmatter (`mcp_tools:`), path confinement, dangerous file sanitization, and the 2-strike compiler failure circuit breaker. Implements 8 native action handlers (`file_read`, `file_write`, `mpatch_edit`, `static_cmd`, `parameterized_cmd`, `file_search`, `cargo_json`, `cli_manual`). |
+| **[`agy-common`](crates/agy-common)** | Library | Shared systems primitives, typed error hierarchy (`AgyError`), Bubblewrap jail builder (`build_bubblewrap_command`), outer container/PID detection, SubprocessSupervisor with process group isolation and timeout supervision, Jujutsu workspace isolation (`JujutsuWorkspace`), workspace root resolution (`WorkspaceResolver`), admission gates (`GateCheck`), and ProtoJSON hook serialization models. |
+| **[`agy-mcp`](crates/agy-mcp)** | Binary (`agy-mcp`) | Persistent JSON-RPC 2.0 stdio Model Context Protocol daemon. Exposes tools declared in `plugins/agy-suite/tools.toml`. Enforces agent scoping from YAML frontmatter (`mcp_tools:`), path confinement, dangerous file sanitization, and the compiler failure circuit breaker. Implements native action handlers (`file_read`, `file_write`, `mpatch_edit`, `static_cmd`, `parameterized_cmd`, `file_search`, `cargo_json`, `cli_manual`). |
 | **[`agy-hooks`](crates/agy-hooks)** | Binary (`agy-hooks`) | Featherweight lifecycle event runner (<1ms startup, <500KB RSS). Runs ephemerally per hook event triggered by Antigravity: `detect-wip` (working copy change detector), `check-conflicts` (merge conflict blocker), `check-subagent` (dynamic admission gates), `enforce-tool-policy` (operator confirmation gate), `record-handoff` (session state writer), and `inject-wake` (Turn-1 wake-up state injector). |
-| **[`agy-ctrl`](crates/agy-ctrl)** | Binary (`agy-ctrl`) | Offline Ratatui 0.29 terminal control deck. Provides an interactive Fleet Matrix, declarative MCP Tool Catalog inspector, SQLite past conversation session discovery (`~/.gemini/antigravity-cli/conversation_summaries.db`), pre-launch quality gate evaluation, and atomic Save & Validate (`F2`) pipeline. |
+| **[`agy-ctrl`](crates/agy-ctrl)** | Binary (`agy-ctrl`) | Offline Ratatui 0.30 terminal control deck. Provides an interactive Fleet Matrix, declarative MCP Tool Catalog inspector, in-process SQLite past conversation session discovery (`~/.gemini/antigravity-cli/conversation_summaries.db`), pre-launch quality gate evaluation, and atomic Save & Validate (`F2`) pipeline. |
 
 ---
 
@@ -125,7 +125,7 @@ The plugin resides in `plugins/agy-suite/` and can be installed globally into `~
    - `effort`: Reasoning budget (`high`, `medium`, `low`).
    - `permissionMode`: Default permission posture (`dont-ask`, `ask-mutating`, `acceptEdits`).
    - `mcp_tools`: Strict allowlist of MCP tools (air-gapped default deny).
-   - `pre_launch_checks`: Mandatory quality gates (`cargo_compilation`, `test_compilation`, `vcs_conflicts`).
+   - `pre_launch_checks`: Mandatory quality gates (`compilation`, `tests`, `vcs_conflicts`).
 
 ---
 

@@ -23,10 +23,11 @@ All autonomous agents and human contributors operating within this repository or
 4. **Subprocess Supervision & Hang Immunity:**
    - **Never** invoke raw synchronous `Command::new(...).output()` without timeout bounding.
    - All external processes must execute through `SubprocessSupervisor::run_supervised` with bounded deadlines (`agy-common::limits`) to prevent daemon or IDE freezes on lock contention or hanging processes.
-5. **Process Group Safety:**
-   - When dispatching group termination signals (`libc::kill`), **always** assert that `pgid > 0` before negating. Never invoke `libc::kill(0, sig)` which terminates the caller's own process group.
+5. **Pure Safe Rust & Process Group Safety:**
+   - The entire codebase compiles with `#![forbid(unsafe_code)]`. Zero raw `libc` pointers or `unsafe` blocks are permitted.
+   - Process tree containment and group signals are managed through safe process group abstractions (`command-group` and safe signal delivery), guaranteeing elimination of orphaned compiler tasks when parent processes exit.
 6. **Thread Safety & Rust 2024 Compliance:**
-   - **Zero** `unsafe { std::env::set_var }` or `remove_var` calls in production or test code. Parameterize environment lookups to prevent multithreaded data races.
+   - **Zero** `std::env::set_var` or `remove_var` calls in production or test code. Parameterize environment lookups to prevent multithreaded data races.
 7. **Fast Verification Standard:**
    - Use `cargo fast` (`cargo fast check`, `cargo fast clippy`, `cargo fast test`, `cargo fast build`) for rapid iteration powered by Cranelift and Mold.
 
@@ -216,7 +217,7 @@ agy-suite/
 
 ### 8.1 The 4 Crates Architecture
 1. **`agy-common` (Systems Foundation):**
-   - **`SubprocessSupervisor`:** Enforces process tree lifecycle containment via `libc::prctl(PR_SET_PDEATHSIG, SIGTERM)` and process groups (`setpgid(0, 0)`). Guaranteed elimination of orphaned compiler tasks when parent processes exit.
+   - **`SubprocessSupervisor`:** Enforces process tree lifecycle containment via safe process group isolation (`command-group`) and safe signal delivery. Guaranteed elimination of orphaned compiler tasks when parent processes exit.
    - **`JujutsuWorkspace`:** Dynamic management of isolated Jujutsu workspaces at `.agy/workspaces/<agent>/`, snapshotting, and atomic rebase/squash merging with rollback (`jj op restore`).
    - **`ContentFilter`:** Language-agnostic syntactic path policies (`comments_only`, `tests_only`, `delimited`) preventing cross-boundary modifications during autonomous runs.
    - **`AgyStatePaths`:** Canonical management of `.agy/` state directories, circuit breaker ledgers, and handoff bridges.

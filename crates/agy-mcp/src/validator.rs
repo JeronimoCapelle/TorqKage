@@ -65,7 +65,7 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
             ToolAction::StaticCommand | ToolAction::ParameterizedCommand => {
                 if tool.output_capture == OutputCapture::JsonSpans {
                     report.warnings.push(format!(
-                        "Tool '{}' specifies output_capture='json_spans' on a command action; falling back to combined output. Use 'cargo_json_diagnostics' action for structured compiler spans.",
+                        "Tool '{}' specifies output_capture='json_spans' on a command action; falling back to combined output.",
                         tool.name
                     ));
                 }
@@ -164,7 +164,7 @@ mod tests {
         let tools = vec![ToolDefinition {
             name: "custom_cmd".to_owned(),
             action: ToolAction::StaticCommand,
-            command: vec!["cargo".to_owned()],
+            command: vec!["echo".to_owned()],
             output_capture: OutputCapture::JsonSpans,
             ..Default::default()
         }];

@@ -1,6 +1,8 @@
 //! Process hygiene and Linux orphan prevention.
 
-use std::process::{Child, Command, ExitStatus};
+use std::process::{Command, ExitStatus};
+
+use command_group::{CommandGroup, GroupChild};
 
 use crate::{
     error::{AgyError, Result},
@@ -9,15 +11,14 @@ use crate::{
 
 /// Drop guard ensuring child process groups are forcefully terminated if parent drops.
 pub struct ChildGuard {
-    child: Child,
-    pgid: i32,
+    child: GroupChild,
 }
 
 impl ChildGuard {
-    /// Constructs a new `ChildGuard` wrapping the spawned process and its process group.
+    /// Constructs a new `ChildGuard` wrapping the spawned process group.
     #[must_use]
-    pub const fn new(child: Child, pgid: i32) -> Self {
-        Self { child, pgid }
+    pub const fn new(child: GroupChild) -> Self {
+        Self { child }
     }
 
     /// Returns the process identifier.
@@ -37,69 +38,24 @@ impl ChildGuard {
 
 impl Drop for ChildGuard {
     fn drop(&mut self) {
-        // If child is still running, kill entire process group with SIGKILL
         if matches!(self.child.try_wait(), Ok(None)) {
-            #[cfg(unix)]
-            {
-                if self.pgid > 0 {
-                    let target_pgid = self.pgid.saturating_neg();
-                    // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
-                    unsafe {
-                        libc::kill(target_pgid, libc::SIGKILL);
-                    }
-                } else if let Ok(raw_pid) = i32::try_from(self.child.id())
-                    && raw_pid > 0
-                {
-                    // SAFETY: Fallback sending SIGKILL directly to child PID when process group id is non-positive
-                    unsafe {
-                        libc::kill(raw_pid, libc::SIGKILL);
-                    }
-                }
-            }
-            if self.child.wait().is_ok() {}
+            drop(self.child.kill());
+            drop(self.child.wait());
         }
     }
 }
 
-#[cfg(target_os = "linux")]
-fn configure_child_process_group() -> std::io::Result<()> {
-    // SAFETY: Setting PR_SET_PDEATHSIG ensures SIGTERM on parent termination
-    let prctl_status = unsafe { libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) };
-    if prctl_status != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-
-    // SAFETY: Placing child in a new process group matching its PID
-    let setpgid_status = unsafe { libc::setpgid(0, 0) };
-    if setpgid_status != 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-
-    Ok(())
-}
-
-/// Subprocess supervisor enforcing Linux process hygiene (`PR_SET_PDEATHSIG` + `setpgid`).
+/// Subprocess supervisor enforcing process hygiene and process group termination.
 pub struct SubprocessSupervisor;
 
 impl SubprocessSupervisor {
-    /// Spawns a command configured with `PR_SET_PDEATHSIG` and its own process group.
+    /// Spawns a command configured in its own isolated process group.
     ///
     /// # Errors
     /// Returns `AgyError::Io` if spawning the process fails.
     pub fn spawn_scoped(mut command: Command) -> Result<ChildGuard> {
-        #[cfg(target_os = "linux")]
-        {
-            use std::os::unix::process::CommandExt;
-            // SAFETY: `pre_exec` registers the single post-fork initialization routine
-            unsafe {
-                command.pre_exec(configure_child_process_group);
-            }
-        }
-
-        let child = command.spawn().map_err(AgyError::Io)?;
-        let pgid = i32::try_from(child.id()).unwrap_or(0);
-
-        Ok(ChildGuard::new(child, pgid))
+        let child = command.group_spawn().map_err(AgyError::Io)?;
+        Ok(ChildGuard::new(child))
     }
 
     /// Executes a command with process group supervision and an optional timeout deadline.
@@ -113,21 +69,11 @@ impl SubprocessSupervisor {
         command.stdout(std::process::Stdio::piped());
         command.stderr(std::process::Stdio::piped());
 
-        #[cfg(target_os = "linux")]
-        {
-            use std::os::unix::process::CommandExt;
-            // SAFETY: `pre_exec` registers the single post-fork initialization routine
-            unsafe {
-                command.pre_exec(configure_child_process_group);
-            }
-        }
-
         let child = command
-            .spawn()
+            .group_spawn()
             .map_err(|err| format!("Failed to spawn process: {err}"))?;
 
         let child_pid = child.id();
-        let process_group_id = i32::try_from(child_pid).unwrap_or(0);
 
         if timeout_seconds > 0 {
             let timeout_dur = std::time::Duration::from_secs(timeout_seconds);
@@ -142,24 +88,25 @@ impl SubprocessSupervisor {
                 drop(worker.join());
                 res.map_err(|err| format!("Failed to read process output: {err}"))
             } else {
-                // Timeout expired: kill process group with SIGKILL
+                // Timeout expired: kill process group with SIGKILL via safe nix wrapper
                 #[cfg(unix)]
                 {
-                    if process_group_id > 0 {
-                        let target_pgid = process_group_id.saturating_neg();
-                        // SAFETY: Sending SIGKILL to negative process group id terminates the scoped process group
-                        unsafe {
-                            libc::kill(target_pgid, libc::SIGKILL);
-                        }
-                    }
-                    let raw_pid = i32::try_from(child_pid).unwrap_or(0);
-                    if raw_pid > 0 {
-                        // SAFETY: Sending SIGKILL directly to process id ensures termination
-                        unsafe {
-                            libc::kill(raw_pid, libc::SIGKILL);
-                        }
+                    if let Ok(pgid) = i32::try_from(child_pid)
+                        && pgid > 0
+                    {
+                        let pid = nix::unistd::Pid::from_raw(pgid);
+                        let _killpg_res =
+                            nix::sys::signal::killpg(pid, nix::sys::signal::Signal::SIGKILL);
+                        let _kill_res =
+                            nix::sys::signal::kill(pid, nix::sys::signal::Signal::SIGKILL);
                     }
                 }
+                #[cfg(not(unix))]
+                {
+                    // Fallback for non-unix targets
+                    let _ = child_pid;
+                }
+
                 // Allow grace duration for worker to unblock post-kill; avoid indefinite deadlock
                 if rx.recv_timeout(PROCESS_KILL_GRACE_WAIT).is_ok() {
                     drop(worker.join());

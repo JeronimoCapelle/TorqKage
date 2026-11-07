@@ -284,10 +284,8 @@ fn find_config_for_tool(tool_name: &str, root: &Path) -> Option<ParsedToolsConfi
     let ws_root = WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
     let mut candidates = vec![
         root.join("tools.toml"),
-        root.join("config/tools.toml"),
         root.join("plugins/agy-suite/tools.toml"),
         ws_root.join("tools.toml"),
-        ws_root.join("config/tools.toml"),
         ws_root.join("plugins/agy-suite/tools.toml"),
     ];
 

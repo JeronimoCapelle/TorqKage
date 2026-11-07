@@ -15,6 +15,7 @@
 //! - [`server`]: Asynchronous JSON-RPC 2.0 event loop powered by Tokio.
 //! - [`validator`]: Startup and pre-flight validation verifying binaries, schemas, and guards.
 
+#![forbid(unsafe_code)]
 #![allow(
     clippy::print_stderr,
     reason = "Daemon diagnostics are logged to stderr"
@@ -104,26 +105,31 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf, Option<String>) {
         if candidate.is_file() {
             candidate
         } else {
-            let candidate_config = workspace_root.join("config/tools.toml");
-            if candidate_config.is_file() {
-                candidate_config
-            } else {
-                let candidate_plugin = workspace_root.join("plugins/agy-suite/tools.toml");
-                if candidate_plugin.is_file() {
-                    eprintln!("[agy-mcp] Notice: Using fallback configuration: {}", candidate_plugin.display());
-                    candidate_plugin
-                } else if let Ok(home) = std::env::var("HOME") {
-                    let home_candidate = PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
-                    if home_candidate.is_file() {
-                        eprintln!("[agy-mcp] Notice: Using installed plugin configuration: {}", home_candidate.display());
-                        home_candidate
-                    } else {
-                        eprintln!("[agy-mcp] Advisory: No tools.toml found in workspace or plugins; defaulting to {}", candidate.display());
-                        candidate
-                    }
+            let candidate_plugin = workspace_root.join("plugins/agy-suite/tools.toml");
+            if candidate_plugin.is_file() {
+                eprintln!(
+                    "[agy-mcp] Notice: Using in-tree plugin configuration: {}",
+                    candidate_plugin.display()
+                );
+                candidate_plugin
+            } else if let Ok(home) = std::env::var("HOME") {
+                let home_candidate =
+                    PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
+                if home_candidate.is_file() {
+                    eprintln!(
+                        "[agy-mcp] Notice: Using installed plugin configuration: {}",
+                        home_candidate.display()
+                    );
+                    home_candidate
                 } else {
+                    eprintln!(
+                        "[agy-mcp] Advisory: No tools.toml found in workspace or plugins; defaulting to {}",
+                        candidate.display()
+                    );
                     candidate
                 }
+            } else {
+                candidate
             }
         }
     });

@@ -15,6 +15,7 @@
 //! - [`ui`]: Modular Ratatui rendering pipelines for the Fleet Matrix, Tool Catalog, and Diagnostics.
 //! - [`vcs`]: Jujutsu and Git snapshotting helpers for automated rollbacks and pre-save checkpoints.
 
+#![forbid(unsafe_code)]
 #![allow(
     clippy::print_stdout,
     reason = "CLI summary flags emit output to stdout"

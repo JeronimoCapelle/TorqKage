@@ -95,35 +95,30 @@ impl App {
         let tools = if tools_path.is_file() {
             load_tools_from_file(&tools_path)?
         } else {
-            let config_tools = workspace_root.join("config/tools.toml");
-            if config_tools.is_file() {
-                load_tools_from_file(&config_tools)?
-            } else {
-                let plugin_tools = workspace_root.join("plugins/agy-suite/tools.toml");
-                if plugin_tools.is_file() {
+            let plugin_tools = workspace_root.join("plugins/agy-suite/tools.toml");
+            if plugin_tools.is_file() {
+                eprintln!(
+                    "[agy-ctrl] Notice: Loaded tools configuration from in-tree plugin: {}",
+                    plugin_tools.display()
+                );
+                load_tools_from_file(&plugin_tools)?
+            } else if let Ok(home) = std::env::var("HOME") {
+                let home_tools =
+                    PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
+                if home_tools.is_file() {
                     eprintln!(
-                        "[agy-ctrl] Notice: Loaded tools configuration from fallback: {}",
-                        plugin_tools.display()
+                        "[agy-ctrl] Notice: Loaded tools configuration from installed plugin: {}",
+                        home_tools.display()
                     );
-                    load_tools_from_file(&plugin_tools)?
-                } else if let Ok(home) = std::env::var("HOME") {
-                    let home_tools =
-                        PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
-                    if home_tools.is_file() {
-                        eprintln!(
-                            "[agy-ctrl] Notice: Loaded tools configuration from installed plugin: {}",
-                            home_tools.display()
-                        );
-                        load_tools_from_file(&home_tools)?
-                    } else {
-                        eprintln!(
-                            "[agy-ctrl] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config."
-                        );
-                        Vec::new()
-                    }
+                    load_tools_from_file(&home_tools)?
                 } else {
+                    eprintln!(
+                        "[agy-ctrl] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config."
+                    );
                     Vec::new()
                 }
+            } else {
+                Vec::new()
             }
         };
 
@@ -568,12 +563,9 @@ impl App {
 
         // Reload tools from disk if tools were modified
         let tools_path = self.workspace_root.join("tools.toml");
-        let config_tools = self.workspace_root.join("config/tools.toml");
         let plugin_tools = self.workspace_root.join("plugins/agy-suite/tools.toml");
         let candidate = if tools_path.is_file() {
             tools_path
-        } else if config_tools.is_file() {
-            config_tools
         } else if plugin_tools.is_file() {
             plugin_tools
         } else if let Ok(home) = std::env::var("HOME") {
