@@ -42,6 +42,7 @@ dependencies = [
  "agy-common",
  "serde",
  "serde_json",
+ "toml",
 ]
 
 [[package]]

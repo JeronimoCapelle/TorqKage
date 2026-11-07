@@ -74,49 +74,37 @@ pub(crate) fn execute_record_handoff() {
 /// providing immediate continuity context for the starting conversation session.
 #[allow(
     clippy::format_push_string,
-    clippy::too_many_lines,
-    reason = "Building injection prompt message and evaluating declarative wake context"
+    reason = "Appending formatted strings into injection message buffer"
 )]
-pub(crate) fn execute_inject_wake() {
-    let input: SessionStartInput = read_stdin_payload();
-
-    let root = resolve_workspace_root(input.common.workspace_paths.first());
-    let config = crate::config::HooksConfig::load(&root);
-
-    if !config.session_start.enabled {
-        let resp = SessionStartResponse::default();
-        if let Ok(json) = serde_json::to_string(&resp) {
-            println!("{json}");
-        }
-        return;
-    }
-
-    let paths = agy_common::AgyStatePaths::new(&root);
+fn resolve_handoff_step(
+    config: &crate::config::SessionStartConfig,
+    paths: &agy_common::AgyStatePaths,
+    project: &agy_common::ProjectConfig,
+) -> Option<InjectStep> {
     let json_handoff = paths.handoff_json_file();
     let md_handoff = paths.handoff_md_file();
-    let project = agy_common::ProjectConfig::detect_or_load(&root);
     let tool_name = project
         .docs
         .tool_name
         .as_deref()
         .unwrap_or("query_project_spec");
 
-    let mut resp = if config.session_start.inject_wake_state
+    if config.inject_wake_state
         && json_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&json_handoff)
         && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
     {
         let mut msg = handoff.to_injection_message();
-        if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
+        if config.inject_documentation && !project.docs.paths.is_empty() {
             msg.push_str(&format!(
                 "\n\n[DOCUMENTATION]: Available in [{}]. Use '{tool_name}' to search specifications.",
                 project.docs.paths.join(", ")
             ));
         }
-        SessionStartResponse {
-            inject_steps: vec![InjectStep::system(msg)],
-        }
-    } else if config.session_start.inject_wake_state
+        return Some(InjectStep::system(msg));
+    }
+
+    if config.inject_wake_state
         && md_handoff.exists()
         && let Ok(content) = std::fs::read_to_string(&md_handoff)
         && let Some(record) = HandoffRecord::from_markdown(&content)
@@ -131,30 +119,28 @@ pub(crate) fn execute_inject_wake() {
             "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
             record.previous_agent, files_str, record.status
         );
-        if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
+        if config.inject_documentation && !project.docs.paths.is_empty() {
             msg.push_str(&format!(
                 " Documentation paths: [{}]. Use '{tool_name}' to search.",
                 project.docs.paths.join(", ")
             ));
         }
+        return Some(InjectStep::system(msg));
+    }
 
-        SessionStartResponse {
-            inject_steps: vec![InjectStep::system(msg)],
-        }
-    } else if config.session_start.inject_documentation && !project.docs.paths.is_empty() {
+    if config.inject_documentation && !project.docs.paths.is_empty() {
         let msg = format!(
             "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. Use '{tool_name}' to search them.",
             project.docs.paths.join(", ")
         );
-        SessionStartResponse {
-            inject_steps: vec![InjectStep::system(msg)],
-        }
-    } else {
-        SessionStartResponse::default()
-    };
+        return Some(InjectStep::system(msg));
+    }
 
-    // Resolve active agent identity to match targeted injections
-    let active_agent = std::env::var("AGY_AGENT")
+    None
+}
+
+fn resolve_active_agent(paths: &agy_common::AgyStatePaths) -> String {
+    std::env::var("AGY_AGENT")
         .or_else(|_| std::env::var("MCP_SCOPE"))
         .ok()
         .or_else(|| {
@@ -177,11 +163,21 @@ pub(crate) fn execute_inject_wake() {
             }
             None
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
 
-    // Evaluate declarative custom wake injections from hooks.toml
-    for injection in &config.session_start.injections {
-        if !crate::config::matches_pattern(&active_agent, &injection.matcher) {
+#[allow(
+    clippy::format_push_string,
+    reason = "Appending formatted strings into injection message buffer"
+)]
+fn evaluate_custom_injections(
+    root: &Path,
+    active_agent: &str,
+    injections: &[crate::config::WakeInjection],
+    steps: &mut Vec<InjectStep>,
+) {
+    for injection in injections {
+        if !crate::config::matches_pattern(active_agent, &injection.matcher) {
             continue;
         }
 
@@ -189,7 +185,7 @@ pub(crate) fn execute_inject_wake() {
             let args = injection.command.get(1..).unwrap_or(&[]);
             let mut cmd = Command::new(binary);
             cmd.args(args);
-            cmd.current_dir(&root);
+            cmd.current_dir(root);
 
             if let Ok(out) =
                 agy_common::SubprocessSupervisor::run_supervised(cmd, injection.timeout_seconds)
@@ -210,14 +206,45 @@ pub(crate) fn execute_inject_wake() {
                         ));
                     }
                     let msg = format!("{}{content}", injection.prefix);
-                    resp.inject_steps.push(InjectStep::system(msg));
+                    steps.push(InjectStep::system(msg));
                 } else if let Some(ref fallback) = injection.fallback {
                     let msg = format!("{}{fallback}", injection.prefix);
-                    resp.inject_steps.push(InjectStep::system(msg));
+                    steps.push(InjectStep::system(msg));
                 }
             }
         }
     }
+}
+
+pub(crate) fn execute_inject_wake() {
+    let input: SessionStartInput = read_stdin_payload();
+
+    let root = resolve_workspace_root(input.common.workspace_paths.first());
+    let config = crate::config::HooksConfig::load(&root);
+
+    if !config.session_start.enabled {
+        let resp = SessionStartResponse::default();
+        if let Ok(json) = serde_json::to_string(&resp) {
+            println!("{json}");
+        }
+        return;
+    }
+
+    let paths = agy_common::AgyStatePaths::new(&root);
+    let project = agy_common::ProjectConfig::detect_or_load(&root);
+
+    let mut resp = SessionStartResponse::default();
+    if let Some(step) = resolve_handoff_step(&config.session_start, &paths, &project) {
+        resp.inject_steps.push(step);
+    }
+
+    let active_agent = resolve_active_agent(&paths);
+    evaluate_custom_injections(
+        &root,
+        &active_agent,
+        &config.session_start.injections,
+        &mut resp.inject_steps,
+    );
 
     if let Ok(json) = serde_json::to_string(&resp) {
         println!("{json}");

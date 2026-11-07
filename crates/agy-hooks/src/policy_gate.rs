@@ -97,94 +97,83 @@ pub(crate) struct ParsedToolsConfig {
     pub(crate) categories: FastHashMap<String, ParsedToolEntry>,
 }
 
+fn parse_tool_entry(table: &toml::Table) -> ParsedToolEntry {
+    let inherit = table
+        .get("inherit")
+        .and_then(toml::Value::as_str)
+        .map(|s| s.strip_prefix("base_tools.").unwrap_or(s).to_owned());
+    let category = table
+        .get("category")
+        .and_then(toml::Value::as_str)
+        .map(|s| s.strip_prefix("categories.").unwrap_or(s).to_owned());
+    let mutating = table.get("mutating").and_then(toml::Value::as_bool);
+    let tracks_circuit_breaker = table
+        .get("tracks_circuit_breaker")
+        .and_then(toml::Value::as_bool);
+    let require_permission_gate = table
+        .get("require_permission_gate")
+        .and_then(toml::Value::as_bool);
+    let require_gates = table
+        .get("require_gates")
+        .and_then(toml::Value::as_array)
+        .map_or_default(|arr| {
+            arr.iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        });
+    let skip_gates = table
+        .get("skip_gates")
+        .and_then(toml::Value::as_array)
+        .map_or_default(|arr| {
+            arr.iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        });
+
+    ParsedToolEntry {
+        inherit,
+        category,
+        mutating,
+        tracks_circuit_breaker,
+        require_permission_gate,
+        require_gates,
+        skip_gates,
+    }
+}
+
 impl ParsedToolsConfig {
     /// Parses a `tools.toml` content string into structured tool and category definitions.
     #[must_use]
     pub(crate) fn from_str(content: &str) -> Self {
+        let Ok(table) = content.parse::<toml::Table>() else {
+            return Self::default();
+        };
+
         let mut config = Self::default();
-        let mut current_section: Option<(&str, String)> = None;
-        let mut lines = content.lines();
 
-        while let Some(line) = lines.next() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with('#') {
-                continue;
-            }
-
-            if let Some(inside) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
-                if let Some((kind, name)) = inside.split_once('.') {
-                    let k = kind.trim();
-                    let n = name.trim().to_owned();
-                    match k {
-                        "tools" => current_section = Some(("tools", n)),
-                        "base_tools" => current_section = Some(("base_tools", n)),
-                        "categories" => current_section = Some(("categories", n)),
-                        _ => current_section = None,
-                    }
-                } else {
-                    current_section = None;
-                }
-                continue;
-            }
-
-            let Some((kind, ref section_name)) = current_section else {
-                continue;
-            };
-
-            let Some((key_part, val_part)) = trimmed.split_once('=') else {
-                continue;
-            };
-
-            let key = key_part.trim();
-            let mut val_str = val_part.trim().to_owned();
-
-            if val_str.starts_with('[') && !val_str.contains(']') {
-                for next_line in lines.by_ref() {
-                    let next_trimmed = next_line.trim();
-                    val_str.push(' ');
-                    val_str.push_str(next_trimmed);
-                    if next_trimmed.contains(']') {
-                        break;
-                    }
+        if let Some(tools_table) = table.get("tools").and_then(toml::Value::as_table) {
+            for (name, val) in tools_table {
+                if let Some(t) = val.as_table() {
+                    config.tools.insert(name.clone(), parse_tool_entry(t));
                 }
             }
+        }
 
-            let clean_val = strip_trailing_comment(&val_str);
+        if let Some(base_table) = table.get("base_tools").and_then(toml::Value::as_table) {
+            for (name, val) in base_table {
+                if let Some(t) = val.as_table() {
+                    config.base_tools.insert(name.clone(), parse_tool_entry(t));
+                }
+            }
+        }
 
-            let entry = match kind {
-                "tools" => config.tools.entry(section_name.clone()).or_default(),
-                "base_tools" => config.base_tools.entry(section_name.clone()).or_default(),
-                "categories" => config.categories.entry(section_name.clone()).or_default(),
-                _ => continue,
-            };
-
-            match key {
-                "inherit" => {
-                    let clean = clean_val.trim().trim_matches(['"', '\'']);
-                    let target = clean.strip_prefix("base_tools.").unwrap_or(clean);
-                    entry.inherit = Some(target.to_owned());
-                },
-                "category" => {
-                    let clean = clean_val.trim().trim_matches(['"', '\'']);
-                    let target = clean.strip_prefix("categories.").unwrap_or(clean);
-                    entry.category = Some(target.to_owned());
-                },
-                "mutating" => {
-                    entry.mutating = Some(clean_val.trim() == "true");
-                },
-                "tracks_circuit_breaker" => {
-                    entry.tracks_circuit_breaker = Some(clean_val.trim() == "true");
-                },
-                "require_permission_gate" => {
-                    entry.require_permission_gate = Some(clean_val.trim() == "true");
-                },
-                "require_gates" => {
-                    entry.require_gates = parse_string_array(&clean_val);
-                },
-                "skip_gates" => {
-                    entry.skip_gates = parse_string_array(&clean_val);
-                },
-                _ => {},
+        if let Some(cat_table) = table.get("categories").and_then(toml::Value::as_table) {
+            for (name, val) in cat_table {
+                if let Some(t) = val.as_table() {
+                    config.categories.insert(name.clone(), parse_tool_entry(t));
+                }
             }
         }
 
@@ -289,51 +278,6 @@ impl ParsedToolsConfig {
 
         gates.iter().any(|g| g.eq_ignore_ascii_case(gate_name))
     }
-}
-
-fn strip_trailing_comment(s: &str) -> String {
-    let mut in_quote = false;
-    let mut quote_char = '"';
-    let mut out = String::new();
-    for c in s.chars() {
-        if in_quote {
-            if c == quote_char {
-                in_quote = false;
-            }
-            out.push(c);
-        } else if c == '"' || c == '\'' {
-            in_quote = true;
-            quote_char = c;
-            out.push(c);
-        } else if c == '#' {
-            break;
-        } else {
-            out.push(c);
-        }
-    }
-    out
-}
-
-fn parse_string_array(s: &str) -> Vec<String> {
-    let mut items = Vec::new();
-    let mut in_quote = false;
-    let mut quote_char = '"';
-    let mut current = String::new();
-
-    for c in s.chars() {
-        if in_quote {
-            if c == quote_char {
-                in_quote = false;
-                items.push(std::mem::take(&mut current));
-            } else {
-                current.push(c);
-            }
-        } else if c == '"' || c == '\'' {
-            in_quote = true;
-            quote_char = c;
-        }
-    }
-    items
 }
 
 fn find_config_for_tool(tool_name: &str, root: &Path) -> Option<ParsedToolsConfig> {

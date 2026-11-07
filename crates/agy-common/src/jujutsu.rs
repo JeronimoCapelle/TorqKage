@@ -125,12 +125,9 @@ impl JujutsuWorkspace {
     /// Returns `AgyError` if Jujutsu is not installed, not initialized, or workspace creation fails.
     #[allow(
         clippy::print_stderr,
-        reason = "Diagnostic logging for subprocess and symlink errors"
+        reason = "Diagnostic advisories when Jujutsu or Git prerequisites are missing"
     )]
-    pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
-        let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
-            .unwrap_or_else(|_| workspace_root.to_path_buf());
-
+    fn verify_jj_prerequisites(repo_root: &Path) -> Result<()> {
         if !is_jj_in_path() {
             eprintln!(
                 "[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot initialize isolated agent workspace."
@@ -140,7 +137,7 @@ impl JujutsuWorkspace {
             ));
         }
 
-        if !Self::is_jj_repo(&repo_root) {
+        if !Self::is_jj_repo(repo_root) {
             if repo_root.join(".git").exists() {
                 eprintln!(
                     "[agy-common] Advisory: Target workspace '{}' is a Git repository without Jujutsu colocation.\n\
@@ -165,12 +162,15 @@ impl JujutsuWorkspace {
             )));
         }
 
-        let paths = crate::state::AgyStatePaths::new(&repo_root);
-        let workspaces_dir = paths.workspaces_dir();
-        std::fs::create_dir_all(&workspaces_dir)?;
-        let agent_ws_path = paths.agent_workspace(agent);
+        Ok(())
+    }
 
-        if !Self::workspace_exists(&repo_root, agent) {
+    #[allow(
+        clippy::print_stderr,
+        reason = "Diagnostic logging for subprocess rebase warnings"
+    )]
+    fn create_or_sync_workspace(repo_root: &Path, agent_ws_path: &Path, agent: &str) -> Result<()> {
+        if !Self::workspace_exists(repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
             let mut cmd = Command::new("jj");
             cmd.args([
@@ -181,7 +181,7 @@ impl JujutsuWorkspace {
                 agent,
                 dest_str,
             ]);
-            cmd.current_dir(&repo_root);
+            cmd.current_dir(repo_root);
             let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                 .map_err(|e| {
                     AgyError::Process(format!("Failed to execute 'jj workspace add': {e}"))
@@ -193,11 +193,11 @@ impl JujutsuWorkspace {
                     agent_ws_path.display()
                 )));
             }
-        } else if Self::is_workspace_clean(&agent_ws_path) {
+        } else if Self::is_workspace_clean(agent_ws_path) {
             // Rebase clean workspace onto latest default@ commit to eliminate split-brain drift
             let mut cmd = Command::new("jj");
             cmd.args(["--color=never", "new", "default@", "--no-edit"]);
-            cmd.current_dir(&agent_ws_path);
+            cmd.current_dir(agent_ws_path);
             match SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
                 Ok(out) if !out.status.success() => {
                     eprintln!(
@@ -216,8 +216,12 @@ impl JujutsuWorkspace {
             }
         }
 
-        // Share declared build caches from project descriptor to avoid cold-start compilation overhead
-        let project = crate::project::ProjectConfig::detect_or_load(&repo_root);
+        Ok(())
+    }
+
+    #[allow(clippy::print_stderr, reason = "Diagnostic logging for symlink errors")]
+    fn link_shared_build_caches(repo_root: &Path, agent_ws_path: &Path) {
+        let project = crate::project::ProjectConfig::detect_or_load(repo_root);
         for cache_name in project.all_ignored_or_cache_paths() {
             let root_cache = repo_root.join(&cache_name);
             let ws_cache = agent_ws_path.join(&cache_name);
@@ -239,6 +243,21 @@ impl JujutsuWorkspace {
                 }
             }
         }
+    }
+
+    pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
+        let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
+            .unwrap_or_else(|_| workspace_root.to_path_buf());
+
+        Self::verify_jj_prerequisites(&repo_root)?;
+
+        let paths = crate::state::AgyStatePaths::new(&repo_root);
+        let workspaces_dir = paths.workspaces_dir();
+        std::fs::create_dir_all(&workspaces_dir)?;
+        let agent_ws_path = paths.agent_workspace(agent);
+
+        Self::create_or_sync_workspace(&repo_root, &agent_ws_path, agent)?;
+        Self::link_shared_build_caches(&repo_root, &agent_ws_path);
 
         if agent_ws_path.is_dir() {
             agent_ws_path.canonicalize().map_err(AgyError::Io)

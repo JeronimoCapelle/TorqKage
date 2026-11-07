@@ -55,6 +55,52 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     }
 }
 
+fn render_header_status_line(app: &App) -> Line<'static> {
+    let modified_count = app
+        .agents
+        .iter()
+        .filter(|a| a.modified)
+        .count()
+        .saturating_add(app.tools.iter().filter(|t| t.modified).count());
+    let mod_span = if modified_count > 0 {
+        Span::styled(
+            format!(" [● {modified_count} MODIFIED] "),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(" [✔ CLEAN] ", Style::default().fg(Color::Green))
+    };
+
+    let sandbox_span = if app.sandbox_enabled() {
+        Span::styled(
+            " [SANDBOX: ON] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
+    };
+
+    let iso_span = if app.isolated_workspace() {
+        Span::styled(
+            " [ISO: ON] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(" [ISO: OFF] ", Style::default().fg(Color::DarkGray))
+    };
+
+    Line::from(vec![mod_span, sandbox_span, iso_span])
+}
+
 fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let header_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -118,49 +164,7 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(tabs, header_chunks[1]);
 
     // Modified tracker & Sandbox state
-    let modified_count = app
-        .agents
-        .iter()
-        .filter(|a| a.modified)
-        .count()
-        .saturating_add(app.tools.iter().filter(|t| t.modified).count());
-    let mod_span = if modified_count > 0 {
-        Span::styled(
-            format!(" [● {modified_count} MODIFIED] "),
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled(" [✔ CLEAN] ", Style::default().fg(Color::Green))
-    };
-
-    let sandbox_span = if app.sandbox_enabled() {
-        Span::styled(
-            " [SANDBOX: ON] ",
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
-    };
-
-    let iso_span = if app.isolated_workspace() {
-        Span::styled(
-            " [ISO: ON] ",
-            Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightCyan)
-                .add_modifier(Modifier::BOLD),
-        )
-    } else {
-        Span::styled(" [ISO: OFF] ", Style::default().fg(Color::DarkGray))
-    };
-
-    let mod_para = Paragraph::new(Line::from(vec![mod_span, sandbox_span, iso_span]))
+    let mod_para = Paragraph::new(render_header_status_line(app))
         .alignment(Alignment::Center)
         .block(
             Block::default()
@@ -280,8 +284,8 @@ fn draw_fleet_agent_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
     draw_agent_tool_preview(frame, app, right_chunks[2]);
 }
 
-fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentManifest, area: Rect) {
-    let (session_span, action_span) = app.active_agent_session.as_ref().map_or_else(
+fn render_session_spans(app: &App) -> (Span<'static>, Span<'static>) {
+    app.active_agent_session.as_ref().map_or_else(
         || {
             (
                 Span::styled(
@@ -316,9 +320,11 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
                 ),
             )
         },
-    );
+    )
+}
 
-    let cb_span = match app.circuit_breaker_status.as_ref() {
+fn render_circuit_breaker_span(app: &App) -> Span<'static> {
+    match app.circuit_breaker_status.as_ref() {
         Some(cb) if cb.tripped => Span::styled(
             format!(
                 "🛑 TRIPPED ({}/{} strikes - {})",
@@ -333,7 +339,12 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
             Style::default().fg(Color::Yellow),
         ),
         _ => Span::styled("✔ OK (0/2 strikes)", Style::default().fg(Color::Green)),
-    };
+    }
+}
+
+fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentManifest, area: Rect) {
+    let (session_span, action_span) = render_session_spans(app);
+    let cb_span = render_circuit_breaker_span(app);
 
     let meta_lines = vec![
         Line::from(vec![
@@ -924,11 +935,8 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 }
 
-fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
-    let modal_area = centered_rect(65, 55, area);
-    frame.render_widget(Clear, modal_area);
-
-    let help_text = vec![
+fn build_help_modal_text() -> Vec<Line<'static>> {
+    vec![
         Line::from(Span::styled(
             "AGY-CTRL KEYBOARD SHORTCUTS & NAVIGATION",
             Style::default()
@@ -1025,7 +1033,12 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
             "Press Esc or Enter to close this help dialog.",
             Style::default().fg(Color::DarkGray),
         )),
-    ];
+    ]
+}
+
+fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
+    let modal_area = centered_rect(65, 55, area);
+    frame.render_widget(Clear, modal_area);
 
     let block = Block::default()
         .title(" [Help & Documentation] ")
@@ -1033,7 +1046,7 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
         .border_type(BorderType::Double)
         .border_style(Style::default().fg(Color::Yellow));
 
-    let modal = Paragraph::new(help_text)
+    let modal = Paragraph::new(build_help_modal_text())
         .block(block)
         .wrap(Wrap { trim: true });
     frame.render_widget(modal, modal_area);

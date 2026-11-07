@@ -231,274 +231,253 @@ pub(crate) fn matches_pattern(text: &str, pattern: &str) -> bool {
     false
 }
 
-/// Parses a `hooks.toml` string into a structured `HooksConfig`.
-#[allow(clippy::too_many_lines, reason = "Declarative hooks.toml parser")]
-#[must_use]
-pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
-    let mut config = HooksConfig::default();
-    let mut current_section = "";
-    let mut current_check: Option<CustomCheck> = None;
-    let mut current_injection: Option<WakeInjection> = None;
+fn parse_custom_check(table: &toml::Table) -> CustomCheck {
+    let name = table
+        .get("name")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    let matcher = table
+        .get("matcher")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("*")
+        .to_owned();
+    let command = table
+        .get("command")
+        .and_then(toml::Value::as_array)
+        .map_or_default(|arr| {
+            arr.iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        });
+    let fail_if_output_contains = table
+        .get("fail_if_output_contains")
+        .and_then(toml::Value::as_str)
+        .map(ToOwned::to_owned);
+    let decision = if table
+        .get("decision")
+        .and_then(toml::Value::as_str)
+        .is_some_and(|d| d.eq_ignore_ascii_case("ask"))
+    {
+        HookDecision::Ask
+    } else {
+        HookDecision::Deny
+    };
+    let reason = table
+        .get("reason")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("Declarative check condition failed")
+        .to_owned();
 
-    let mut in_array = false;
-    let mut array_key = String::new();
-    let mut array_items: Vec<String> = Vec::new();
+    CustomCheck {
+        name,
+        matcher,
+        command,
+        fail_if_output_contains,
+        decision,
+        reason,
+    }
+}
 
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
+fn parse_wake_injection(table: &toml::Table) -> WakeInjection {
+    let name = table
+        .get("name")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    let matcher = table
+        .get("matcher")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("*")
+        .to_owned();
+    let command = table
+        .get("command")
+        .and_then(toml::Value::as_array)
+        .map_or_default(|arr| {
+            arr.iter()
+                .filter_map(toml::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        });
+    let max_lines = table
+        .get("max_lines")
+        .and_then(toml::Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(40);
+    let timeout_seconds = table
+        .get("timeout_seconds")
+        .and_then(toml::Value::as_integer)
+        .and_then(|n| u64::try_from(n).ok())
+        .unwrap_or(5);
+    let prefix = table
+        .get("prefix")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+    let fallback = table
+        .get("fallback")
+        .and_then(toml::Value::as_str)
+        .map(ToOwned::to_owned);
 
-        // Multi-line array continuation
-        if in_array {
-            if let Some(end_idx) = trimmed.find(']') {
-                let part = &trimmed[..end_idx];
-                extract_quoted_strings(part, &mut array_items);
-                in_array = false;
-                apply_array_field(
-                    &mut config,
-                    current_section,
-                    &array_key,
-                    &array_items,
-                    &mut current_check,
-                    &mut current_injection,
-                );
-                array_items.clear();
-            } else {
-                extract_quoted_strings(trimmed, &mut array_items);
-            }
-            continue;
-        }
+    WakeInjection {
+        name,
+        matcher,
+        command,
+        max_lines,
+        timeout_seconds,
+        prefix,
+        fallback,
+    }
+}
 
-        // Section header
-        if trimmed.starts_with("[[") && trimmed.ends_with("]]") {
-            if let Some(check) = current_check.take() {
-                config.pre_tool_use.custom_checks.push(check);
-            }
-            if let Some(inj) = current_injection.take() {
-                config.session_start.injections.push(inj);
-            }
-            let section_name = trimmed.trim_matches(['[', ']']).trim();
-            current_section = if section_name == "pre_tool_use.custom_checks" {
-                current_check = Some(CustomCheck {
-                    name: String::new(),
-                    matcher: "*".to_owned(),
-                    command: Vec::new(),
-                    fail_if_output_contains: None,
-                    decision: HookDecision::Deny,
-                    reason: "Declarative check condition failed".to_owned(),
-                });
-                "custom_check"
-            } else if section_name == "session_start.injections"
-                || section_name == "session_start.custom_injections"
-            {
-                current_injection = Some(WakeInjection::default());
-                "session_start_injection"
-            } else {
-                "unknown"
-            };
-            continue;
-        }
-
-        if trimmed.starts_with('[') && trimmed.ends_with(']') {
-            if let Some(check) = current_check.take() {
-                config.pre_tool_use.custom_checks.push(check);
-            }
-            if let Some(inj) = current_injection.take() {
-                config.session_start.injections.push(inj);
-            }
-            let section_name = trimmed.trim_matches(['[', ']']).trim();
-            current_section = match section_name {
-                "pre_tool_use" => "pre_tool_use",
-                "circuit_breaker" => "circuit_breaker",
-                "manifest_guard" => "manifest_guard",
-                "wip" => "wip",
-                "session_start" => "session_start",
-                "stop" => "stop",
-                _ => "unknown",
-            };
-            continue;
-        }
-
-        // Key = Value parsing
-        if let Some((key_part, val_part)) = trimmed.split_once('=') {
-            let key = key_part.trim();
-            let val = val_part.trim();
-
-            if let Some(rest) = val.strip_prefix('[') {
-                if let Some(end_idx) = rest.find(']') {
-                    let inside = rest.get(..end_idx).unwrap_or("");
-                    let mut items = Vec::new();
-                    extract_quoted_strings(inside, &mut items);
-                    apply_array_field(
-                        &mut config,
-                        current_section,
-                        key,
-                        &items,
-                        &mut current_check,
-                        &mut current_injection,
-                    );
-                } else {
-                    in_array = true;
-                    key.clone_into(&mut array_key);
-                    extract_quoted_strings(rest, &mut array_items);
-                }
-            } else {
-                let clean_val = val.trim_matches(['"', '\'']);
-                apply_string_field(
-                    &mut config,
-                    current_section,
-                    key,
-                    clean_val,
-                    &mut current_check,
-                    &mut current_injection,
-                );
+fn parse_pre_tool_use(pre: &toml::Table) -> PreToolUseConfig {
+    let mut config = PreToolUseConfig::default();
+    if let Some(pipeline) = pre.get("pipeline").and_then(toml::Value::as_array) {
+        config.pipeline = pipeline
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+    if let Some(checks) = pre.get("custom_checks").and_then(toml::Value::as_array) {
+        for check in checks {
+            if let Some(ct) = check.as_table() {
+                config.custom_checks.push(parse_custom_check(ct));
             }
         }
     }
-
-    if let Some(check) = current_check {
-        config.pre_tool_use.custom_checks.push(check);
-    }
-    if let Some(inj) = current_injection {
-        config.session_start.injections.push(inj);
-    }
-
     config
 }
 
-fn extract_quoted_strings(slice: &str, items: &mut Vec<String>) {
-    let mut in_quote = false;
-    let mut current = String::new();
-    let mut quote_char = '"';
-
-    for ch in slice.chars() {
-        if in_quote {
-            if ch == quote_char {
-                in_quote = false;
-                items.push(current.clone());
-                current.clear();
-            } else {
-                current.push(ch);
-            }
-        } else if ch == '"' || ch == '\'' {
-            in_quote = true;
-            quote_char = ch;
-        }
+fn parse_circuit_breaker(cb: &toml::Table) -> CircuitBreakerConfig {
+    let mut config = CircuitBreakerConfig::default();
+    if let Some(enabled) = cb.get("enabled").and_then(toml::Value::as_bool) {
+        config.enabled = enabled;
     }
+    if let Some(max) = cb.get("max_strikes").and_then(toml::Value::as_integer)
+        && let Ok(m) = usize::try_from(max)
+    {
+        config.max_strikes = m;
+    }
+    config
 }
 
-fn apply_array_field(
-    config: &mut HooksConfig,
-    section: &str,
-    key: &str,
-    items: &[String],
-    current_check: &mut Option<CustomCheck>,
-    current_injection: &mut Option<WakeInjection>,
-) {
-    if section == "pre_tool_use" && key == "pipeline" {
-        config.pre_tool_use.pipeline = items.to_vec();
-    } else if section == "manifest_guard" {
-        if key == "protected_patterns" {
-            config.manifest_guard.protected_patterns = items.to_vec();
-        } else if key == "protected_tools" {
-            config.manifest_guard.protected_tools = items.to_vec();
-        }
-    } else if section == "custom_check"
-        && key == "command"
-        && let Some(check) = current_check
-    {
-        check.command = items.to_vec();
-    } else if section == "session_start_injection"
-        && key == "command"
-        && let Some(inj) = current_injection
-    {
-        inj.command = items.to_vec();
+fn parse_manifest_guard(mg: &toml::Table) -> ManifestGuardConfig {
+    let mut config = ManifestGuardConfig::default();
+    if let Some(enabled) = mg.get("enabled").and_then(toml::Value::as_bool) {
+        config.enabled = enabled;
     }
+    if let Some(patterns) = mg.get("protected_patterns").and_then(toml::Value::as_array) {
+        config.protected_patterns = patterns
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+    if let Some(tools) = mg.get("protected_tools").and_then(toml::Value::as_array) {
+        config.protected_tools = tools
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect();
+    }
+    config
 }
 
-fn apply_string_field(
-    config: &mut HooksConfig,
-    section: &str,
-    key: &str,
-    val: &str,
-    current_check: &mut Option<CustomCheck>,
-    current_injection: &mut Option<WakeInjection>,
-) {
-    if section == "circuit_breaker" {
-        if key == "max_strikes" {
-            if let Ok(m) = val.parse::<usize>() {
-                config.circuit_breaker.max_strikes = m;
+fn parse_wip(wip: &toml::Table) -> WipConfig {
+    let mut config = WipConfig::default();
+    if let Some(enabled) = wip.get("enabled").and_then(toml::Value::as_bool) {
+        config.enabled = enabled;
+    }
+    if let Some(max) = wip
+        .get("max_preview_files")
+        .and_then(toml::Value::as_integer)
+        && let Ok(m) = usize::try_from(max)
+    {
+        config.max_preview_files = m;
+    }
+    config
+}
+
+fn parse_session_start(ss: &toml::Table) -> SessionStartConfig {
+    let mut config = SessionStartConfig::default();
+    if let Some(enabled) = ss.get("enabled").and_then(toml::Value::as_bool) {
+        config.enabled = enabled;
+    }
+    if let Some(wake) = ss.get("inject_wake_state").and_then(toml::Value::as_bool) {
+        config.inject_wake_state = wake;
+    }
+    if let Some(doc) = ss
+        .get("inject_documentation")
+        .and_then(toml::Value::as_bool)
+    {
+        config.inject_documentation = doc;
+    }
+    let injections_arr = ss
+        .get("injections")
+        .or_else(|| ss.get("custom_injections"))
+        .and_then(toml::Value::as_array);
+    if let Some(injections) = injections_arr {
+        for inj in injections {
+            if let Some(it) = inj.as_table() {
+                config.injections.push(parse_wake_injection(it));
             }
-        } else if key == "enabled" {
-            config.circuit_breaker.enabled = val.parse::<bool>().unwrap_or(true);
         }
-    } else if section == "manifest_guard" && key == "enabled" {
-        config.manifest_guard.enabled = val.parse::<bool>().unwrap_or(true);
-    } else if section == "wip" {
-        if key == "enabled" {
-            config.wip.enabled = val.parse::<bool>().unwrap_or(true);
-        } else if key == "max_preview_files"
-            && let Ok(n) = val.parse::<usize>()
-        {
-            config.wip.max_preview_files = n;
-        }
-    } else if section == "session_start" {
-        if key == "enabled" {
-            config.session_start.enabled = val.parse::<bool>().unwrap_or(true);
-        } else if key == "inject_wake_state" {
-            config.session_start.inject_wake_state = val.parse::<bool>().unwrap_or(true);
-        } else if key == "inject_documentation" {
-            config.session_start.inject_documentation = val.parse::<bool>().unwrap_or(true);
-        }
-    } else if section == "stop" {
-        if key == "enabled" {
-            config.stop.enabled = val.parse::<bool>().unwrap_or(true);
-        } else if key == "record_handoff" {
-            config.stop.record_handoff = val.parse::<bool>().unwrap_or(true);
-        } else if key == "max_modified_files"
-            && let Ok(n) = val.parse::<usize>()
-        {
-            config.stop.max_modified_files = n;
-        }
-    } else if section == "custom_check"
-        && let Some(check) = current_check
+    }
+    config
+}
+
+fn parse_stop(stop: &toml::Table) -> StopConfig {
+    let mut config = StopConfig::default();
+    if let Some(enabled) = stop.get("enabled").and_then(toml::Value::as_bool) {
+        config.enabled = enabled;
+    }
+    if let Some(record) = stop.get("record_handoff").and_then(toml::Value::as_bool) {
+        config.record_handoff = record;
+    }
+    if let Some(max) = stop
+        .get("max_modified_files")
+        .and_then(toml::Value::as_integer)
+        && let Ok(m) = usize::try_from(max)
     {
-        match key {
-            "name" => val.clone_into(&mut check.name),
-            "matcher" => val.clone_into(&mut check.matcher),
-            "fail_if_output_contains" => check.fail_if_output_contains = Some(val.to_owned()),
-            "decision" => {
-                check.decision = if val.eq_ignore_ascii_case("ask") {
-                    HookDecision::Ask
-                } else {
-                    HookDecision::Deny
-                };
-            },
-            "reason" => val.clone_into(&mut check.reason),
-            _ => {},
-        }
-    } else if section == "session_start_injection"
-        && let Some(inj) = current_injection
-    {
-        match key {
-            "name" => val.clone_into(&mut inj.name),
-            "matcher" => val.clone_into(&mut inj.matcher),
-            "prefix" => val.clone_into(&mut inj.prefix),
-            "fallback" => inj.fallback = Some(val.to_owned()),
-            "max_lines" => {
-                if let Ok(n) = val.parse::<usize>() {
-                    inj.max_lines = n;
-                }
-            },
-            "timeout_seconds" => {
-                if let Ok(n) = val.parse::<u64>() {
-                    inj.timeout_seconds = n;
-                }
-            },
-            _ => {},
-        }
+        config.max_modified_files = m;
+    }
+    config
+}
+
+/// Parses a `hooks.toml` string into a structured `HooksConfig`.
+#[must_use]
+pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
+    let Ok(table) = content.parse::<toml::Table>() else {
+        return HooksConfig::default();
+    };
+
+    HooksConfig {
+        pre_tool_use: table
+            .get("pre_tool_use")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_pre_tool_use),
+        circuit_breaker: table
+            .get("circuit_breaker")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_circuit_breaker),
+        manifest_guard: table
+            .get("manifest_guard")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_manifest_guard),
+        wip: table
+            .get("wip")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_wip),
+        session_start: table
+            .get("session_start")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_session_start),
+        stop: table
+            .get("stop")
+            .and_then(toml::Value::as_table)
+            .map_or_default(parse_stop),
     }
 }
 

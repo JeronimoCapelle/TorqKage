@@ -786,8 +786,151 @@ fn is_matching_test_item(token: &str, syntax: &SyntaxConfig) -> bool {
 #[allow(
     clippy::arithmetic_side_effects,
     clippy::indexing_slicing,
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
+    reason = "Attribute slicing and bracket traversal on bounded character vector"
+)]
+fn parse_rust_attribute(
+    chars: &[char],
+    i: &mut usize,
+    syntax: &SyntaxConfig,
+) -> Option<(String, bool)> {
+    let len = chars.len();
+    if *i >= len
+        || chars[*i] != '#'
+        || i.saturating_add(1_usize) >= len
+        || chars[i.saturating_add(1_usize)] != '['
+    {
+        return None;
+    }
+
+    let start = *i;
+    *i = i.saturating_add(2_usize);
+    let mut bracket_depth = 1_usize;
+    let mut attr_content = String::new();
+
+    while *i < len && bracket_depth > 0_usize {
+        let ch = chars[*i];
+        if ch == '[' {
+            bracket_depth = bracket_depth.saturating_add(1_usize);
+            attr_content.push(ch);
+            *i = i.saturating_add(1_usize);
+        } else if ch == ']' {
+            bracket_depth = bracket_depth.saturating_sub(1_usize);
+            if bracket_depth > 0_usize {
+                attr_content.push(ch);
+            }
+            *i = i.saturating_add(1_usize);
+        } else if ch == '"' {
+            attr_content.push(ch);
+            *i = i.saturating_add(1_usize);
+            while *i < len {
+                let sc = chars[*i];
+                attr_content.push(sc);
+                if sc == '\\' && i.saturating_add(1_usize) < len {
+                    *i = i.saturating_add(1_usize);
+                    attr_content.push(chars[*i]);
+                } else if sc == '"' {
+                    *i = i.saturating_add(1_usize);
+                    break;
+                }
+                *i = i.saturating_add(1_usize);
+            }
+        } else {
+            attr_content.push(ch);
+            *i = i.saturating_add(1_usize);
+        }
+    }
+
+    let full_attr: String = chars[start..*i].iter().collect();
+    let is_test = is_matching_test_item(&attr_content, syntax);
+    Some((full_attr, is_test))
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    reason = "Bounded lookahead on character vector"
+)]
+fn matches_direct_test_definition(chars: &[char], i: usize, syntax: &SyntaxConfig) -> bool {
+    let len = chars.len();
+    let current_slice: String = chars[i..len.min(i.saturating_add(30_usize))]
+        .iter()
+        .collect();
+    syntax
+        .test_attributes
+        .iter()
+        .any(|a| current_slice.starts_with(a))
+        || syntax.test_prefixes.iter().any(|p| {
+            current_slice.starts_with(&format!("func {p}")) || current_slice.starts_with(p)
+        })
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
+    reason = "Bounded brace traversal on character vector"
+)]
+fn skip_test_item_body(chars: &[char], i: &mut usize) {
+    let len = chars.len();
+    let mut brace_depth = 0_usize;
+    let mut seen_brace = false;
+
+    while *i < len {
+        let ch = chars[*i];
+
+        if let Some((_, next_idx)) = try_consume_raw_string(chars, *i) {
+            *i = next_idx;
+            continue;
+        }
+
+        if ch == '"' {
+            *i = i.saturating_add(1_usize);
+            while *i < len {
+                let sc = chars[*i];
+                if sc == '\\' && i.saturating_add(1_usize) < len {
+                    *i = i.saturating_add(2_usize);
+                } else if sc == '"' {
+                    *i = i.saturating_add(1_usize);
+                    break;
+                } else {
+                    *i = i.saturating_add(1_usize);
+                }
+            }
+            continue;
+        }
+
+        if ch == '\'' && i.saturating_add(2_usize) < len && chars[i.saturating_add(2_usize)] == '\''
+        {
+            *i = i.saturating_add(3_usize);
+            continue;
+        }
+
+        if ch == '{' {
+            seen_brace = true;
+            brace_depth = brace_depth.saturating_add(1_usize);
+            *i = i.saturating_add(1_usize);
+        } else if ch == '}' {
+            if brace_depth > 0_usize {
+                brace_depth = brace_depth.saturating_sub(1_usize);
+                *i = i.saturating_add(1_usize);
+                if brace_depth == 0_usize {
+                    break;
+                }
+            } else {
+                *i = i.saturating_add(1_usize);
+                break;
+            }
+        } else if ch == ';' && !seen_brace {
+            *i = i.saturating_add(1_usize);
+            break;
+        } else {
+            *i = i.saturating_add(1_usize);
+        }
+    }
+}
+
+#[allow(
+    clippy::arithmetic_side_effects,
+    clippy::indexing_slicing,
     clippy::iter_with_drain,
     reason = "Item-level brace tracking state machine operating on bounded character vector"
 )]
@@ -809,67 +952,13 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
         }
 
         // 1. Rust attribute detection: #[ ... ]
-        if chars[i] == '#'
-            && i.saturating_add(1_usize) < len
-            && chars[i.saturating_add(1_usize)] == '['
-        {
-            let start = i;
-            i = i.saturating_add(2_usize);
-            let mut bracket_depth = 1_usize;
-            let mut attr_content = String::new();
-
-            while i < len && bracket_depth > 0_usize {
-                let ch = chars[i];
-                if ch == '[' {
-                    bracket_depth = bracket_depth.saturating_add(1_usize);
-                    attr_content.push(ch);
-                    i = i.saturating_add(1_usize);
-                } else if ch == ']' {
-                    bracket_depth = bracket_depth.saturating_sub(1_usize);
-                    if bracket_depth > 0_usize {
-                        attr_content.push(ch);
-                    }
-                    i = i.saturating_add(1_usize);
-                } else if ch == '"' {
-                    attr_content.push(ch);
-                    i = i.saturating_add(1_usize);
-                    while i < len {
-                        let sc = chars[i];
-                        attr_content.push(sc);
-                        if sc == '\\' && i.saturating_add(1_usize) < len {
-                            i = i.saturating_add(1_usize);
-                            attr_content.push(chars[i]);
-                        } else if sc == '"' {
-                            i = i.saturating_add(1_usize);
-                            break;
-                        }
-                        i = i.saturating_add(1_usize);
-                    }
-                } else {
-                    attr_content.push(ch);
-                    i = i.saturating_add(1_usize);
-                }
-            }
-
-            let full_attr: String = chars[start..i].iter().collect();
-            let is_test = is_matching_test_item(&attr_content, syntax);
+        if let Some((full_attr, is_test)) = parse_rust_attribute(&chars, &mut i, syntax) {
             attr_buffer.push((full_attr, is_test));
             continue;
         }
 
         // 2. Direct test definitions (e.g. Zig `test "..."`, C++ `TEST(...)`, Go `func Test...`)
-        let current_slice: String = chars[i..len.min(i.saturating_add(30_usize))]
-            .iter()
-            .collect();
-        let matches_direct_test = syntax
-            .test_attributes
-            .iter()
-            .any(|a| current_slice.starts_with(a))
-            || syntax.test_prefixes.iter().any(|p| {
-                current_slice.starts_with(&format!("func {p}")) || current_slice.starts_with(p)
-            });
-
-        if matches_direct_test {
+        if matches_direct_test_definition(&chars, i, syntax) {
             attr_buffer.push((String::new(), true));
         }
 
@@ -879,65 +968,7 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
 
             if item_is_test {
                 attr_buffer.clear();
-
-                let mut brace_depth = 0_usize;
-                let mut seen_brace = false;
-
-                while i < len {
-                    let ch = chars[i];
-
-                    if let Some((_, next_idx)) = try_consume_raw_string(&chars, i) {
-                        i = next_idx;
-                        continue;
-                    }
-
-                    if ch == '"' {
-                        i = i.saturating_add(1_usize);
-                        while i < len {
-                            let sc = chars[i];
-                            if sc == '\\' && i.saturating_add(1_usize) < len {
-                                i = i.saturating_add(2_usize);
-                            } else if sc == '"' {
-                                i = i.saturating_add(1_usize);
-                                break;
-                            } else {
-                                i = i.saturating_add(1_usize);
-                            }
-                        }
-                        continue;
-                    }
-
-                    if ch == '\''
-                        && i.saturating_add(2_usize) < len
-                        && chars[i.saturating_add(2_usize)] == '\''
-                    {
-                        i = i.saturating_add(3_usize);
-                        continue;
-                    }
-
-                    if ch == '{' {
-                        seen_brace = true;
-                        brace_depth = brace_depth.saturating_add(1_usize);
-                        i = i.saturating_add(1_usize);
-                    } else if ch == '}' {
-                        if brace_depth > 0_usize {
-                            brace_depth = brace_depth.saturating_sub(1_usize);
-                            i = i.saturating_add(1_usize);
-                            if brace_depth == 0_usize {
-                                break;
-                            }
-                        } else {
-                            i = i.saturating_add(1_usize);
-                            break;
-                        }
-                    } else if ch == ';' && !seen_brace {
-                        i = i.saturating_add(1_usize);
-                        break;
-                    } else {
-                        i = i.saturating_add(1_usize);
-                    }
-                }
-
+                skip_test_item_body(&chars, &mut i);
                 out.push(' ');
                 continue;
             }
