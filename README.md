@@ -10,6 +10,20 @@
 
 ---
 
+## 💡 About `agy-suite`
+
+Autonomous AI coding agents frequently suffer from two fatal failure modes in production systems engineering: **ambient shell poisoning** (unrestricted subshell injection, accidental `rm -rf`, credential leakage) and **token exhaustion** (re-injecting multi-kilobyte interpreted markdown skills on every turn).
+
+`agy-suite` (Antigravity Systems Suite) is an enterprise-grade, capability-based orchestration platform written in pure Safe Rust (Rust 2024 Edition, `#![forbid(unsafe_code)]`). Built as a hardened extension layer for Google Antigravity (`agy`), it replaces non-deterministic ambient shell access with:
+
+- **Precision Container Jailing:** Unshare-all Bubblewrap (`bwrap`) isolation with private loopback, unmounted network capability, read-only system roots, and credential masking.
+- **Declarative MCP Tooling (`agy-mcp`):** Native JSON-RPC stdio daemon with regex parameter sanitization, bounded UTF-8 output slicing, and dynamic agent allowlists.
+- **Compiled Lifecycle Interceptors (`agy-hooks`):** Sub-millisecond (<1ms, <500KB RSS) execution gates featuring an automated 2-strike compiler circuit breaker and Turn-1 context wake injections.
+- **Interactive Flight Cockpit (`agy-ctrl`):** Ratatui 0.30 terminal dashboard for live policy matrix navigation, SQLite session resumption, and pre-flight gatekeeping.
+- **Specialized 10-Agent Fleet:** Distinct operational personas (`coder`, `finisher`, `planner`, `test-author`, `perf-analyst`, etc.) with inner-file boundary filters and explicit human-in-the-loop dependency request gates.
+
+---
+
 ## 🏛️ System Architecture
 
 `agy-suite` is organized as a unified 4-crate Rust workspace paired with an Antigravity plugin:
@@ -27,7 +41,7 @@ agy-suite/
 │   ├── agy-common/                 # Shared primitives, bwrap builder, Jujutsu isolation, ProtoJSON models
 │   ├── agy-mcp/                    # Persistent JSON-RPC 2.0 stdio MCP daemon (bounded native actions)
 │   ├── agy-hooks/                  # Featherweight lifecycle hook CLI (<1ms startup, <500KB RSS)
-│   └── agy-ctrl/                   # Ratatui 0.29 TUI dashboard, fleet manager, and session orchestrator
+│   └── agy-ctrl/                   # Ratatui 0.30 TUI dashboard, fleet manager, and session orchestrator
 └── plugins/
     └── agy-suite/                  # Antigravity native plugin distribution package
         ├── plugin.json             # Plugin metadata manifest

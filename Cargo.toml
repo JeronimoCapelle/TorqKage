@@ -15,6 +15,7 @@ edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["infinite"]
 repository = "https://github.com/JeronimoCapelle/agy-suite"
+description = "High-assurance systems programming toolkit, declarative MCP daemon, and Ratatui control deck for Google Antigravity"
 readme = "README.md"
 keywords = ["mcp", "agentic", "systems", "ratatui", "antigravity"]
 categories = ["development-tools", "command-line-utilities"]
