@@ -22,13 +22,13 @@ categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 # Internal workspace crates
-agy-common = { path = "crates/agy-common" }
+agy-common = { path = "crates/agy-common", version = "0.1.0" }
 
 # Serialization & Configuration
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "1.2"
-toml_edit = "0.22"
+toml_edit = "0.25"
 
 # Error Handling & Systems Utilities
 thiserror = "2.0"
@@ -42,7 +42,7 @@ anstream = "1.0"
 globset = "0.4"
 ignore = "0.4"
 rustc-hash = "2.1"
-rusqlite = { version = "0.33", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 
 # Asynchronous Runtime (for agy-mcp stdio transport)
 tokio = { version = "1.54", features = ["full"] }

@@ -88,7 +88,7 @@ fn query_session_from_db(
                 agent_name: row.get(1)?,
                 workspace_uris: row.get(2)?,
                 last_modified_time: row.get(3)?,
-                step_count: row.get(4)?,
+                step_count: u64::try_from(row.get::<_, i64>(4)?).unwrap_or(0),
                 preview: row.get(5)?,
             })
         })
