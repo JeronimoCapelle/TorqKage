@@ -238,3 +238,83 @@ agy-suite/
 ### 8.3 Self-Contained Plugin Code Intelligence
 - **`graphtrail` (Tree-sitter AST Code Graph):** Bundled standalone Rust binary (`plugins/agy-suite/bin/graphtrail`) exposing cross-file caller/callee indexing, dead code discovery, and blast-radius impact analysis via `query_code_graph` and `sync_code_graph`.
 - **`perfetto-mcp-rs` (Systems Trace Analysis):** Bundled standalone MCP server (`plugins/agy-suite/bin/perfetto-mcp-rs`) giving `perf-analyst` deep PerfettoSQL introspection into Linux kernel ftrace, thread scheduler switches, and lock contention without browser clutter.
+
+### 8.4 Native MCP Access Points & Execution Guarantees
+The `agy-mcp` daemon replaces ambient shell access with 10 hardened native action handlers:
+1. **`file_read`:** Bounded file reader with line-range slicing (`start_line`, `end_line`) and UTF-8-safe byte caps.
+2. **`file_write`:** Atomic writer enforcing directory perimeters and syntactic path policies.
+3. **`mpatch_edit`:** Precision fuzzy block patcher (`<<<< SEARCH / ==== / >>>> REPLACE`) eliminating destructive full-file rewrites.
+4. **`file_search`:** Bounded `rg` wrapper returning matching lines, column offsets, and context lines without flooding context buffers.
+5. **`static_command`:** Parameterless invocation of fixed audit binaries (`cargo check`, `cargo test`, `git status`).
+6. **`parametrized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`).
+7. **`cli_manual`:** Intelligent system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and `rustc --explain` references directly into the agent's context.
+8. **Documentation & Specification Query Handlers:** Instant lookups across `docs/`, RFCs, and ISA specifications.
+9. **Pre-Flight Binary Verification:** Every tool declared in `tools.toml` is verified via `which` before reporting its schema to `agy`. Missing tools are dropped cleanly or report an unambiguous configuration error, preventing agent runtime panics.
+10. **Tool Inheritance & Output Slicing:** Base templates (`base_tools.*`) provide unified timeouts, output limits, and environment policies. Output streams capture `stdout`, `stderr`, or interleaved buffers with automatic fallback execution chains if an error occurs.
+
+---
+
+## 9. Deep Systems Verification & Hardware Analysis Toolchain
+
+`agy-suite` incorporates a battle-tested systems engineering and silicon verification toolchain:
+
+| Domain | Tools & Frameworks | Architectural Purpose |
+| :--- | :--- | :--- |
+| **Compiler & Fast Path** | Cranelift, Mold, `cargo fast`, `sccache`, `zigbuild` | Sub-second dev iteration; Cranelift code generation + Mold linking for instant checks. |
+| **Formal Verification** | `kani`, `miri` | Bit-precise model checking and SAT/SMT proofs (`kani`); Stacked/Tree Borrows UB detection (`miri`). |
+| **Concurrency Testing** | `loom` | Exhaustive permutation testing of atomic memory orderings and lock-free data structures. |
+| **Property & Mutation** | `proptest`, `cargo-fuzz`, `cargo-mutants`, `cargo-careful` | Generative property testing, libFuzzer fuzzing, mutation coverage, and extra UB checks. |
+| **Trace & Microarchitecture** | `perfetto-mcp-rs`, `graphtrail`, `perf`, `llvm-mca`, `samply`, `flamegraph` | Kernel scheduler switch analysis (`.pftrace`), AST code intelligence, pipeline latency, CPU profiling. |
+| **Benchmarking & Memory** | `hyperfine`, `criterion`, `divan`, `dhat`, `valgrind`, `bacon` | Statistical CLI benchmarks, microbenchmarks, heap allocation profiling, memory leak detection. |
+| **Low-Level & Hardware** | `gdb`, `lldb`, `strace`, `qemu`, `nasm`, `zig`, `cargo-asm`, `cargo-bloat` | Kernel syscall tracing, ISA emulation, assembly inspection, and binary footprint analysis. |
+| **Supply Chain & API Gates**| `cargo-deny`, `cargo-audit`, `cargo-machete`, `cargo-semver-checks`, `cargo-public-api`, `cargo-hack` | License/CVE compliance, unused dependency elimination, semver drift detection, and multi-target checks. |
+
+---
+
+## 10. Zero-Skill Architecture & Sandboxing Continuum
+
+### 10.1 The Zero-Skill Policy (`NO SKILL.md`)
+Google Antigravity natively supports markdown-based skills (`SKILL.md`) and unconfined bash wrappers. In production systems engineering, this approach exhibits severe defects:
+- **Token Inefficiency:** Injecting multi-kilobyte markdown definitions consumes 2,000 to 4,000+ baseline tokens per conversational turn.
+- **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
+- **`agy-suite` Solution:** Completely bans interpreted markdown skills. All agent capabilities are declared as native, compiled MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
+
+### 10.2 Four-Tier Security Continuum
+```
+[ Level 1: Operator Cockpit (agy-ctrl) ]
+  └── Policy switches, model effort controls, interactive ASK gate enforcement
+        │
+[ Level 2: Runtime Engine (agy --sandbox) ]
+  └── Host LLM & Web Search connectivity retained; local filesystem mutations constrained
+        │
+[ Level 3: Precision Tool Isolation (bwrap --unshare-all) ]
+  └── enforce_sandbox = true: Private mount/PID/IPC/network namespaces, loopback only, zero raw sockets
+        │
+[ Level 4: Path & Manifest Guard (manifest_guard & ContentFilter) ]
+  └── Cargo.toml / .env / SSH keys protected; inner-file boundary filters (mod tests only)
+```
+
+---
+
+## 11. The 10-Agent Fleet Perimeters & Operational Matrix
+
+Every agent in `agy-suite` operates under declarative frontmatter rules specifying allowed directories, forbidden paths, tool allowlists, and operator confirmation gates:
+
+| Agent Profile | Role & Specialty | Allowed Directories | File / Content Policies | Mutating Access |
+| :--- | :--- | :--- | :--- | :--- |
+| **`coder.md`** | Autonomous Systems Implementer (Rust, RISC-V asm, linker scripts) | `src/`, `crates/`, `boards/`, `layout/`, `targets/` | Masked manifests; asks operator for `Cargo.toml` dependency edits | Full code mutation |
+| **`copilot.md`** | Chief of Staff & Fleet Orchestrator | Full workspace | Orchestrates subagents, reviews diffs, merges Jujutsu workspaces | Workspace rebase/merge |
+| **`doc-author.md`** | Technical Specification & Rustdoc Author | `docs/`, `specs/`, `README.md`, `ARCHITECTURE.md` | `comments_only` path policy in `src/` (in-place `///` rustdoc) | Docs + doc-comments |
+| **`finisher.md`** | Adversarial Release Gatekeeper | Read-only across repository | Pre-release gauntlet (fmt, clippy, test suite, VCS conflicts) | Read-only |
+| **`mini.md`** | Pure Symbolic Math Engine | Ephemeral sandbox | Network-less Bubblewrap container using Python SymPy | Scratchpad only |
+| **`perf-analyst.md`** | Microarchitectural Profiler & Benchmark Engineer | `benches/`, `profiles/`, `traces/` | Systems trace introspection via `perfetto-mcp-rs` & `agy-tools` | Benchmarks & traces |
+| **`planner.md`** | Forward-Looking Systems Architect | `docs/`, `specs/`, `ARCHITECTURE.md` | Authoritative design documents & upfront verification plans | Architecture docs |
+| **`spec-checker.md`** | Read-Only Compliance Auditor | Read-only across repository | Cross-references source code against specifications & ISA contracts| Read-only |
+| **`sysadmin.md`** | Arch Linux System Administrator | System & development tools | Interactive operator confirmation (`ASK`) on all state-altering tools | Supervised shell |
+| **`test-author.md`** | Design Verification (DV) & Formal Test Engineer | `tests/`, `benches/` | `tests_only` in `src/` (`mod tests` syntactic filter); asks for test deps | Test suites & proofs |
+
+### 11.1 The Dependency Request Protocol
+When an implementing agent (`coder` or `test-author`) requires a third-party dependency:
+1. Direct editing of `Cargo.toml`, `Cargo.lock`, or `deny.toml` is intercepted and blocked by `manifest_guard`.
+2. The agent writes a structured JSON payload to `.agy/state/dependency_requests.json` specifying the package name, requested version, features, and justification.
+3. The agent explicitly requests the human operator's permission before any modification occurs.
