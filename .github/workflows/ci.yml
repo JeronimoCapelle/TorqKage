@@ -42,10 +42,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Rust toolchain (Nightly / Rust 2024)
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@cargo-deny
+
       - name: Security, License & Banned Dependency Audit (cargo-deny)
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check
+        run: cargo deny check
 
   quality-gate:
     name: Build, Test & Lint
@@ -54,6 +58,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install build tools (clang, mold)
+        run: sudo apt-get update && sudo apt-get install -y clang mold
+
+      - name: Install sccache
+        uses: taiki-e/install-action@sccache
+
       - name: Install Rust toolchain (Nightly / Rust 2024)
         uses: dtolnay/rust-toolchain@nightly
         with:
@@ -61,6 +71,8 @@ jobs:
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "agy-suite-cache"
 
       - name: Verify code formatting (rustfmt)
         run: cargo fmt --check
