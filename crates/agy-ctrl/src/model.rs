@@ -641,14 +641,14 @@ mainAgent: false
 subagent: true
 inheritMcp: false
 allowed_subagents:
-  - mini
+  - helper_agent
 pre_launch_checks:
-  - compilation
-  - vcs_conflicts
+  - gate_a
+  - gate_b
 tools: []
 mcp_tools:
-  - cargo_clippy
-  - cargo_test
+  - tool_a
+  - tool_b
 mcpServers:
   - name: agy-tools
     command: agy-mcp
@@ -667,20 +667,17 @@ You are a test agent. Always pass tests.
         assert_eq!(manifest.name, "test-agent");
         assert_eq!(manifest.effort, "high");
         assert!(!manifest.inherit_mcp);
-        assert_eq!(manifest.mcp_tools, vec!["cargo_clippy", "cargo_test"]);
-        assert_eq!(manifest.allowed_subagents, vec!["mini"]);
-        assert_eq!(
-            manifest.pre_launch_checks,
-            vec!["compilation", "vcs_conflicts"]
-        );
+        assert_eq!(manifest.mcp_tools, vec!["tool_a", "tool_b"]);
+        assert_eq!(manifest.allowed_subagents, vec!["helper_agent"]);
+        assert_eq!(manifest.pre_launch_checks, vec!["gate_a", "gate_b"]);
         assert!(manifest.directives.contains("You are a test agent."));
 
         let serialized = manifest.serialize();
         assert!(serialized.contains("name: test-agent"));
         assert!(serialized.contains("pre_launch_checks:"));
-        assert!(serialized.contains("- compilation"));
+        assert!(serialized.contains("- gate_a"));
         assert!(serialized.contains("mcp_tools:"));
-        assert!(serialized.contains("- cargo_clippy"));
+        assert!(serialized.contains("- tool_a"));
         assert!(serialized.contains("inheritMcp: false"));
         assert!(serialized.contains("You are a test agent."));
     }

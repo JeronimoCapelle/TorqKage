@@ -60,11 +60,7 @@ async fn main() -> ExitCode {
         eprintln!("[agy-mcp] Warning: {warning}");
     }
 
-    let mut guards = agent_scope::resolve_agent_guards(&workspace_root, agent_name.as_deref());
-    // Merge any remaining guards from tools.toml as fallback
-    for (k, v) in loaded_config.agent_guards {
-        guards.entry(k).or_insert(v);
-    }
+    let guards = agent_scope::resolve_agent_guards(&workspace_root, agent_name.as_deref());
 
     let server = McpServer::new(loaded_config.tools, workspace_root, agent_name, guards);
 

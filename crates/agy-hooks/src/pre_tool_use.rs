@@ -459,7 +459,7 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
     }
 
     #[test]
-    fn test_pre_tool_use_path_policies_and_agent_guards() {
+    fn test_pre_tool_use_path_policies_and_agent_frontmatter_guards() {
         let unique_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -470,10 +470,10 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
         ));
         drop(std::fs::create_dir_all(temp_dir.join("src")));
 
-        let doc_author_manifest = "---\nname: doc-writer\nallowed_dirs:\n  - docs\n  - src\npath_policies:\n  - path: src\n    filter: comments_only\n---\n";
+        let scoped_agent_manifest = "---\nname: comments_restricted_agent\nallowed_dirs:\n  - docs\n  - src\npath_policies:\n  - path: src\n    filter: comments_only\n---\n";
         std::fs::write(
-            temp_dir.join("plugins/agy-suite/agents/doc-writer.md"),
-            doc_author_manifest,
+            temp_dir.join("plugins/agy-suite/agents/comments_restricted_agent.md"),
+            scoped_agent_manifest,
         )
         .unwrap();
 
@@ -492,7 +492,7 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
                 }),
             }),
             common: agy_common::models::CommonHookPayload {
-                model_name: Some("doc-writer".to_owned()),
+                model_name: Some("comments_restricted_agent".to_owned()),
                 ..Default::default()
             },
             ..Default::default()
@@ -517,7 +517,7 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
                 }),
             }),
             common: agy_common::models::CommonHookPayload {
-                model_name: Some("doc-writer".to_owned()),
+                model_name: Some("comments_restricted_agent".to_owned()),
                 ..Default::default()
             },
             ..Default::default()
@@ -542,7 +542,7 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
                 }),
             }),
             common: agy_common::models::CommonHookPayload {
-                model_name: Some("doc-writer".to_owned()),
+                model_name: Some("comments_restricted_agent".to_owned()),
                 ..Default::default()
             },
             ..Default::default()

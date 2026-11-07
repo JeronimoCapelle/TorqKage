@@ -29,7 +29,7 @@ impl JujutsuWorkspace {
             .is_ok_and(|out| out.status.success())
     }
 
-    /// Returns the active workspace name (e.g., "default", "coder") for `workspace_root`.
+    /// Returns the active workspace name (e.g., `"default"`, `"subagent_a"`) for `workspace_root`.
     #[must_use]
     pub fn current_workspace_name(workspace_root: &Path) -> Option<String> {
         let mut cmd = Command::new("jj");

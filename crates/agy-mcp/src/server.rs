@@ -409,7 +409,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_scoping_coder_cannot_call_design_doc() {
+    fn test_agent_scoping_unauthorized_cannot_call_tool() {
         let tools = vec![
             ToolDefinition {
                 name: "modify_code".to_owned(),
@@ -429,16 +429,16 @@ mod tests {
         let agents_dir = temp_dir.join("plugins/agy-suite/agents");
         std::fs::create_dir_all(&agents_dir).expect("create dir");
         std::fs::write(
-            agents_dir.join("coder.md"),
-            "---\nname: coder\nmcp_tools:\n  - modify_code\n---\n",
+            agents_dir.join("restricted_agent.md"),
+            "---\nname: restricted_agent\nmcp_tools:\n  - modify_code\n---\n",
         )
-        .expect("write mock coder.md");
+        .expect("write mock restricted_agent.md");
 
-        // Scope to coder
+        // Scope to restricted_agent
         let server = McpServer::new(
             tools,
             temp_dir.clone(),
-            Some("coder".to_owned()),
+            Some("restricted_agent".to_owned()),
             BTreeMap::new(),
         );
 
@@ -470,7 +470,10 @@ mod tests {
         let call_resp = server.handle_request(call_req).expect("call resp");
         assert!(call_resp.error.is_some());
         let err = call_resp.error.unwrap();
-        assert!(err.message.contains("unauthorized for agent 'coder'"));
+        assert!(
+            err.message
+                .contains("unauthorized for agent 'restricted_agent'")
+        );
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

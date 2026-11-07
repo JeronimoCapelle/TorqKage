@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_extract_mcp_tools_from_markdown() {
-        let md = "---\nname: coder\ntools: []\nmcp_tools:\n  - read_project_file\n  - modify_code\n  - write_file\n---\nSome body\n";
+        let md = "---\nname: mock_agent\ntools: []\nmcp_tools:\n  - read_project_file\n  - modify_code\n  - write_file\n---\nSome body\n";
         let tools = extract_mcp_tools_from_markdown(md).unwrap();
         assert_eq!(tools.len(), 3);
         assert!(tools.contains("read_project_file"));
@@ -187,18 +187,18 @@ mod tests {
         fs::create_dir_all(&state_dir).expect("create state dir");
 
         // 1. JSON state
-        fs::write(paths.active_agent_file(), r#"{"agent": "test-author"}"#).expect("write json");
+        fs::write(paths.active_agent_file(), r#"{"agent": "agent_alpha"}"#).expect("write json");
         assert_eq!(
             read_active_agent_from_state(&temp_dir),
-            Some("test-author".to_owned())
+            Some("agent_alpha".to_owned())
         );
 
         // 2. Text fallback
         fs::remove_file(paths.active_agent_file()).expect("remove json");
-        fs::write(state_dir.join("active_agent"), "finisher\n").expect("write txt");
+        fs::write(state_dir.join("active_agent"), "agent_beta\n").expect("write txt");
         assert_eq!(
             read_active_agent_from_state(&temp_dir),
-            Some("finisher".to_owned())
+            Some("agent_beta".to_owned())
         );
 
         drop(fs::remove_dir_all(&temp_dir));

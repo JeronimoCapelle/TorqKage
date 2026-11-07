@@ -157,8 +157,8 @@ mod tests {
         assert_eq!(paths.state_dir(), root.join(".agy/state"));
         assert_eq!(paths.workspaces_dir(), root.join(".agy/workspaces"));
         assert_eq!(
-            paths.agent_workspace("coder"),
-            root.join(".agy/workspaces/coder")
+            paths.agent_workspace("agent_worker"),
+            root.join(".agy/workspaces/agent_worker")
         );
         assert_eq!(paths.artifacts_dir(), root.join(".agy/artifacts"));
         assert_eq!(paths.cache_dir(), root.join(".agy/cache"));

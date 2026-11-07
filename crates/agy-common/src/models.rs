@@ -780,9 +780,9 @@ mod tests {
     #[test]
     fn test_handoff_markdown_roundtrip() {
         let record = HandoffRecord {
-            previous_agent: "planner".to_owned(),
+            previous_agent: "agent_a".to_owned(),
             timestamp: "2026-11-01T15:00:00Z".to_owned(),
-            modified_files: vec!["ARCHITECTURE.md".to_owned(), "src/lib.rs".to_owned()],
+            modified_files: vec!["spec.md".to_owned(), "src/lib.rs".to_owned()],
             status: "WIP".to_owned(),
         };
 
@@ -799,7 +799,7 @@ mod tests {
         ));
         drop(std::fs::create_dir_all(&temp_dir));
 
-        let mut ledger = CircuitBreakerLedger::new("coder");
+        let mut ledger = CircuitBreakerLedger::new("worker_agent");
         assert_eq!(ledger.consecutive_failures, 0);
         assert!(!ledger.tripped);
 
@@ -807,8 +807,8 @@ mod tests {
         ledger
             .record_failure(
                 &temp_dir,
-                Some("coder"),
-                Some("quick_check"),
+                Some("worker_agent"),
+                Some("check_gate"),
                 Some("E0502"),
                 Some("cannot borrow as mutable"),
             )
@@ -820,8 +820,8 @@ mod tests {
         ledger
             .record_failure(
                 &temp_dir,
-                Some("coder"),
-                Some("quick_check"),
+                Some("worker_agent"),
+                Some("check_gate"),
                 Some("E0502"),
                 Some("cannot borrow as mutable"),
             )

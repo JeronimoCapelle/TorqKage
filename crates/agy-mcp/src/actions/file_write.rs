@@ -232,7 +232,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
@@ -243,13 +243,13 @@ mod tests {
             "path": "tests/test.rs",
             "content": "// test"
         });
-        assert!(execute(&tool, &temp, &test_file, Some("coder"), &guards).is_err());
+        assert!(execute(&tool, &temp, &test_file, Some("worker_agent"), &guards).is_err());
 
         let src_file = json!({
             "path": "src/main.rs",
             "content": "fn main() {}"
         });
-        assert!(execute(&tool, &temp, &src_file, Some("coder"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &src_file, Some("worker_agent"), &guards).is_ok());
     }
 
     #[test]
@@ -263,19 +263,19 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
             },
         );
 
-        // 1. Coder creates new file "auth/jwt.rs" without prefix -> created in src/auth/jwt.rs
+        // 1. Worker creates new file "auth/jwt.rs" without prefix -> created in src/auth/jwt.rs
         let args = json!({
             "path": "auth/jwt.rs",
             "content": "pub fn verify() -> bool { true }"
         });
-        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &args, Some("worker_agent"), &guards).is_ok());
         assert!(temp.join("src/auth/jwt.rs").exists());
         let content =
             std::fs::read_to_string(temp.join("src/auth/jwt.rs")).expect("read created file");
@@ -306,7 +306,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "doc-author".to_owned(),
+            "comments_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 path_policies: vec![agy_common::PathPolicy::comments_only("src")],
@@ -318,19 +318,28 @@ mod tests {
         std::fs::create_dir_all(temp.join("src")).unwrap();
         std::fs::write(&file_path, "pub fn add(a: i32, b: i32) -> i32 { a + b }").unwrap();
 
-        // 1. Doc author updates file adding comments: allowed
+        // 1. Comments agent updates file adding comments: allowed
         let valid_args = json!({
             "path": "src/lib.rs",
             "content": "/// Documentation\npub fn add(a: i32, b: i32) -> i32 { a + b }"
         });
-        assert!(execute(&tool, &temp, &valid_args, Some("doc-author"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &valid_args, Some("comments_agent"), &guards).is_ok());
 
-        // 2. Doc author updates file tampering code: rejected
+        // 2. Comments agent updates file tampering code: rejected
         let tampered_args = json!({
             "path": "src/lib.rs",
             "content": "pub fn add(a: i32, b: i32) -> i32 { a + b + 1 }"
         });
-        assert!(execute(&tool, &temp, &tampered_args, Some("doc-author"), &guards).is_err());
+        assert!(
+            execute(
+                &tool,
+                &temp,
+                &tampered_args,
+                Some("comments_agent"),
+                &guards
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -357,7 +366,7 @@ filter = "comments_only"
         // Agent has no frontmatter path policies, only allowed_dirs
         let mut guards = BTreeMap::new();
         guards.insert(
-            "doc-author".to_owned(),
+            "comments_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["app".to_owned()],
                 ..Default::default()
@@ -368,18 +377,27 @@ filter = "comments_only"
         std::fs::create_dir_all(temp.join("app")).unwrap();
         std::fs::write(&file_path, "def add(a, b):\n    return a + b\n").unwrap();
 
-        // 1. Doc author adds docstring and # comments: allowed
+        // 1. Comments agent adds docstring and # comments: allowed
         let valid_args = json!({
             "path": "app/calc.py",
             "content": "def add(a, b):\n    \"\"\"Adds two numbers.\"\"\"\n    # Addition\n    return a + b\n"
         });
-        assert!(execute(&tool, &temp, &valid_args, Some("doc-author"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &valid_args, Some("comments_agent"), &guards).is_ok());
 
-        // 2. Doc author modifies code: rejected by project.toml path policy
+        // 2. Comments agent modifies code: rejected by project.toml path policy
         let tampered_args = json!({
             "path": "app/calc.py",
             "content": "def add(a, b):\n    return a + b + 1\n"
         });
-        assert!(execute(&tool, &temp, &tampered_args, Some("doc-author"), &guards).is_err());
+        assert!(
+            execute(
+                &tool,
+                &temp,
+                &tampered_args,
+                Some("comments_agent"),
+                &guards
+            )
+            .is_err()
+        );
     }
 }

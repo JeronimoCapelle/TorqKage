@@ -20,12 +20,12 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
    - [3. `mcp_config.json` (Host MCP Server Config)](#3-mcp_configjson-host-mcp-server-config)
    - [4. `project.toml` (Ecosystem & Quality Gates)](#4-projecttoml-ecosystem--quality-gates)
    - [5. `hooks.toml` (Safety Pipeline & Interceptors)](#5-hookstoml-safety-pipeline--interceptors)
-   - [6. `tools.toml` (Declarative MCP Tools & Agent Guards)](#6-toolstoml-declarative-mcp-tools--agent-guards)
+   - [6. `tools.toml` (Declarative MCP Tools)](#6-toolstoml-declarative-mcp-tools)
 4. [How `agents/*.md` Files Interact with `agy-suite`](#how-agentsmd-files-interact-with-agy-suite)
    - [Frontmatter Specification](#frontmatter-specification)
    - [The Air-Gapped Zero-Trust Tooling Model](#the-air-gapped-zero-trust-tooling-model)
    - [Dynamic Pre-Launch Admission Gatekeeping](#dynamic-pre-launch-admission-gatekeeping)
-   - [Directory Confinement (`[agent_guards]`)](#directory-confinement-agent_guards)
+   - [Directory Confinement (Frontmatter Path Perimeters)](#directory-confinement-frontmatter-path-perimeters)
    - [Sparse Jujutsu Workspace Isolation](#sparse-jujutsu-workspace-isolation)
    - [Fleet Management in `agy-ctrl`](#fleet-management-in-agy-ctrl)
 5. [End-to-End Execution Lifecycle Flow](#end-to-end-execution-lifecycle-flow)
@@ -56,7 +56,7 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
                      |                                                 |
                      | Reads hooks.toml                                | Reads tools.toml
                      | Reads project.toml                              | Reads project.toml
-                     | Reads agents/*.md                               | Reads [agent_guards]
+                     | Reads agents/*.md                               | Reads agent frontmatters
                      v                                                 v
         +-------------------------+                       +-------------------------+
         | Safety Pipeline:        |                       | Sandboxed Actions:      |
@@ -174,13 +174,12 @@ plugins/agy-suite/
   - `[stop]`: `enabled = true`, `record_handoff = true`, `max_modified_files = 10`.
   - `[[pre_tool_use.custom_checks]]`: Declarative custom shell commands evaluated without recompiling Rust.
 
-### 6. `tools.toml` (Declarative MCP Tools & Agent Guards)
-- **Role:** Declares all MCP tools exposed to agents, base inheritance templates, execution engines, and per-agent blast perimeters.
+### 6. `tools.toml` (Declarative MCP Tools)
+- **Role:** Declares all MCP tools exposed to agents, base inheritance templates, and execution engines.
 - **Parsers:** `agy-mcp`, `agy-hooks` (`policy_gate`), `agy-ctrl`.
 - **Key Sections:**
   - `[base_tools.<name>]`: Abstract base templates inherited by concrete tools (`code_modifier`, `file_creator`).
   - `[tools.<name>]`: Concrete tool definitions specifying `action`, `category`, `command`, `args`, `output_capture`, `truncate_lines`, `mutating`, `tracks_circuit_breaker`, and `require_permission_gate`.
-  - `[agent_guards.<agent>]`: Path boundaries (`allowed_dirs`, `disallowed_dirs`, `allowed_files`) restricting file mutations for each specific agent.
 
 ---
 
@@ -226,7 +225,7 @@ pre_launch_checks:
 1. **`inheritMcp: false`:**
    Prevents the agent from inheriting host tools or parent agent tools. Each agent starts with a blank slate.
 2. **`mcpServers` with `--agent <name>`:**
-   Instantiates `agy-mcp` with the caller's distinct identity. This binds the MCP server session directly to that agent's security guard in `tools.toml`.
+   Instantiates `agy-mcp` with the caller's distinct identity. This binds the MCP server session directly to that agent's security boundaries configured in its frontmatter.
 3. **`mcp_tools` Strict Allowlist:**
    `agy-mcp` compares tools declared in `tools.toml` against the agent's frontmatter `mcp_tools`. Any tool NOT in `mcp_tools` is **completely hidden and air-gapped** from the agent's LLM context.
    - Example: `coder` cannot run `cargo_semver_checks` or `cargo_deny`.
@@ -244,26 +243,40 @@ When Copilot or another agent calls `invoke_subagent` to spawn an agent (e.g. `c
    - The subagent is not launched, preventing wasted API tokens.
    - The exact failure diagnostic and error explanation is returned to the calling agent so it can fix the issue.
 
-### Directory Confinement (`[agent_guards]`)
+### Directory Confinement (Frontmatter Path Perimeters)
 
-When an agent invokes a file modification tool (`modify_code` or `write_file`), `agy-mcp` inspects `[agent_guards.<name>]` from `tools.toml`:
+When an agent invokes a file modification tool (`modify_code` or `write_file`), `agy-mcp` inspects path boundaries defined directly in the agent's frontmatter (`agents/<agent>.md`):
 
-```toml
-[agent_guards.coder]
-allowed_dirs = ["src"]
-disallowed_dirs = ["tests", "benches", "docs"]
-
-[agent_guards.test-author]
-allowed_dirs = ["tests", "benches"]
-disallowed_dirs = ["src", "docs"]
-
-[agent_guards.planner]
-allowed_dirs = ["docs", ".scratchpad"]
-allowed_files = ["ARCHITECTURE.md"]
-disallowed_dirs = ["src", "tests", "benches"]
+```yaml
+---
+name: coder
+allowed_dirs:
+  - src
+disallowed_dirs:
+  - tests
+  - benches
+  - docs
+---
 ```
 
-If `coder` attempts to alter `tests/common.rs` or `Cargo.toml`, `agy-mcp` blocks the operation with an explicit boundary violation error.
+Or for an agent with document-level boundaries:
+
+```yaml
+---
+name: planner
+allowed_dirs:
+  - docs
+  - .scratchpad
+allowed_files:
+  - ARCHITECTURE.md
+disallowed_dirs:
+  - src
+  - tests
+  - benches
+---
+```
+
+If an agent attempts to alter a file outside its allowed boundaries (e.g. editing `tests/common.rs`), `agy-mcp` blocks the operation with an explicit boundary violation error.
 
 ### Sparse Jujutsu Workspace Isolation
 
@@ -313,7 +326,7 @@ sequenceDiagram
     Hooks-->>Host: Decision: ALLOW
 
     Host->>MCP: Call MCP Tool: modify_code
-    MCP->>MCP: Check [agent_guards.<agent>] allowed_dirs
+    MCP->>MCP: Check agent frontmatter allowed_dirs
     MCP->>MCP: Execute mpatch engine
     MCP-->>Host: Return updated diff / success snippet
 
@@ -413,19 +426,19 @@ To create a new agent (e.g. `db-migrator`):
      - query_project_spec
    pre_launch_checks:
      - compilation
+   allowed_dirs:
+     - migrations
+     - docs/schema
+   disallowed_dirs:
+     - src
+     - tests
    ---
 
    # Directives
    - Confine all schema and migration files to `migrations/`.
    - Always verify backward compatibility of SQL DDL statements.
    ```
-2. Add directory boundaries in `tools.toml`:
-   ```toml
-   [agent_guards.db-migrator]
-   allowed_dirs = ["migrations", "docs/schema"]
-   disallowed_dirs = ["src", "tests"]
-   ```
-3. Run `./install.sh --fast` to synchronize the bundle.
+2. Run `./install.sh --fast` to synchronize the bundle.
 
 ### Adding Custom MCP Tools
 

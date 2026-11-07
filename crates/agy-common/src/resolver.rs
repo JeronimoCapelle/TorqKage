@@ -110,7 +110,7 @@ mod tests {
         let main_jj_repo = main_repo.join(".jj/repo");
         std::fs::create_dir_all(&main_jj_repo).unwrap();
 
-        let sub_ws = main_repo.join(".agy/workspaces/coder");
+        let sub_ws = main_repo.join(".agy/workspaces/agent_sub");
         let sub_jj = sub_ws.join(".jj");
         std::fs::create_dir_all(&sub_jj).unwrap();
         std::fs::write(sub_jj.join("repo"), "../../../../.jj/repo").unwrap();

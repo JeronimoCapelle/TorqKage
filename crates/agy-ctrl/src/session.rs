@@ -113,7 +113,7 @@ mod tests {
     fn test_short_id() {
         let summary = SessionSummary {
             conversation_id: "6030b881-9107-4730-a943-fe383688402a".to_owned(),
-            agent_name: "coder".to_owned(),
+            agent_name: "mock_agent".to_owned(),
             workspace_uris: "[]".to_owned(),
             last_modified_time: "2026-11-02".to_owned(),
             step_count: 10,
@@ -154,7 +154,7 @@ mod tests {
             "INSERT INTO conversation_summaries VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 "test-uuid-1234",
-                "coder",
+                "mock_agent",
                 "[\"/home/infinite/projects/rust/agy-suite\"]",
                 "2026-11-07T00:00:00Z",
                 5,
@@ -166,7 +166,7 @@ mod tests {
         std::fs::write(convs_dir.join("test-uuid-1234.db"), b"").unwrap();
 
         let ws = Path::new("/home/infinite/projects/rust/agy-suite");
-        let res = query_session_from_db(&db_path, &convs_dir, "coder", ws);
+        let res = query_session_from_db(&db_path, &convs_dir, "mock_agent", ws);
         assert!(res.is_some());
         let session = res.unwrap();
         assert_eq!(session.conversation_id, "test-uuid-1234");

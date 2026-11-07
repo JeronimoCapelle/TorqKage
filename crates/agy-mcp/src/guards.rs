@@ -198,7 +198,7 @@ fn matches_directory_scope(rel_path: &str, target_dir: &str) -> bool {
         return true;
     }
 
-    // 2. Cargo workspace crate-level match: e.g. "crates/agy-mcp/src/main.rs" matches "src"
+    // 2. Workspace container-level match: e.g. "packages/subpackage/src/main.rs" matches "src"
     for prefix in &["crates/", "packages/", "crates\\", "packages\\"] {
         if let Some(sub) = rel_path.strip_prefix(prefix)
             && let Some((_crate_name, crate_rel)) = sub.split_once(['/', '\\'])
@@ -575,7 +575,7 @@ pub(crate) fn resolve_scoped_path_str(
         }
     }
 
-    // 1. If explicit allowed file for this agent (e.g. "ARCHITECTURE.md" for planner), leave as-is
+    // 1. If explicit allowed file for this agent, leave as-is
     if let Some((agent_name, guards)) = agent_context
         && let Some(guard) = guards.get(agent_name)
         && guard.allowed_files.iter().any(|f| f == clean)
@@ -790,7 +790,7 @@ mod tests {
         let mut guards = BTreeMap::new();
 
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 disallowed_dirs: vec!["tests".to_owned()],
@@ -801,45 +801,72 @@ mod tests {
         );
 
         guards.insert(
-            "planner".to_owned(),
+            "docs_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["docs".to_owned()],
                 disallowed_dirs: vec!["src".to_owned()],
-                allowed_files: vec!["ARCHITECTURE.md".to_owned()],
+                allowed_files: vec!["spec.md".to_owned()],
                 disallowed_files: Vec::new(),
                 ..Default::default()
             },
         );
 
-        // Coder tests
-        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("coder"), &guards).is_ok());
-        assert!(
-            check_agent_guard(&root, &root.join("tests/test.rs"), Some("coder"), &guards).is_err()
-        );
-        assert!(
-            check_agent_guard(&root, &root.join("Cargo.toml"), Some("coder"), &guards).is_err()
-        );
-
-        // Planner tests
+        // worker_agent tests
         assert!(
             check_agent_guard(
                 &root,
-                &root.join("ARCHITECTURE.md"),
-                Some("planner"),
+                &root.join("src/lib.rs"),
+                Some("worker_agent"),
                 &guards
             )
             .is_ok()
         );
         assert!(
-            check_agent_guard(&root, &root.join("docs/rfc.md"), Some("planner"), &guards).is_ok()
+            check_agent_guard(
+                &root,
+                &root.join("tests/test.rs"),
+                Some("worker_agent"),
+                &guards
+            )
+            .is_err()
         );
         assert!(
-            check_agent_guard(&root, &root.join("src/lib.rs"), Some("planner"), &guards).is_err()
+            check_agent_guard(
+                &root,
+                &root.join("Cargo.toml"),
+                Some("worker_agent"),
+                &guards
+            )
+            .is_err()
+        );
+
+        // docs_agent tests
+        assert!(
+            check_agent_guard(&root, &root.join("spec.md"), Some("docs_agent"), &guards).is_ok()
+        );
+        assert!(
+            check_agent_guard(
+                &root,
+                &root.join("docs/rfc.md"),
+                Some("docs_agent"),
+                &guards
+            )
+            .is_ok()
+        );
+        assert!(
+            check_agent_guard(&root, &root.join("src/lib.rs"), Some("docs_agent"), &guards)
+                .is_err()
         );
 
         // Unrestricted agent
         assert!(
-            check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok()
+            check_agent_guard(
+                &root,
+                &root.join("src/lib.rs"),
+                Some("unrestricted_agent"),
+                &guards
+            )
+            .is_ok()
         );
         assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
     }
@@ -849,7 +876,7 @@ mod tests {
         let mut guards = BTreeMap::new();
 
         guards.insert(
-            "doc-author".to_owned(),
+            "comments_guarded_agent".to_owned(),
             AgentGuard {
                 path_policies: vec![agy_common::PathPolicy::comments_only("src")],
                 ..Default::default()
@@ -857,7 +884,7 @@ mod tests {
         );
 
         guards.insert(
-            "test-author".to_owned(),
+            "tests_guarded_agent".to_owned(),
             AgentGuard {
                 path_policies: vec![agy_common::PathPolicy::tests_only("src")],
                 ..Default::default()
@@ -868,20 +895,20 @@ mod tests {
     }
 
     #[test]
-    fn test_check_agent_path_policies_doc_author() {
+    fn test_check_agent_path_policies_comments_only() {
         let (root, guards) = setup_test_guards();
         let orig = "pub fn foo() -> u32 { 1 }";
         let with_docs = "/// Doc comment\npub fn foo() -> u32 {\n    // Inline comment\n    1\n}";
         let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
-        // doc-author: comments allowed, code edits blocked in src/
+        // comments_guarded_agent: comments allowed, code edits blocked in src/
         assert!(
             check_agent_path_policies(
                 &root,
                 &root.join("src/lib.rs"),
                 orig,
                 with_docs,
-                Some("doc-author"),
+                Some("comments_guarded_agent"),
                 &guards,
                 None
             )
@@ -893,7 +920,7 @@ mod tests {
                 &root.join("src/lib.rs"),
                 orig,
                 with_code_tamper,
-                Some("doc-author"),
+                Some("comments_guarded_agent"),
                 &guards,
                 None
             )
@@ -902,12 +929,12 @@ mod tests {
     }
 
     #[test]
-    fn test_check_agent_path_policies_test_author() {
+    fn test_check_agent_path_policies_tests_only() {
         let (root, guards) = setup_test_guards();
         let orig = "pub fn foo() -> u32 { 1 }";
         let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
-        // test-author: tests allowed in src/, production code edits blocked
+        // tests_guarded_agent: tests allowed in src/, production code edits blocked
         let with_unit_test =
             "pub fn foo() -> u32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}";
         assert!(
@@ -916,7 +943,7 @@ mod tests {
                 &root.join("src/lib.rs"),
                 orig,
                 with_unit_test,
-                Some("test-author"),
+                Some("tests_guarded_agent"),
                 &guards,
                 None
             )
@@ -928,7 +955,7 @@ mod tests {
                 &root.join("src/lib.rs"),
                 orig,
                 with_code_tamper,
-                Some("test-author"),
+                Some("tests_guarded_agent"),
                 &guards,
                 None
             )
@@ -949,7 +976,7 @@ mod tests {
                 &root.join("src/lib.rs"),
                 orig,
                 with_code_tamper,
-                Some("coder"),
+                Some("unconfigured_agent"),
                 &guards,
                 None
             )
@@ -981,7 +1008,7 @@ mod tests {
                 &root.join("app/math.py"),
                 py_orig,
                 py_docs,
-                Some("doc-author"),
+                Some("comments_guarded_agent"),
                 &guards,
                 Some(&proj)
             )
@@ -993,7 +1020,7 @@ mod tests {
                 &root.join("app/math.py"),
                 py_orig,
                 py_tamper,
-                Some("doc-author"),
+                Some("comments_guarded_agent"),
                 &guards,
                 Some(&proj)
             )
@@ -1070,7 +1097,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_scoped_path_str_single_crate_and_tools() {
+    fn test_resolve_scoped_path_str_single_crate() {
         let root = std::env::temp_dir().join(format!("agy_scope_test_{}", std::process::id()));
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(root.join("src/auth")).expect("create src/auth");
@@ -1082,7 +1109,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 disallowed_dirs: vec!["tests".to_owned()],
@@ -1092,56 +1119,101 @@ mod tests {
             },
         );
         guards.insert(
-            "planner".to_owned(),
+            "docs_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["docs".to_owned()],
                 disallowed_dirs: vec!["src".to_owned()],
-                allowed_files: vec!["ARCHITECTURE.md".to_owned()],
+                allowed_files: vec!["spec.md".to_owned()],
                 disallowed_files: Vec::new(),
                 ..Default::default()
             },
         );
 
-        // 1. Coder scoped resolution
+        // 1. worker_agent scoped resolution
         assert_eq!(
-            resolve_scoped_path_str(&root, "auth/hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "auth/hasher.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "src/auth/hasher.rs"
         );
 
         // 2. Already prefixed remains unchanged
         assert_eq!(
-            resolve_scoped_path_str(&root, "src/auth/hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "src/auth/hasher.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "src/auth/hasher.rs"
         );
 
         // 3. Leading ./ stripped
         assert_eq!(
-            resolve_scoped_path_str(&root, "./auth/hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "./auth/hasher.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "src/auth/hasher.rs"
         );
 
         // 4. Absolute path preserved
         assert_eq!(
-            resolve_scoped_path_str(&root, "/tmp/absolute.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "/tmp/absolute.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "/tmp/absolute.rs"
         );
 
         // 5. Existing root file preserved for read/inspection
         assert_eq!(
-            resolve_scoped_path_str(&root, "Cargo.toml", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(&root, "Cargo.toml", None, Some(("worker_agent", &guards))),
             "Cargo.toml"
         );
 
         // 6. Explicit allowed file for agent preserved
         assert_eq!(
-            resolve_scoped_path_str(&root, "ARCHITECTURE.md", None, Some(("planner", &guards))),
-            "ARCHITECTURE.md"
+            resolve_scoped_path_str(&root, "spec.md", None, Some(("docs_agent", &guards))),
+            "spec.md"
         );
 
         // 7. Disallowed directory is NOT rewritten into allowed scope (preserves security rejection)
         assert_eq!(
-            resolve_scoped_path_str(&root, "tests/unit_test.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "tests/unit_test.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "tests/unit_test.rs"
+        );
+
+        drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn test_resolve_scoped_path_str_tools_and_new_files() {
+        let root = std::env::temp_dir().join(format!("agy_scope_tools_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&root));
+        std::fs::create_dir_all(root.join("src/auth")).expect("create src/auth");
+        std::fs::create_dir_all(root.join("docs/specs")).expect("create docs/specs");
+        std::fs::write(root.join("docs/specs/rv32.md"), "# RV32").expect("write rv32.md");
+
+        let mut guards = BTreeMap::new();
+        guards.insert(
+            "worker_agent".to_owned(),
+            AgentGuard {
+                allowed_dirs: vec!["src".to_owned()],
+                ..Default::default()
+            },
         );
 
         // 8. Tool enforce_dir resolution
@@ -1168,7 +1240,7 @@ mod tests {
 
         // 10. New file creation in scope when file does not exist yet
         assert_eq!(
-            resolve_scoped_path_str(&root, "auth/jwt.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(&root, "auth/jwt.rs", None, Some(("worker_agent", &guards))),
             "src/auth/jwt.rs"
         );
 
@@ -1190,7 +1262,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
@@ -1199,7 +1271,12 @@ mod tests {
 
         // 1. Scoped path with crate prefix "core/hasher.rs" -> "crates/core/src/hasher.rs"
         assert_eq!(
-            resolve_scoped_path_str(&root, "core/hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "core/hasher.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "crates/core/src/hasher.rs"
         );
 
@@ -1209,26 +1286,31 @@ mod tests {
                 &root,
                 "crates/core/hasher.rs",
                 None,
-                Some(("coder", &guards))
+                Some(("worker_agent", &guards))
             ),
             "crates/core/src/hasher.rs"
         );
 
         // 3. Unique file across crates ("hasher.rs") -> "crates/core/src/hasher.rs"
         assert_eq!(
-            resolve_scoped_path_str(&root, "hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(&root, "hasher.rs", None, Some(("worker_agent", &guards))),
             "crates/core/src/hasher.rs"
         );
 
         // 4. Ambiguous file ("lib.rs") in multiple crates falls back without guessing
         assert_eq!(
-            resolve_scoped_path_str(&root, "lib.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(&root, "lib.rs", None, Some(("worker_agent", &guards))),
             "src/lib.rs"
         );
 
         // 5. Creating new file in crate: "core/token.rs" -> "crates/core/src/token.rs"
         assert_eq!(
-            resolve_scoped_path_str(&root, "core/token.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "core/token.rs",
+                None,
+                Some(("worker_agent", &guards))
+            ),
             "crates/core/src/token.rs"
         );
 
@@ -1238,7 +1320,7 @@ mod tests {
                 &root,
                 "crates/core/token.rs",
                 None,
-                Some(("coder", &guards))
+                Some(("worker_agent", &guards))
             ),
             "crates/core/src/token.rs"
         );

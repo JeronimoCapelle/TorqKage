@@ -307,7 +307,7 @@ mod tests {
         let res1 = update_circuit_breaker(
             &tool,
             &temp_dir,
-            Some("coder"),
+            Some("worker_agent"),
             Ok(("error[E0502]: borrow error".to_owned(), true)),
         )
         .unwrap();
@@ -318,7 +318,7 @@ mod tests {
         let res2 = update_circuit_breaker(
             &tool,
             &temp_dir,
-            Some("coder"),
+            Some("worker_agent"),
             Ok(("error[E0502]: borrow error".to_owned(), true)),
         )
         .unwrap();
@@ -329,7 +329,7 @@ mod tests {
         let res3 = update_circuit_breaker(
             &tool,
             &temp_dir,
-            Some("coder"),
+            Some("worker_agent"),
             Ok(("Clean check".to_owned(), false)),
         )
         .unwrap();

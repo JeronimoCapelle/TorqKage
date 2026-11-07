@@ -270,7 +270,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
@@ -283,7 +283,7 @@ mod tests {
             "patch": patch
         });
 
-        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_err());
+        assert!(execute(&tool, &temp, &args, Some("worker_agent"), &guards).is_err());
     }
 
     #[test]
@@ -302,7 +302,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
@@ -310,13 +310,13 @@ mod tests {
         );
 
         let patch = "<<<<<<< SEARCH\nfn hash() -> u32 { 10 }\n=======\nfn hash() -> u32 { 42 }\n>>>>>>> REPLACE";
-        // Coder specifies relative scoped path "auth/hasher.rs"
+        // Worker specifies relative scoped path "auth/hasher.rs"
         let args = json!({
             "path": "auth/hasher.rs",
             "patch": patch
         });
 
-        assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &args, Some("worker_agent"), &guards).is_ok());
         let updated = std::fs::read_to_string(&file_path).unwrap();
         assert!(updated.contains("42"));
     }
@@ -337,7 +337,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "test-author".to_owned(),
+            "tests_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 path_policies: vec![agy_common::PathPolicy::tests_only("src")],
@@ -345,20 +345,20 @@ mod tests {
             },
         );
 
-        // 1. Test author adds unit test block: allowed
+        // 1. Test agent adds unit test block: allowed
         let valid_patch = "<<<<<<< SEARCH\npub fn calculate() -> u32 {\n    42\n}\n=======\npub fn calculate() -> u32 {\n    42\n}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n>>>>>>> REPLACE";
         let valid_args = json!({
             "path": "src/lib.rs",
             "patch": valid_patch
         });
-        assert!(execute(&tool, &temp, &valid_args, Some("test-author"), &guards).is_ok());
+        assert!(execute(&tool, &temp, &valid_args, Some("tests_agent"), &guards).is_ok());
 
-        // 2. Test author modifies production code: rejected
+        // 2. Test agent modifies production code: rejected
         let tampered_patch = "<<<<<<< SEARCH\npub fn calculate() -> u32 {\n    42\n}\n=======\npub fn calculate() -> u32 {\n    100\n}\n>>>>>>> REPLACE";
         let tampered_args = json!({
             "path": "src/lib.rs",
             "patch": tampered_patch
         });
-        assert!(execute(&tool, &temp, &tampered_args, Some("test-author"), &guards).is_err());
+        assert!(execute(&tool, &temp, &tampered_args, Some("tests_agent"), &guards).is_err());
     }
 }

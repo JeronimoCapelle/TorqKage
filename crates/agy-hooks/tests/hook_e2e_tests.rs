@@ -66,7 +66,7 @@ fn test_record_handoff_and_inject_wake_roundtrip_e2e() {
             workspace_paths: vec![temp_workspace.clone()],
             transcript_path: None,
             artifact_directory_path: None,
-            model_name: Some("planner".to_owned()),
+            model_name: Some("agent_outgoing".to_owned()),
             last_user_input: None,
         },
     };
@@ -89,7 +89,7 @@ fn test_record_handoff_and_inject_wake_roundtrip_e2e() {
             workspace_paths: vec![temp_workspace.clone()],
             transcript_path: None,
             artifact_directory_path: None,
-            model_name: Some("copilot".to_owned()),
+            model_name: Some("agent_incoming".to_owned()),
             last_user_input: None,
         },
     };

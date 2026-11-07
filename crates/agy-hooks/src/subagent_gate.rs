@@ -108,7 +108,7 @@ mod tests {
             tool_call: Some(ToolCallPayload {
                 name: "invoke_subagent".to_owned(),
                 args: json!({
-                    "TypeName": "mini",
+                    "TypeName": "helper_agent",
                     "Role": "Tester",
                     "Prompt": "Calculate 2+2"
                 }),

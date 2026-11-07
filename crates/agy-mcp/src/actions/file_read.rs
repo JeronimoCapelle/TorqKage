@@ -127,7 +127,7 @@ mod tests {
 
         let mut guards = BTreeMap::new();
         guards.insert(
-            "coder".to_owned(),
+            "worker_agent".to_owned(),
             AgentGuard {
                 allowed_dirs: vec!["src".to_owned()],
                 ..Default::default()
@@ -140,9 +140,9 @@ mod tests {
             ..Default::default()
         };
 
-        // 1. Coder reads scoped relative path "auth/hasher.rs" -> resolves to "src/auth/hasher.rs"
+        // 1. Worker reads scoped relative path "auth/hasher.rs" -> resolves to "src/auth/hasher.rs"
         let args = serde_json::json!({ "path": "auth/hasher.rs" });
-        let res = execute(&default_tool, &temp, &args, Some("coder"), &guards)
+        let res = execute(&default_tool, &temp, &args, Some("worker_agent"), &guards)
             .expect("read auth/hasher.rs");
         assert!(res.contains("pub fn hash() {}"));
 
@@ -152,7 +152,7 @@ mod tests {
             ..Default::default()
         };
         let root_args = serde_json::json!({ "path": "Cargo.toml" });
-        let res_root = execute(&root_tool, &temp, &root_args, Some("coder"), &guards)
+        let res_root = execute(&root_tool, &temp, &root_args, Some("worker_agent"), &guards)
             .expect("read Cargo.toml");
         assert!(res_root.contains("name = \"demo\""));
 

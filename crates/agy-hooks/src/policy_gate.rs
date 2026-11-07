@@ -405,17 +405,17 @@ mod tests {
             "[tools.modify_code]\nmutating = true\n",
         ));
 
-        let mut ledger = CircuitBreakerLedger::new("coder");
+        let mut ledger = CircuitBreakerLedger::new("worker_agent");
         drop(ledger.record_failure(
             &temp_dir,
-            Some("coder"),
+            Some("worker_agent"),
             Some("quick_check"),
             Some("E0502"),
             Some("borrow error"),
         ));
         drop(ledger.record_failure(
             &temp_dir,
-            Some("coder"),
+            Some("worker_agent"),
             Some("quick_check"),
             Some("E0502"),
             Some("borrow error"),

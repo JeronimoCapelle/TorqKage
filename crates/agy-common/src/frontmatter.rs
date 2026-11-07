@@ -415,7 +415,7 @@ mod tests {
     #[test]
     fn test_parse_agent_frontmatter_full() {
         let md = "---
-name: coder
+name: agent_primary
 description: Primary implementer
 effort: high
 permissionMode: default
@@ -424,9 +424,9 @@ mainAgent: true
 subagent: false
 inheritMcp: true
 allowed_subagents:
-  - mini
+  - subagent_helper
 pre_launch_checks:
-  - cargo_check
+  - check_gate
 tools:
   - read_file
 mcp_tools:
@@ -437,7 +437,7 @@ mcp_tools:
 Directives here.
 ";
         let manifest = AgentFrontmatter::parse(md).unwrap();
-        assert_eq!(manifest.name, "coder");
+        assert_eq!(manifest.name, "agent_primary");
         assert_eq!(manifest.description, "Primary implementer");
         assert_eq!(manifest.effort, "high");
         assert_eq!(manifest.permission_mode, "default");
@@ -445,8 +445,8 @@ Directives here.
         assert!(manifest.main_agent);
         assert!(!manifest.subagent);
         assert!(manifest.inherit_mcp);
-        assert_eq!(manifest.allowed_subagents, vec!["mini"]);
-        assert_eq!(manifest.pre_launch_checks, vec!["cargo_check"]);
+        assert_eq!(manifest.allowed_subagents, vec!["subagent_helper"]);
+        assert_eq!(manifest.pre_launch_checks, vec!["check_gate"]);
         assert_eq!(manifest.native_tools, vec!["read_file"]);
         assert_eq!(manifest.mcp_tools, vec!["modify_code", "write_file"]);
         assert_eq!(manifest.directives, "# System Prompt\nDirectives here.\n");
@@ -455,7 +455,7 @@ Directives here.
     #[test]
     fn test_parse_agent_frontmatter_path_policies() {
         let md = "---
-name: doc-author
+name: agent_restricted
 description: Technical writer
 allowed_dirs:
   - docs
@@ -471,7 +471,7 @@ path_policies:
 # Directives
 ";
         let manifest = AgentFrontmatter::parse(md).unwrap();
-        assert_eq!(manifest.name, "doc-author");
+        assert_eq!(manifest.name, "agent_restricted");
         assert_eq!(manifest.allowed_dirs, vec!["docs", "src"]);
         assert_eq!(manifest.path_policies.len(), 2);
         assert_eq!(manifest.path_policies[0].path, "src");
@@ -500,29 +500,29 @@ path_policies:
     #[test]
     fn test_parse_agent_frontmatter_guards() {
         let md = "---
-name: coder
+name: agent_scoped
 allowed_dirs:
   - src
 disallowed_dirs:
   - tests
   - benches
 allowed_files:
-  - ARCHITECTURE.md
+  - spec.md
 disallowed_files:
-  - Cargo.toml
+  - protected.env
 ---
 Directives";
         let manifest = AgentFrontmatter::parse(md).unwrap();
         assert_eq!(manifest.allowed_dirs, vec!["src"]);
         assert_eq!(manifest.disallowed_dirs, vec!["tests", "benches"]);
-        assert_eq!(manifest.allowed_files, vec!["ARCHITECTURE.md"]);
-        assert_eq!(manifest.disallowed_files, vec!["Cargo.toml"]);
+        assert_eq!(manifest.allowed_files, vec!["spec.md"]);
+        assert_eq!(manifest.disallowed_files, vec!["protected.env"]);
 
         let guard = manifest.to_guard();
         assert_eq!(guard.allowed_dirs, vec!["src"]);
         assert_eq!(guard.disallowed_dirs, vec!["tests", "benches"]);
-        assert_eq!(guard.allowed_files, vec!["ARCHITECTURE.md"]);
-        assert_eq!(guard.disallowed_files, vec!["Cargo.toml"]);
+        assert_eq!(guard.allowed_files, vec!["spec.md"]);
+        assert_eq!(guard.disallowed_files, vec!["protected.env"]);
     }
 
     #[test]
