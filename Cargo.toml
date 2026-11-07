@@ -26,17 +26,17 @@ agy-common = { path = "crates/agy-common" }
 # Serialization & Configuration
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.8"
+toml = "1.2"
 
 # Error Handling & Systems Utilities
 thiserror = "2.0"
-which = "7.0"
+which = "8.0"
 libc = "0.2"
-mpatch = "1.7"
+mpatch = "1.8"
 jiff = "0.2"
 
 # Asynchronous Runtime (for agy-mcp stdio transport)
-tokio = { version = "1.43", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 
 # Terminal UI (for offline agy-ctrl configuration deck)
 ratatui = "0.30"
