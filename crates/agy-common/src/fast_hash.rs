@@ -1,95 +1,19 @@
-//! Ultra-fast non-cryptographic hasher and `SwissTable`-backed [`FastHashMap`] and [`FastHashSet`].
-//!
-//! # Architecture & Rationale
-//!
-//! The standard library's `std::collections::HashMap` uses `hashbrown`'s `SwissTable`
-//! algorithm under the hood, but defaults to `SipHash` 1-3 (`RandomState`) for `DoS` protection
-//! against untrusted network hash flooding.
-//!
-//! For internal systems tooling, compiler AST nodes, tool tables, and lifecycle hooks,
-//! `SipHash` introduces unnecessary overhead (~3x to 5x slower than non-cryptographic hashers).
-//! `FastHasher` implements the multiplicative rotating hash (`FxHash` algorithm) used
-//! internally by `rustc`, processing 8-byte and 4-byte chunks with zero indexing and
-//! zero casting for maximum hardware throughput.
+//! High-performance non-cryptographic hasher and `SwissTable`-backed [`FastHashMap`] and [`FastHashSet`]
+//! backed by the official compiler team's [`rustc_hash`] crate.
 
 #![allow(
     clippy::module_name_repetitions,
     reason = "Explicit FastHashMap/FastHashSet/FastHasher names for clear unqualified imports"
 )]
 
-use std::{
-    collections::{HashMap, HashSet},
-    hash::{BuildHasherDefault, Hasher},
-};
-
-/// Golden-ratio multiplicative constant used in rustc-hash and `FxHash`.
-const K: u64 = 0x517c_c1b7_2722_0a95;
-
-/// High-performance non-cryptographic hasher for internal systems and compiler identifiers.
-#[derive(Debug, Clone, Default)]
-pub struct FastHasher {
-    hash: u64,
-}
-
-impl Hasher for FastHasher {
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.hash
-    }
-
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        let (chunks8, remainder) = bytes.as_chunks::<8>();
-        for chunk in chunks8 {
-            let val = u64::from_ne_bytes(*chunk);
-            self.write_u64(val);
-        }
-
-        let (chunks4, trailing) = remainder.as_chunks::<4>();
-        for chunk in chunks4 {
-            let val = u32::from_ne_bytes(*chunk);
-            self.write_u32(val);
-        }
-
-        for &byte in trailing {
-            self.write_u8(byte);
-        }
-    }
-
-    #[inline]
-    fn write_u8(&mut self, i: u8) {
-        self.write_u64(u64::from(i));
-    }
-
-    #[inline]
-    fn write_u16(&mut self, i: u16) {
-        self.write_u64(u64::from(i));
-    }
-
-    #[inline]
-    fn write_u32(&mut self, i: u32) {
-        self.write_u64(u64::from(i));
-    }
-
-    #[inline]
-    fn write_u64(&mut self, i: u64) {
-        self.hash = (self.hash.rotate_left(5) ^ i).wrapping_mul(K);
-    }
-
-    #[inline]
-    fn write_usize(&mut self, i: usize) {
-        self.write_u64(u64::try_from(i).unwrap_or(0));
-    }
-}
-
-/// Fast `BuildHasher` using `BuildHasherDefault<FastHasher>`.
-pub type FastBuildHasher = BuildHasherDefault<FastHasher>;
-
+/// Fast `BuildHasher` using `rustc_hash::FxBuildHasher`.
+pub use rustc_hash::FxBuildHasher as FastBuildHasher;
+/// High-performance non-cryptographic hasher backed by official `rustc_hash`.
+pub use rustc_hash::FxHasher as FastHasher;
 /// SwissTable-backed `HashMap` using the ultra-fast `FastHasher`.
-pub type FastHashMap<K, V> = HashMap<K, V, FastBuildHasher>;
-
+pub type FastHashMap<K, V> = rustc_hash::FxHashMap<K, V>;
 /// SwissTable-backed `HashSet` using the ultra-fast `FastHasher`.
-pub type FastHashSet<T> = HashSet<T, FastBuildHasher>;
+pub type FastHashSet<T> = rustc_hash::FxHashSet<T>;
 
 /// Constructs an empty `FastHashMap`.
 #[must_use]
@@ -100,7 +24,7 @@ pub fn fast_map_new<K, V>() -> FastHashMap<K, V> {
 /// Constructs an empty `FastHashMap` with the specified initial capacity.
 #[must_use]
 pub fn fast_map_with_capacity<K, V>(capacity: usize) -> FastHashMap<K, V> {
-    FastHashMap::with_capacity_and_hasher(capacity, FastBuildHasher::default())
+    FastHashMap::with_capacity_and_hasher(capacity, FastBuildHasher)
 }
 
 /// Constructs an empty `FastHashSet`.
@@ -112,12 +36,12 @@ pub fn fast_set_new<T>() -> FastHashSet<T> {
 /// Constructs an empty `FastHashSet` with the specified initial capacity.
 #[must_use]
 pub fn fast_set_with_capacity<T>(capacity: usize) -> FastHashSet<T> {
-    FastHashSet::with_capacity_and_hasher(capacity, FastBuildHasher::default())
+    FastHashSet::with_capacity_and_hasher(capacity, FastBuildHasher)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::hash::Hash;
+    use std::hash::{Hash, Hasher};
 
     use super::*;
 

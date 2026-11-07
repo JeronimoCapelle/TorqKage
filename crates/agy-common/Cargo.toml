@@ -15,6 +15,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 libc = { workspace = true }
 jiff = { workspace = true }
+rustc-hash = { workspace = true }
+toml = { workspace = true }
 
 [lints]
 workspace = true

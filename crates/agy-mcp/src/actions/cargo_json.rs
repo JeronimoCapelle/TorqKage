@@ -119,22 +119,11 @@ fn parse_cargo_json(stdout: &str) -> (Vec<String>, bool) {
 }
 
 fn strip_ansi_escapes(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut in_escape = false;
-
-    for ch in input.chars() {
-        if ch == '\x1b' {
-            in_escape = true;
-        } else if in_escape {
-            if ch == 'm' {
-                in_escape = false;
-            }
-        } else {
-            out.push(ch);
-        }
+    let mut out = Vec::with_capacity(input.len());
+    for chunk in anstream::adapter::strip_bytes(input.as_bytes()) {
+        out.extend_from_slice(chunk);
     }
-
-    out
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(test)]
@@ -163,5 +152,9 @@ mod tests {
     fn test_strip_ansi_escapes() {
         let ansi = "\x1b[31merror\x1b[0m: broken code";
         assert_eq!(strip_ansi_escapes(ansi), "error: broken code");
+
+        // Non-'m' escapes like \x1b[K (clear line) which previously swallowed text until 'm'
+        let ansi_clear_line = "\x1b[Kcompilation complete";
+        assert_eq!(strip_ansi_escapes(ansi_clear_line), "compilation complete");
     }
 }

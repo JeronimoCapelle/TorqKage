@@ -63,7 +63,7 @@ pub(crate) fn execute(
                 &pattern_lower,
                 &project.security,
                 &mut matches,
-            )?;
+            );
         } else if target.is_file() {
             search_single_file(
                 target,
@@ -179,32 +179,31 @@ fn walk_and_search(
     pattern_lower: &str,
     security: &ProjectSecurityConfig,
     matches: &mut Vec<String>,
-) -> Result<(), String> {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(());
-    };
+) {
+    let mut builder = ignore::WalkBuilder::new(dir);
+    builder
+        .hidden(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .parents(true)
+        .require_git(false);
 
-    for entry in entries.flatten() {
+    for result in builder.build() {
+        let Ok(entry) = result else { continue };
+
         let path = entry.path();
-        let file_name = entry.file_name();
-        let name_lossy = file_name.to_string_lossy();
-
-        // Skip VCS, build artifacts, and hidden directories
-        if name_lossy.starts_with('.') || name_lossy == "target" || name_lossy == "node_modules" {
-            continue;
-        }
-
-        if path.is_dir() {
-            walk_and_search(&path, workspace_root, pattern_lower, security, matches)?;
-        } else if path.is_file() {
-            search_single_file(&path, workspace_root, pattern_lower, security, matches);
+        if path.is_file() {
+            let name_lossy = entry.file_name().to_string_lossy();
+            if name_lossy == "target" || name_lossy == "node_modules" {
+                continue;
+            }
+            search_single_file(path, workspace_root, pattern_lower, security, matches);
             if matches.len() >= 500 {
-                return Ok(());
+                break;
             }
         }
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

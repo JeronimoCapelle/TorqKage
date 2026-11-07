@@ -19,30 +19,46 @@ pub(crate) fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
         return true;
     }
 
-    // Directory wildcard e.g. "src/auth/password/**" or "src/auth/password/*"
-    if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
-        let prefix = prefix.trim_end_matches('/');
-        return target == prefix || target.starts_with(&format!("{prefix}/"));
-    }
-
-    // Suffix wildcard e.g. "*.pem" or "*_secret.json"
-    if let Some(suffix) = p.strip_prefix('*') {
-        return target.ends_with(suffix);
-    }
-
-    // Prefix wildcard e.g. ".env*"
-    if let Some(prefix) = p.strip_suffix('*') {
-        return target.starts_with(prefix);
-    }
-
-    // Exact path match
     if target == p {
         return true;
     }
 
-    // Match filename component e.g. pattern "firmware_key.pem" matches "tests/fixtures/firmware_key.pem"
-    if let Some(filename) = Path::new(&target).file_name()
-        && filename.to_string_lossy() == p
+    // Directory wildcard e.g. "src/auth/password/**" matching directory itself
+    if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
+        let prefix = prefix.trim_end_matches('/');
+        if target == prefix || target.starts_with(&format!("{prefix}/")) {
+            return true;
+        }
+    }
+
+    // Direct filename / component match (e.g. "firmware.bin" or "*.pem" matching inside directories)
+    if !p.contains('/')
+        && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
+    {
+        if filename == p {
+            return true;
+        }
+        if let Ok(glob) = globset::GlobBuilder::new(&p)
+            .literal_separator(true)
+            .build()
+            && glob.compile_matcher().is_match(filename)
+        {
+            return true;
+        }
+    }
+
+    // Full glob matching (e.g. "src/**/*.rs", "*.{pem,key}", "tests/*_test.rs")
+    if let Ok(glob) = globset::GlobBuilder::new(&p)
+        .literal_separator(true)
+        .build()
+        && glob.compile_matcher().is_match(&target)
+    {
+        return true;
+    }
+
+    // Prefix wildcard fallback (e.g. ".env*")
+    if let Some(prefix) = p.strip_suffix('*')
+        && target.starts_with(prefix)
     {
         return true;
     }
@@ -978,6 +994,14 @@ mod tests {
             "deep/nested/path/firmware.bin",
             "firmware.bin"
         ));
+        // Standard globs unlocked by globset
+        assert!(path_matches_pattern(
+            "src/controllers/user.rs",
+            "src/**/*.rs"
+        ));
+        assert!(path_matches_pattern("secret.key", "*.{key,pem}"));
+        assert!(path_matches_pattern("cert.pem", "*.{key,pem}"));
+        assert!(!path_matches_pattern("doc.md", "*.{key,pem}"));
     }
 
     #[test]

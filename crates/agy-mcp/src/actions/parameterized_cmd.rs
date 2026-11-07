@@ -189,42 +189,8 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
         return false;
     }
 
-    if pattern.contains("\\x00-\\x1f") {
-        return !val.chars().any(char::is_control);
-    }
-
-    if pattern.contains("\\x00") {
-        return !val.contains('\0');
-    }
-
-    // Pattern matching for fixed Rustc error codes (e.g. "^E[0-9]{4}$")
-    if pattern == "^E[0-9]{4}$" {
-        return val.len() == 5
-            && val.starts_with('E')
-            && val
-                .get(1..)
-                .is_some_and(|digits| digits.chars().all(|c| c.is_ascii_digit()));
-    }
-
-    if let Some(inner) = pattern
-        .strip_prefix("^[")
-        .and_then(|p| p.strip_suffix("]+$"))
-    {
-        let allow_lower = inner.contains("a-z");
-        let allow_upper = inner.contains("A-Z");
-        let allow_digit = inner.contains("0-9");
-        let literals = inner
-            .replace("a-zA-Z0-9", "")
-            .replace("a-z", "")
-            .replace("A-Z", "")
-            .replace("0-9", "");
-
-        return val.chars().all(|c| {
-            (allow_lower && c.is_ascii_lowercase())
-                || (allow_upper && c.is_ascii_uppercase())
-                || (allow_digit && c.is_ascii_digit())
-                || literals.contains(c)
-        });
+    if let Ok(re) = regex::Regex::new(pattern) {
+        return re.is_match(val);
     }
 
     // Strict fallback: letters, numbers, underscore, colon, hyphen
@@ -275,6 +241,11 @@ mod tests {
         assert!(!matches_pattern("E308", "^E[0-9]{4}$"));
         assert!(!matches_pattern("E03088", "^E[0-9]{4}$"));
         assert!(!matches_pattern("F0308", "^E[0-9]{4}$"));
+        // Standard regex features unlocked by the `regex` crate
+        assert!(matches_pattern("release", "^(debug|release|test)$"));
+        assert!(!matches_pattern("staging", "^(debug|release|test)$"));
+        assert!(matches_pattern("12345", r"^\d{5}$"));
+        assert!(!matches_pattern("1234", r"^\d{5}$"));
     }
 
     fn create_test_dir(tag: &str) -> std::path::PathBuf {

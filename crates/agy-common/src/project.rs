@@ -532,311 +532,317 @@ impl ProjectConfig {
 }
 
 /// Parses a TOML string into a structured `ProjectConfig`.
-/// Uses a lightweight, robust line parser that does not require additional crate dependencies.
+/// Uses the official `toml` parser crate for robust syntax and structure deserialization.
 ///
 /// # Errors
 /// Returns an error message if the content fails syntax validation.
-#[allow(
-    clippy::string_slice,
-    reason = "Line parser operates on verified character delimiters"
-)]
 pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
+    let table: toml::Table = toml::from_str(content).map_err(|err| err.to_string())?;
     let mut config = ProjectConfig::default();
-    let mut current_section = String::new();
 
-    let mut in_array = false;
-    let mut array_key = String::new();
-    let mut array_items: Vec<String> = Vec::new();
-
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-
-        // Multi-line array continuation
-        if in_array {
-            if let Some(end_idx) = trimmed.find(']') {
-                if let Some(part) = trimmed.get(..end_idx) {
-                    extract_quoted_items(part, &mut array_items);
+    for (section, val) in &table {
+        match section.as_str() {
+            "project" => parse_project_section(&mut config, val),
+            "workspace" => parse_workspace_section(&mut config, val),
+            "gates" => parse_gates_section(&mut config, val),
+            "sandbox" => parse_sandbox_section(&mut config, val),
+            "environment" => parse_environment_section(&mut config, val),
+            "security" => parse_security_section(&mut config, val),
+            "extra_banned_files" => {
+                if let toml::Value::Array(arr) = val {
+                    let items = extract_string_array(arr);
+                    config.security.extra_banned_patterns.extend(items.clone());
+                    config.extra_banned_files = items;
                 }
-                in_array = false;
-                apply_array_field(&mut config, &current_section, &array_key, &array_items);
-                array_items.clear();
-            } else {
-                extract_quoted_items(trimmed, &mut array_items);
-            }
-            continue;
-        }
-
-        // Table array header: e.g. [[path_policies]]
-        if let Some(rest) = trimmed.strip_prefix("[[")
-            && let Some(section) = rest.strip_suffix("]]")
-        {
-            let sec_name = section.trim();
-            if sec_name == "path_policies" || sec_name == "policies.path_policies" {
-                config
-                    .path_policies
-                    .push(crate::content_filter::PathPolicy::default());
-                "path_policies".clone_into(&mut current_section);
-                continue;
-            }
-        }
-
-        // Section header
-        if let Some(rest) = trimmed.strip_prefix('[')
-            && let Some(section) = rest.strip_suffix(']')
-        {
-            section.trim().clone_into(&mut current_section);
-            continue;
-        }
-
-        // Key-value pair
-        if let Some((key_raw, val_raw)) = trimmed.split_once('=') {
-            let key = key_raw.trim();
-            let val = val_raw.trim();
-
-            if let Some(inner) = val.strip_prefix('[') {
-                if let Some(end_idx) = inner.find(']') {
-                    let mut items = Vec::new();
-                    if let Some(part) = inner.get(..end_idx) {
-                        extract_quoted_items(part, &mut items);
-                    }
-                    apply_array_field(&mut config, &current_section, key, &items);
-                } else {
-                    in_array = true;
-                    key.clone_into(&mut array_key);
-                    array_items.clear();
-                    extract_quoted_items(inner, &mut array_items);
-                }
-            } else {
-                apply_scalar_field(&mut config, &current_section, key, val);
-            }
+            },
+            "docs" | "docs_paths" => parse_docs_section(&mut config, val),
+            "policies" => parse_policies_section(&mut config, val),
+            "path_policies" => parse_path_policies_section(&mut config, val),
+            _ => {},
         }
     }
 
     Ok(config)
 }
 
-fn extract_quoted_items(text: &str, items: &mut Vec<String>) {
-    let mut chars = text.chars();
-    while let Some(c) = chars.next() {
-        if c == '"' {
-            let mut s = String::new();
-            while let Some(inner) = chars.next() {
-                if inner == '"' {
-                    break;
+fn extract_string_array(arr: &[toml::Value]) -> Vec<String> {
+    arr.iter()
+        .filter_map(|x| x.as_str().map(ToOwned::to_owned))
+        .collect()
+}
+
+fn parse_project_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val {
+        for (k, v) in tbl {
+            if let Some(s) = v.as_str() {
+                match k.as_str() {
+                    "name" => config.project.name = Some(s.to_owned()),
+                    "language" => config.project.language = Some(s.to_owned()),
+                    "version" => config.project.version = Some(s.to_owned()),
+                    "docs" | "docs_paths" => config.docs.paths = vec![s.to_owned()],
+                    _ => {},
                 }
-                if inner == '\\' {
-                    if let Some(escaped) = chars.next() {
-                        s.push(escaped);
-                    }
-                } else {
-                    s.push(inner);
+            } else if let toml::Value::Array(arr) = v
+                && (k == "docs" || k == "docs_paths" || k == "paths")
+            {
+                config.docs.paths = extract_string_array(arr);
+            }
+        }
+    }
+}
+
+fn parse_workspace_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val {
+        for (k, v) in tbl {
+            if let toml::Value::Array(arr) = v {
+                let strings = extract_string_array(arr);
+                match k.as_str() {
+                    "containers" => config.workspace.containers = strings,
+                    "ignored_paths" => config.workspace.ignored_paths = strings,
+                    _ => {},
                 }
             }
-            items.push(s);
         }
     }
 }
 
-fn unquote_toml_scalar(val: &str) -> &str {
-    let trimmed = val.trim();
-    if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2)
-        || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
-    {
-        let end = trimmed.len().saturating_sub(1);
-        trimmed.get(1..end).unwrap_or(trimmed)
-    } else {
-        trimmed
-    }
-}
-
-fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val: &str) {
-    let clean_str = unquote_toml_scalar(val);
-
-    if section == "project" {
-        match key {
-            "name" => config.project.name = Some(clean_str.to_owned()),
-            "language" => config.project.language = Some(clean_str.to_owned()),
-            "version" => config.project.version = Some(clean_str.to_owned()),
-            _ => {},
-        }
-    } else if let Some(gate_name) = section.strip_prefix("gates.") {
-        let gate = config
-            .gates
-            .entry(gate_name.to_owned())
-            .or_insert_with(|| GateDefinition {
-                command: Vec::new(),
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: None,
-                error_regex: None,
-                explain_command: None,
-            });
-
-        match key {
-            "timeout_seconds" => {
-                if let Ok(t) = clean_str.parse::<u64>() {
-                    gate.timeout_seconds = t;
+fn parse_gates_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val {
+        for (gate_name, gate_val) in tbl {
+            if let toml::Value::Table(gate_tbl) = gate_val {
+                let mut gate = GateDefinition {
+                    command: Vec::new(),
+                    timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
+                    failure_message: None,
+                    error_regex: None,
+                    explain_command: None,
+                };
+                for (gk, gv) in gate_tbl {
+                    match gk.as_str() {
+                        "command" => {
+                            if let toml::Value::Array(arr) = gv {
+                                gate.command = extract_string_array(arr);
+                            }
+                        },
+                        "timeout_seconds" => {
+                            if let Some(n) = gv.as_integer()
+                                && let Ok(u) = u64::try_from(n)
+                            {
+                                gate.timeout_seconds = u;
+                            }
+                        },
+                        "failure_message" => {
+                            gate.failure_message = gv.as_str().map(ToOwned::to_owned);
+                        },
+                        "error_regex" => {
+                            gate.error_regex = gv.as_str().map(ToOwned::to_owned);
+                        },
+                        "explain_command" => {
+                            if let toml::Value::Array(arr) = gv {
+                                gate.explain_command = Some(extract_string_array(arr));
+                            }
+                        },
+                        _ => {},
+                    }
                 }
-            },
-            "failure_message" => {
-                gate.failure_message = Some(clean_str.to_owned());
-            },
-            "error_regex" => {
-                gate.error_regex = Some(clean_str.to_owned());
-            },
-            _ => {},
+                config.gates.insert(gate_name.clone(), gate);
+            }
         }
-    } else if section == "environment" {
-        config
-            .environment
-            .insert(key.to_owned(), clean_str.to_owned());
-    } else if section == "security" {
-        let is_true = clean_str == "true";
-        match key {
-            "block_generic_credentials" => config
-                .security
-                .set_category_blocked(SecurityCategory::GenericCredentials, is_true),
-            "block_vcs_internals" => config
-                .security
-                .set_category_blocked(SecurityCategory::VcsInternals, is_true),
-            "block_ssh_keys" => config
-                .security
-                .set_category_blocked(SecurityCategory::SshKeys, is_true),
-            "block_shell_profiles" => config
-                .security
-                .set_category_blocked(SecurityCategory::ShellProfiles, is_true),
-            "block_sensitive_extensions" => config
-                .security
-                .set_category_blocked(SecurityCategory::SensitiveExtensions, is_true),
-            _ => {},
-        }
-    } else if section == "docs" {
-        match key {
-            "description" => config.docs.description = Some(clean_str.to_owned()),
-            "path" | "paths" => config.docs.paths = vec![clean_str.to_owned()],
-            "tool_name" => config.docs.tool_name = Some(clean_str.to_owned()),
-            _ => {},
-        }
-    } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths")
+    }
+}
+
+fn parse_sandbox_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val
+        && let Some(toml::Value::Array(arr)) = tbl.get("bind_mounts")
     {
-        config.docs.paths = vec![clean_str.to_owned()];
-    } else if section == "path_policies" {
-        if let Some(last) = config.path_policies.last_mut() {
-            match key {
-                "path" => clean_str.clone_into(&mut last.path),
-                "filter" => match clean_str {
-                    "comments_only" | "comments" => {
-                        last.filter = crate::content_filter::ContentFilterKind::CommentsOnly;
+        config.sandbox.bind_mounts = extract_string_array(arr);
+    }
+}
+
+fn parse_environment_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val {
+        for (k, v) in tbl {
+            if k == "extra_banned_files" || k == "extra_banned_patterns" {
+                if let toml::Value::Array(arr) = v {
+                    let items = extract_string_array(arr);
+                    config.security.extra_banned_patterns.extend(items.clone());
+                    config.extra_banned_files = items;
+                }
+            } else if let Some(s) = v.as_str() {
+                config.environment.insert(k.clone(), s.to_owned());
+            }
+        }
+    }
+}
+
+fn parse_security_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val {
+        for (k, v) in tbl {
+            match (k.as_str(), v) {
+                ("block_generic_credentials", toml::Value::Boolean(b)) => {
+                    config
+                        .security
+                        .set_category_blocked(SecurityCategory::GenericCredentials, *b);
+                },
+                ("block_vcs_internals", toml::Value::Boolean(b)) => {
+                    config
+                        .security
+                        .set_category_blocked(SecurityCategory::VcsInternals, *b);
+                },
+                ("block_ssh_keys", toml::Value::Boolean(b)) => {
+                    config
+                        .security
+                        .set_category_blocked(SecurityCategory::SshKeys, *b);
+                },
+                ("block_shell_profiles", toml::Value::Boolean(b)) => {
+                    config
+                        .security
+                        .set_category_blocked(SecurityCategory::ShellProfiles, *b);
+                },
+                ("block_sensitive_extensions", toml::Value::Boolean(b)) => {
+                    config
+                        .security
+                        .set_category_blocked(SecurityCategory::SensitiveExtensions, *b);
+                },
+                ("extra_banned_patterns" | "extra_banned_files", toml::Value::Array(arr)) => {
+                    config.security.extra_banned_patterns = extract_string_array(arr);
+                },
+                ("allowed_patterns", toml::Value::Array(arr)) => {
+                    config.security.allowed_patterns = extract_string_array(arr);
+                },
+                ("disabled_categories", toml::Value::Array(arr)) => {
+                    config.security.disabled_categories = extract_string_array(arr);
+                },
+                _ => {},
+            }
+        }
+    }
+}
+
+fn parse_docs_section(config: &mut ProjectConfig, val: &toml::Value) {
+    match val {
+        toml::Value::Table(tbl) => {
+            for (k, v) in tbl {
+                match (k.as_str(), v) {
+                    ("description", toml::Value::String(s)) => {
+                        config.docs.description = Some(s.clone());
                     },
-                    "tests_only" | "tests" => {
-                        last.filter = crate::content_filter::ContentFilterKind::TestsOnly;
+                    ("path", toml::Value::String(s)) => config.docs.paths = vec![s.clone()],
+                    ("paths" | "dirs", toml::Value::Array(arr)) => {
+                        config.docs.paths = extract_string_array(arr);
                     },
-                    "delimited" => {
-                        last.filter = crate::content_filter::ContentFilterKind::Delimited;
+                    ("tool_name", toml::Value::String(s)) => {
+                        config.docs.tool_name = Some(s.clone());
                     },
                     _ => {},
-                },
-                "start_marker" => last.start_marker = Some(clean_str.to_owned()),
-                "end_marker" => last.end_marker = Some(clean_str.to_owned()),
-                "line_comment" => last.line_comments = vec![clean_str.to_owned()],
-                "block_comment_start" => {
-                    if let Some(last_bc) = last.block_comments.last_mut() {
-                        clean_str.clone_into(&mut last_bc.start);
-                    } else {
-                        last.block_comments.push(
-                            crate::content_filter::BlockCommentDelimiters::new(clean_str, ""),
-                        );
-                    }
-                },
-                "block_comment_end" => {
-                    if let Some(last_bc) = last.block_comments.last_mut() {
-                        clean_str.clone_into(&mut last_bc.end);
-                    } else {
-                        last.block_comments.push(
-                            crate::content_filter::BlockCommentDelimiters::new("", clean_str),
-                        );
-                    }
-                },
-                _ => {},
+                }
             }
-        }
-    } else if section == "policies.syntax" || section == "syntax" {
-        let syntax = config
-            .policies
-            .syntax
-            .get_or_insert_with(crate::content_filter::SyntaxConfig::default);
-        match key {
-            "line_comment" => syntax.line_comments = vec![clean_str.to_owned()],
-            "test_prefix" => syntax.test_prefixes = vec![clean_str.to_owned()],
-            "test_attribute" => syntax.test_attributes = vec![clean_str.to_owned()],
-            _ => {},
-        }
+        },
+        toml::Value::Array(arr) => {
+            config.docs.paths = extract_string_array(arr);
+        },
+        toml::Value::String(s) => {
+            config.docs.paths = vec![s.clone()];
+        },
+        _ => {},
     }
 }
 
-fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items: &[String]) {
-    if key == "extra_banned_files" {
-        config.extra_banned_files = items.to_vec();
-        config.security.extra_banned_patterns.extend(items.to_vec());
-    } else if section == "workspace" {
-        if key == "containers" {
-            config.workspace.containers = items.to_vec();
-        } else if key == "ignored_paths" {
-            config.workspace.ignored_paths = items.to_vec();
-        }
-    } else if (section == "docs" && (key == "paths" || key == "dirs"))
-        || ((section == "project" || section.is_empty())
-            && (key == "docs" || key == "docs_paths" || key == "paths"))
+fn parse_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Table(tbl) = val
+        && let Some(toml::Value::Table(syntax_tbl)) = tbl.get("syntax")
     {
-        config.docs.paths = items.to_vec();
-    } else if let Some(gate_name) = section.strip_prefix("gates.") {
-        let gate = config
-            .gates
-            .entry(gate_name.to_owned())
-            .or_insert_with(|| GateDefinition {
-                command: Vec::new(),
-                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                failure_message: None,
-                error_regex: None,
-                explain_command: None,
-            });
-
-        if key == "command" {
-            gate.command = items.to_vec();
-        } else if key == "explain_command" {
-            gate.explain_command = Some(items.to_vec());
-        }
-    } else if section == "sandbox" && key == "bind_mounts" {
-        config.sandbox.bind_mounts = items.to_vec();
-    } else if section == "security" {
-        if key == "extra_banned_patterns" || key == "extra_banned_files" {
-            config.security.extra_banned_patterns = items.to_vec();
-        } else if key == "allowed_patterns" {
-            config.security.allowed_patterns = items.to_vec();
-        } else if key == "disabled_categories" {
-            config.security.disabled_categories = items.to_vec();
-        }
-    } else if section == "path_policies" {
-        if let Some(last) = config.path_policies.last_mut() {
-            match key {
-                "line_comments" => last.line_comments = items.to_vec(),
-                "test_attributes" => last.test_attributes = items.to_vec(),
-                "test_prefixes" => last.test_prefixes = items.to_vec(),
-                _ => {},
+        let mut syntax = crate::content_filter::SyntaxConfig::default();
+        for (sk, sv) in syntax_tbl {
+            if let toml::Value::Array(arr) = sv {
+                let strings = extract_string_array(arr);
+                match sk.as_str() {
+                    "line_comments" => syntax.line_comments = strings,
+                    "test_attributes" => syntax.test_attributes = strings,
+                    "test_prefixes" => syntax.test_prefixes = strings,
+                    _ => {},
+                }
+            } else if let toml::Value::String(s) = sv {
+                match sk.as_str() {
+                    "line_comment" => syntax.line_comments = vec![s.clone()],
+                    "test_attribute" => syntax.test_attributes = vec![s.clone()],
+                    "test_prefix" => syntax.test_prefixes = vec![s.clone()],
+                    _ => {},
+                }
             }
         }
-    } else if section == "policies.syntax" || section == "syntax" {
-        let syntax = config
-            .policies
-            .syntax
-            .get_or_insert_with(crate::content_filter::SyntaxConfig::default);
-        match key {
-            "line_comments" => syntax.line_comments = items.to_vec(),
-            "test_attributes" => syntax.test_attributes = items.to_vec(),
-            "test_prefixes" => syntax.test_prefixes = items.to_vec(),
-            _ => {},
+        config.policies.syntax = Some(syntax);
+    }
+}
+
+fn parse_path_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
+    if let toml::Value::Array(arr) = val {
+        for item in arr {
+            if let toml::Value::Table(p_tbl) = item {
+                let mut policy = crate::content_filter::PathPolicy::default();
+                for (pk, pv) in p_tbl {
+                    match (pk.as_str(), pv) {
+                        ("path", toml::Value::String(s)) => policy.path.clone_from(s),
+                        ("filter", toml::Value::String(s)) => match s.as_str() {
+                            "comments_only" | "comments" => {
+                                policy.filter =
+                                    crate::content_filter::ContentFilterKind::CommentsOnly;
+                            },
+                            "tests_only" | "tests" => {
+                                policy.filter = crate::content_filter::ContentFilterKind::TestsOnly;
+                            },
+                            "delimited" => {
+                                policy.filter = crate::content_filter::ContentFilterKind::Delimited;
+                            },
+                            _ => {},
+                        },
+                        ("start_marker", toml::Value::String(s)) => {
+                            policy.start_marker = Some(s.clone());
+                        },
+                        ("end_marker", toml::Value::String(s)) => {
+                            policy.end_marker = Some(s.clone());
+                        },
+                        ("line_comment", toml::Value::String(s)) => {
+                            policy.line_comments = vec![s.clone()];
+                        },
+                        ("block_comment_start", toml::Value::String(s)) => {
+                            if let Some(bc) = policy.block_comments.last_mut() {
+                                s.clone_into(&mut bc.start);
+                            } else {
+                                policy.block_comments.push(
+                                    crate::content_filter::BlockCommentDelimiters::new(
+                                        s.as_str(),
+                                        "",
+                                    ),
+                                );
+                            }
+                        },
+                        ("block_comment_end", toml::Value::String(s)) => {
+                            if let Some(bc) = policy.block_comments.last_mut() {
+                                s.clone_into(&mut bc.end);
+                            } else {
+                                policy.block_comments.push(
+                                    crate::content_filter::BlockCommentDelimiters::new(
+                                        "",
+                                        s.as_str(),
+                                    ),
+                                );
+                            }
+                        },
+                        ("line_comments", toml::Value::Array(p_arr)) => {
+                            policy.line_comments = extract_string_array(p_arr);
+                        },
+                        ("test_attributes", toml::Value::Array(p_arr)) => {
+                            policy.test_attributes = extract_string_array(p_arr);
+                        },
+                        ("test_prefixes", toml::Value::Array(p_arr)) => {
+                            policy.test_prefixes = extract_string_array(p_arr);
+                        },
+                        _ => {},
+                    }
+                }
+                config.path_policies.push(policy);
+            }
         }
     }
 }
