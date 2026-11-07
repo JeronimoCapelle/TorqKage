@@ -48,7 +48,7 @@ divan = "0.1"
 gungraun = "0.20"
 insta = { version = "1.49", features = ["yaml", "redactions"] }
 loom = "0.7"
-proptest = "1.6"
+proptest = "1.12"
 
 # ==============================================================================
 # WORKSPACE COMPILER LINTS
