@@ -89,6 +89,14 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
                 "path": {
                     "type": "string",
                     "description": "Optional specific directory or file path to search (defaults to all configured documentation paths)"
+                },
+                "is_regex": {
+                    "type": "boolean",
+                    "description": "Whether to evaluate pattern as a regular expression (defaults to true if pattern is valid regex)"
+                },
+                "case_sensitive": {
+                    "type": "boolean",
+                    "description": "Whether the search is case-sensitive (defaults to false)"
                 }
             },
             "required": ["pattern"]
@@ -203,5 +211,21 @@ mod tests {
         let mcp_tool = McpTool::from_definition(&def);
         assert_eq!(mcp_tool.input_schema["required"], json!(["item_path"]));
         assert!(mcp_tool.input_schema["properties"]["item_path"].is_object());
+    }
+
+    #[test]
+    fn test_file_search_schema() {
+        let def = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            description: "Search docs".to_owned(),
+            action: ToolAction::FileSearch,
+            ..Default::default()
+        };
+
+        let mcp_tool = McpTool::from_definition(&def);
+        assert_eq!(mcp_tool.input_schema["required"], json!(["pattern"]));
+        assert!(mcp_tool.input_schema["properties"]["pattern"].is_object());
+        assert!(mcp_tool.input_schema["properties"]["is_regex"].is_object());
+        assert!(mcp_tool.input_schema["properties"]["case_sensitive"].is_object());
     }
 }

@@ -255,8 +255,10 @@ ban_dangerous_files = true
 truncate_lines = 150
 timeout_seconds = 10
 args = [
-    { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or pattern to search across documentation" },
-    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" }
+    { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regular expression to search across documentation" },
+    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" },
+    { name = "is_regex", required = false, description = "Whether to evaluate pattern as a regular expression (defaults to true if pattern is valid regex)" },
+    { name = "case_sensitive", required = false, description = "Whether search is case-sensitive (defaults to false)" }
 ]
 
 [tools.list_project_docs]

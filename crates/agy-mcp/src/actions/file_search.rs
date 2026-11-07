@@ -1,21 +1,94 @@
-//! `file_search` action handler providing fast pattern search across repository files.
+//! `file_search` action handler providing fast pattern and regex search across repository files.
 
 use std::path::Path;
 
 use agy_common::{ProjectConfig, ProjectSecurityConfig};
+use regex::{Regex, RegexBuilder};
 
 use crate::{
     guards::{check_dangerous_files_with_security, truncate_output},
     models::ToolDefinition,
 };
 
+const MAX_SEARCH_MATCHES: usize = 500;
+
+#[derive(Debug)]
+enum SearchMatcher {
+    Regex(Regex),
+    Literal {
+        pattern: String,
+        case_sensitive: bool,
+    },
+}
+
+impl SearchMatcher {
+    fn literal(pattern: &str, case_sensitive: bool) -> Self {
+        let stored_pattern = if case_sensitive {
+            pattern.to_owned()
+        } else {
+            pattern.to_lowercase()
+        };
+        Self::Literal {
+            pattern: stored_pattern,
+            case_sensitive,
+        }
+    }
+
+    fn from_args(
+        pattern: &str,
+        is_regex_opt: Option<bool>,
+        case_sensitive: bool,
+    ) -> Result<Self, String> {
+        match is_regex_opt {
+            Some(true) => {
+                let re = RegexBuilder::new(pattern)
+                    .case_insensitive(!case_sensitive)
+                    .multi_line(true)
+                    .build()
+                    .map_err(|err| format!("Invalid regex pattern '{pattern}': {err}"))?;
+                Ok(Self::Regex(re))
+            },
+            Some(false) => Ok(Self::literal(pattern, case_sensitive)),
+            None => {
+                // Auto-compile as regex if valid; gracefully fallback to literal if regex syntax fails.
+                RegexBuilder::new(pattern)
+                    .case_insensitive(!case_sensitive)
+                    .multi_line(true)
+                    .build()
+                    .map_or_else(
+                        |_| Ok(Self::literal(pattern, case_sensitive)),
+                        |re| Ok(Self::Regex(re)),
+                    )
+            },
+        }
+    }
+
+    fn is_match(&self, line: &str) -> bool {
+        match self {
+            Self::Regex(re) => re.is_match(line),
+            Self::Literal {
+                pattern,
+                case_sensitive,
+            } => {
+                if *case_sensitive {
+                    line.contains(pattern)
+                } else {
+                    line.to_lowercase().contains(pattern)
+                }
+            },
+        }
+    }
+}
+
 /// Executes a bounded pattern search across files.
 ///
 /// If no explicit path is given, searches across all configured documentation paths
 /// in `project.toml` (e.g. `docs/`, `specs/`, `ARCHITECTURE.md`), or falls back to `tool.enforce_dir`.
 ///
+/// Supports regular expressions via the `regex` crate and optional `is_regex` / `case_sensitive` parameters.
+///
 /// # Errors
-/// Returns an error message if parameters are invalid or search fails.
+/// Returns an error message if parameters are invalid, regex compilation fails, or search fails.
 pub(crate) fn execute(
     tool: &ToolDefinition,
     workspace_root: &Path,
@@ -31,9 +104,20 @@ pub(crate) fn execute(
         return Err("Search pattern cannot be empty".to_owned());
     }
 
+    let is_regex_opt = arguments
+        .get("is_regex")
+        .or_else(|| arguments.get("regex"))
+        .and_then(serde_json::Value::as_bool);
+
+    let case_sensitive = arguments
+        .get("case_sensitive")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    let matcher = SearchMatcher::from_args(pattern, is_regex_opt, case_sensitive)?;
+
     let project = ProjectConfig::detect_or_load(workspace_root);
-    let pattern_lower = pattern.to_lowercase();
-    let mut matches = Vec::new();
+    let mut collected_matches = Vec::new();
 
     let path_arg = arguments
         .get("path")
@@ -60,17 +144,17 @@ pub(crate) fn execute(
             walk_and_search(
                 target,
                 workspace_root,
-                &pattern_lower,
+                &matcher,
                 &project.security,
-                &mut matches,
+                &mut collected_matches,
             );
         } else if target.is_file() {
             search_single_file(
                 target,
                 workspace_root,
-                &pattern_lower,
+                &matcher,
                 &project.security,
-                &mut matches,
+                &mut collected_matches,
             );
         }
     }
@@ -96,14 +180,14 @@ pub(crate) fn execute(
         ));
     }
 
-    if matches.is_empty() {
+    if collected_matches.is_empty() {
         let searched_summary = searched_targets.join(", ");
         return Ok(format!(
             "No occurrences found for pattern '{pattern}' in: {searched_summary}."
         ));
     }
 
-    let joined = matches.join("\n");
+    let joined = collected_matches.join("\n");
     let truncated = truncate_output(
         &joined,
         tool.truncate_lines.or(Some(150)),
@@ -146,9 +230,9 @@ fn resolve_search_targets(
 fn search_single_file(
     file_path: &Path,
     workspace_root: &Path,
-    pattern_lower: &str,
+    matcher: &SearchMatcher,
     security: &ProjectSecurityConfig,
-    matches: &mut Vec<String>,
+    collected_matches: &mut Vec<String>,
 ) {
     if check_dangerous_files_with_security(file_path, Some(security)).is_err() {
         return;
@@ -162,10 +246,10 @@ fn search_single_file(
             .to_string();
 
         for (idx, line) in content.lines().enumerate() {
-            if line.to_lowercase().contains(pattern_lower) {
+            if matcher.is_match(line) {
                 let line_num = idx.saturating_add(1);
-                matches.push(format!("{rel_path}:{line_num}: {line}"));
-                if matches.len() >= 500 {
+                collected_matches.push(format!("{rel_path}:{line_num}: {line}"));
+                if collected_matches.len() >= MAX_SEARCH_MATCHES {
                     return;
                 }
             }
@@ -176,9 +260,9 @@ fn search_single_file(
 fn walk_and_search(
     dir: &Path,
     workspace_root: &Path,
-    pattern_lower: &str,
+    matcher: &SearchMatcher,
     security: &ProjectSecurityConfig,
-    matches: &mut Vec<String>,
+    collected_matches: &mut Vec<String>,
 ) {
     let mut builder = ignore::WalkBuilder::new(dir);
     builder
@@ -198,8 +282,8 @@ fn walk_and_search(
             if name_lossy == "target" || name_lossy == "node_modules" {
                 continue;
             }
-            search_single_file(path, workspace_root, pattern_lower, security, matches);
-            if matches.len() >= 500 {
+            search_single_file(path, workspace_root, matcher, security, collected_matches);
+            if collected_matches.len() >= MAX_SEARCH_MATCHES {
                 break;
             }
         }
@@ -320,6 +404,175 @@ mod tests {
         let result_arch = execute(&tool, &temp, &args_arch).expect("search architecture only");
         assert!(result_arch.contains("ARCHITECTURE.md:2: CACHE_LINE_SIZE is tuned"));
         assert!(!result_arch.contains("docs/specs.md"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_regex_matches() {
+        let temp = create_test_dir("regex-matches");
+        let docs_dir = temp.join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("spec.md"),
+            "# Specification\n\nOPCODE_CALL = 0x10;\nOPCODE_RET = 0x20;\nDATA_STORE = 0x30;\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+
+        // Regex matching both OPCODE_CALL and OPCODE_RET
+        let args = json!({
+            "pattern": r"OPCODE_[A-Z]+\s*=\s*0x[0-9a-fA-F]+",
+            "is_regex": true
+        });
+
+        let result = execute(&tool, &temp, &args).expect("execute regex search");
+        assert!(result.contains("docs/spec.md:3: OPCODE_CALL = 0x10;"));
+        assert!(result.contains("docs/spec.md:4: OPCODE_RET = 0x20;"));
+        assert!(!result.contains("DATA_STORE"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_regex_auto_compile_without_flag() {
+        let temp = create_test_dir("regex-auto");
+        let docs_dir = temp.join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("spec.md"),
+            "# Specification\n\nOPCODE_CALL = 0x10;\nOPCODE_RET = 0x20;\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+
+        // Valid regex passed without is_regex flag -> should auto-compile as regex
+        let args = json!({
+            "pattern": "OPCODE_[A-Z]+"
+        });
+
+        let result = execute(&tool, &temp, &args).expect("auto regex search");
+        assert!(result.contains("docs/spec.md:3: OPCODE_CALL = 0x10;"));
+        assert!(result.contains("docs/spec.md:4: OPCODE_RET = 0x20;"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_regex_invalid_syntax_error() {
+        let temp = create_test_dir("regex-invalid");
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            ..Default::default()
+        };
+
+        let args = json!({
+            "pattern": "OPCODE_([a-z+",
+            "is_regex": true
+        });
+
+        let err = execute(&tool, &temp, &args).unwrap_err();
+        assert!(err.contains("Invalid regex pattern"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_regex_fallback_on_invalid_syntax() {
+        let temp = create_test_dir("regex-fallback");
+        let docs_dir = temp.join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("notes.txt"),
+            "Special line: unclosed(paren in text\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+
+        // Pattern has invalid regex syntax "unclosed(" but is_regex is omitted -> fallback to literal
+        let args = json!({
+            "pattern": "unclosed("
+        });
+
+        let result = execute(&tool, &temp, &args).expect("fallback to literal search");
+        assert!(result.contains("Special line: unclosed(paren in text"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_case_sensitive() {
+        let temp = create_test_dir("case-sensitive");
+        let docs_dir = temp.join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(docs_dir.join("spec.md"), "lowercase = 1;\nUPPERCASE = 2;\n").unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+
+        // Case-sensitive search for UPPERCASE
+        let args_upper = json!({
+            "pattern": "UPPERCASE",
+            "case_sensitive": true
+        });
+        let res_upper = execute(&tool, &temp, &args_upper).expect("case sensitive upper");
+        assert!(res_upper.contains("UPPERCASE = 2;"));
+
+        // Case-sensitive search for lowercase (should match lowercase but not UPPERCASE)
+        let args_lower = json!({
+            "pattern": "lowercase",
+            "case_sensitive": true
+        });
+        let res_lower = execute(&tool, &temp, &args_lower).expect("case sensitive lower");
+        assert!(res_lower.contains("lowercase = 1;"));
+        assert!(!res_lower.contains("UPPERCASE = 2;"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_file_search_literal_mode() {
+        let temp = create_test_dir("literal-mode");
+        let docs_dir = temp.join("docs");
+        std::fs::create_dir_all(&docs_dir).unwrap();
+        std::fs::write(
+            docs_dir.join("spec.md"),
+            "Line with literal: OPCODE_[A-Z]+\nOther line: OPCODE_CALL\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            enforce_dir: Some("docs".to_owned()),
+            ..Default::default()
+        };
+
+        // Literal search for "OPCODE_[A-Z]+" with is_regex = false
+        let args = json!({
+            "pattern": "OPCODE_[A-Z]+",
+            "is_regex": false
+        });
+        let result = execute(&tool, &temp, &args).expect("literal mode");
+        assert!(result.contains("Line with literal: OPCODE_[A-Z]+"));
+        assert!(!result.contains("Other line: OPCODE_CALL"));
 
         drop(std::fs::remove_dir_all(&temp));
     }
