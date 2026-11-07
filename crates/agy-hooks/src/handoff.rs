@@ -1,11 +1,15 @@
 //! Session state handoff recording (`Stop`) and wake-up injection (`SessionStart`).
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use agy_common::{
     HandoffRecord, InjectStep, PipelineHandoff, SessionStartInput, SessionStartResponse, StopInput,
     StopResponse, WorkspaceResolver,
 };
+
 use crate::stdin::read_stdin_payload;
 
 /// Executes the `record-handoff` hook (`Stop`).
@@ -91,7 +95,11 @@ pub(crate) fn execute_inject_wake() {
     let json_handoff = paths.handoff_json_file();
     let md_handoff = paths.handoff_md_file();
     let project = agy_common::ProjectConfig::detect_or_load(&root);
-    let tool_name = project.docs.tool_name.as_deref().unwrap_or("query_project_spec");
+    let tool_name = project
+        .docs
+        .tool_name
+        .as_deref()
+        .unwrap_or("query_project_spec");
 
     let mut resp = if config.session_start.inject_wake_state
         && json_handoff.exists()
@@ -183,14 +191,17 @@ pub(crate) fn execute_inject_wake() {
             cmd.args(args);
             cmd.current_dir(&root);
 
-            if let Ok(out) = agy_common::SubprocessSupervisor::run_supervised(cmd, injection.timeout_seconds) {
+            if let Ok(out) =
+                agy_common::SubprocessSupervisor::run_supervised(cmd, injection.timeout_seconds)
+            {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
                 let stderr = String::from_utf8_lossy(&out.stderr).trim().to_owned();
                 let raw = if stdout.is_empty() { stderr } else { stdout };
 
                 if !raw.is_empty() {
                     let lines: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).collect();
-                    let truncated: Vec<&str> = lines.iter().take(injection.max_lines).copied().collect();
+                    let truncated: Vec<&str> =
+                        lines.iter().take(injection.max_lines).copied().collect();
                     let mut content = truncated.join("\n");
                     if lines.len() > injection.max_lines {
                         content.push_str(&format!(

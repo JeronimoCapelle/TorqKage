@@ -2,11 +2,13 @@
 //!
 //! Modular quality gatekeeper and pre-flight validation rules for specialized agents.
 
-use std::path::Path;
-use std::process::Command;
-use crate::limits::{DEFAULT_PREVIEW_LINES, DEFAULT_VCS_QUERY_TIMEOUT_SECS};
-use crate::project::ProjectConfig;
-use crate::supervisor::SubprocessSupervisor;
+use std::{path::Path, process::Command};
+
+use crate::{
+    limits::{DEFAULT_PREVIEW_LINES, DEFAULT_VCS_QUERY_TIMEOUT_SECS},
+    project::ProjectConfig,
+    supervisor::SubprocessSupervisor,
+};
 
 /// Validation check outcome.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -95,14 +97,24 @@ impl GateCheck for ProjectGateCheck {
                     let stderr = String::from_utf8_lossy(&out.stderr);
                     let stdout = String::from_utf8_lossy(&out.stdout);
                     let raw = format!("{stdout}\n{stderr}");
-                    let truncated: Vec<&str> = raw.lines().filter(|l| !l.trim().is_empty()).take(DEFAULT_PREVIEW_LINES).collect();
+                    let truncated: Vec<&str> = raw
+                        .lines()
+                        .filter(|l| !l.trim().is_empty())
+                        .take(DEFAULT_PREVIEW_LINES)
+                        .collect();
                     let diag = truncated.join("\n");
-                    let default_msg = format!("Gate '{}' failed (`{}`).", self.name, self.command.join(" "));
+                    let default_msg = format!(
+                        "Gate '{}' failed (`{}`).",
+                        self.name,
+                        self.command.join(" ")
+                    );
                     let msg = self.failure_message.as_deref().unwrap_or(&default_msg);
                     GateCheckStatus::Failed(format!("{msg}\n\n[Diagnostic Output]:\n{diag}"))
                 }
-            }
-            Err(e) => GateCheckStatus::Failed(format!("Failed to execute gate '{}': {e}", self.name)),
+            },
+            Err(e) => {
+                GateCheckStatus::Failed(format!("Failed to execute gate '{}': {e}", self.name))
+            },
         }
     }
 }
@@ -120,10 +132,18 @@ impl GateCheck for VcsConflictCheck {
         // 1. Jujutsu conflict check
         if workspace_root.join(".jj").is_dir() {
             let mut cmd = Command::new("jj");
-            cmd.args(["log", "-r", "conflicts() & @", "--no-graph", "-T", "change_id"]);
+            cmd.args([
+                "log",
+                "-r",
+                "conflicts() & @",
+                "--no-graph",
+                "-T",
+                "change_id",
+            ]);
             cmd.current_dir(workspace_root);
 
-            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            if let Ok(out) =
+                SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                 && out.status.success()
             {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim().to_owned();
@@ -141,11 +161,20 @@ impl GateCheck for VcsConflictCheck {
             cmd.args(["diff", "--check"]);
             cmd.current_dir(workspace_root);
 
-            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
-                let combined = format!("{}\n{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                if combined.contains("leftover conflict marker") || combined.contains("conflict marker") {
+            if let Ok(out) =
+                SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            {
+                let combined = format!(
+                    "{}\n{}",
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                if combined.contains("leftover conflict marker")
+                    || combined.contains("conflict marker")
+                {
                     return GateCheckStatus::Failed(
-                        "Unresolved conflict markers detected in working tree (git diff --check).".to_owned(),
+                        "Unresolved conflict markers detected in working tree (git diff --check)."
+                            .to_owned(),
                     );
                 }
             }
@@ -168,7 +197,8 @@ impl GateCheck for WorkspaceCleanCheck {
         if crate::JujutsuWorkspace::is_jj_repo(workspace_root) {
             if !crate::JujutsuWorkspace::is_workspace_clean(workspace_root) {
                 return GateCheckStatus::Failed(
-                    "Working copy has uncommitted modifications (Jujutsu repository not clean).".to_owned(),
+                    "Working copy has uncommitted modifications (Jujutsu repository not clean)."
+                        .to_owned(),
                 );
             }
             return GateCheckStatus::Passed;
@@ -178,7 +208,8 @@ impl GateCheck for WorkspaceCleanCheck {
             let mut cmd = Command::new("git");
             cmd.args(["status", "--porcelain"]);
             cmd.current_dir(workspace_root);
-            if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            if let Ok(out) =
+                SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                 && out.status.success()
                 && !out.stdout.is_empty()
             {
@@ -205,7 +236,10 @@ impl GateCheck for WorkspaceCleanCheck {
 ///
 /// # Errors
 /// Returns a list of blocking failure diagnostics if any mandatory check fails.
-pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -> Result<Vec<String>, Vec<String>> {
+pub fn evaluate_pre_flight_checks(
+    workspace_root: &Path,
+    check_names: &[&str],
+) -> Result<Vec<String>, Vec<String>> {
     let project = ProjectConfig::detect_or_load(workspace_root);
     let mut checks: Vec<Box<dyn GateCheck>> = Vec::new();
     let mut errors = Vec::new();
@@ -232,13 +266,13 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
                         "Pre-launch check '{gate_name}' is required by agent manifest, but no gate '[gates.{gate_name}]' is defined in project.toml."
                     ));
                 }
-            }
+            },
         }
     }
 
     for check in checks {
         match check.execute(workspace_root) {
-            GateCheckStatus::Passed => {}
+            GateCheckStatus::Passed => {},
             GateCheckStatus::Failed(err) => errors.push(err),
             GateCheckStatus::Warning(warn) => warnings.push(warn),
         }
@@ -253,8 +287,14 @@ pub fn evaluate_pre_flight_checks(workspace_root: &Path, check_names: &[&str]) -
 
 /// Discovers the path to an agent's Markdown specification file.
 #[must_use]
-#[allow(clippy::print_stderr, reason = "Advisory notice when agent manifest is missing")]
-pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Option<std::path::PathBuf> {
+#[allow(
+    clippy::print_stderr,
+    reason = "Advisory notice when agent manifest is missing"
+)]
+pub fn find_agent_manifest_path(
+    workspace_root: &Path,
+    agent_name: &str,
+) -> Option<std::path::PathBuf> {
     let mut candidates = vec![
         workspace_root.join(format!("config/agents/{agent_name}.md")),
         workspace_root.join(format!("plugins/agy-suite/agents/{agent_name}.md")),
@@ -267,7 +307,9 @@ pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Opti
 
     if let Ok(home) = std::env::var("HOME") {
         let home_path = std::path::PathBuf::from(home);
-        candidates.push(home_path.join(format!(".gemini/config/plugins/agy-suite/agents/{agent_name}.md")));
+        candidates.push(home_path.join(format!(
+            ".gemini/config/plugins/agy-suite/agents/{agent_name}.md"
+        )));
         candidates.push(home_path.join(format!(".gemini/config/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".gemini/agents/{agent_name}.md")));
         candidates.push(home_path.join(format!(".agents/agents/{agent_name}.md")));
@@ -276,7 +318,9 @@ pub fn find_agent_manifest_path(workspace_root: &Path, agent_name: &str) -> Opti
 
     let found = candidates.into_iter().find(|p| p.is_file());
     if found.is_none() {
-        eprintln!("[agy-common] Advisory: Agent manifest for '{agent_name}' not found across workspace or ~/.gemini/config.");
+        eprintln!(
+            "[agy-common] Advisory: Agent manifest for '{agent_name}' not found across workspace or ~/.gemini/config."
+        );
     }
     found
 }
@@ -319,19 +363,32 @@ pre_launch_checks: []
     fn test_gate_check_trait_dispatch() {
         struct MockPass;
         impl GateCheck for MockPass {
-            fn name(&self) -> &'static str { "Mock Pass" }
-            fn execute(&self, _: &Path) -> GateCheckStatus { GateCheckStatus::Passed }
+            fn name(&self) -> &'static str {
+                "Mock Pass"
+            }
+
+            fn execute(&self, _: &Path) -> GateCheckStatus {
+                GateCheckStatus::Passed
+            }
         }
 
         struct MockFail;
         impl GateCheck for MockFail {
-            fn name(&self) -> &'static str { "Mock Fail" }
-            fn execute(&self, _: &Path) -> GateCheckStatus { GateCheckStatus::Failed("error".to_owned()) }
+            fn name(&self) -> &'static str {
+                "Mock Fail"
+            }
+
+            fn execute(&self, _: &Path) -> GateCheckStatus {
+                GateCheckStatus::Failed("error".to_owned())
+            }
         }
 
         let pass = MockPass;
         let fail = MockFail;
         assert_eq!(pass.execute(Path::new(".")), GateCheckStatus::Passed);
-        assert_eq!(fail.execute(Path::new(".")), GateCheckStatus::Failed("error".to_owned()));
+        assert_eq!(
+            fail.execute(Path::new(".")),
+            GateCheckStatus::Failed("error".to_owned())
+        );
     }
 }

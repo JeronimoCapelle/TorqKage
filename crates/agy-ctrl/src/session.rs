@@ -5,8 +5,11 @@
 //! It requires the external `sqlite3` CLI utility installed in `$PATH` to execute JSON queries.
 //! If `sqlite3` is absent, session discovery gracefully returns `None`.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use serde::Deserialize;
 
 /// Compact summary of a past conversation session for a specific agent in this workspace.
@@ -29,7 +32,9 @@ impl SessionSummary {
     /// Formats a short prefix of the UUID conversation ID.
     #[must_use]
     pub(crate) fn short_id(&self) -> &str {
-        self.conversation_id.get(..8).unwrap_or(&self.conversation_id)
+        self.conversation_id
+            .get(..8)
+            .unwrap_or(&self.conversation_id)
     }
 }
 
@@ -42,7 +47,9 @@ pub(crate) fn find_agent_session_for_workspace(
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
     if which::which("sqlite3").is_err() {
-        eprintln!("[agy-ctrl] Advisory: 'sqlite3' CLI not found in PATH; past conversation session discovery disabled.");
+        eprintln!(
+            "[agy-ctrl] Advisory: 'sqlite3' CLI not found in PATH; past conversation session discovery disabled."
+        );
         return None;
     }
 

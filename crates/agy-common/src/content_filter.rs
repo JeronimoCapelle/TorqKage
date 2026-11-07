@@ -12,6 +12,7 @@
 //! can be auto-inferred by file extension or `project.language`, or declared in `project.toml`.
 
 use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 /// Policy filter kind specifying the allowed modification domain.
@@ -72,11 +73,11 @@ impl SyntaxConfig {
                 "zig" => return Self::zig(),
                 "c" | "cpp" | "c++" | "cxx" | "javascript" | "typescript" | "js" | "ts" => {
                     return Self::c_family();
-                }
+                },
                 "shell" | "bash" | "sh" => return Self::shell(),
                 "lua" | "sql" => return Self::lua(),
                 "rust" | "rs" => return Self::rust(),
-                _ => {}
+                _ => {},
             }
         }
 
@@ -85,8 +86,8 @@ impl SyntaxConfig {
             "py" | "pyi" => Self::python(),
             "go" => Self::go(),
             "zig" => Self::zig(),
-            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "java" | "cs" | "swift" | "kt"
-            | "js" | "ts" | "jsx" | "tsx" => Self::c_family(),
+            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "java" | "cs" | "swift" | "kt" | "js"
+            | "ts" | "jsx" | "tsx" => Self::c_family(),
             "sh" | "bash" | "zsh" => Self::shell(),
             "lua" | "sql" => Self::lua(),
             _ => Self::rust(),
@@ -147,11 +148,7 @@ impl SyntaxConfig {
             line_comments: vec!["//".to_owned()],
             block_comments: vec![BlockCommentDelimiters::new("/*", "*/")],
             test_attributes: vec!["//go:build test".to_owned()],
-            test_prefixes: vec![
-                "Test".to_owned(),
-                "Benchmark".to_owned(),
-                "Fuzz".to_owned(),
-            ],
+            test_prefixes: vec!["Test".to_owned(), "Benchmark".to_owned(), "Fuzz".to_owned()],
         }
     }
 
@@ -335,7 +332,7 @@ impl PathPolicy {
                         self.path
                     ))
                 }
-            }
+            },
             ContentFilterKind::TestsOnly => {
                 let norm_orig = strip_tests_and_normalize_with_syntax(
                     original,
@@ -363,9 +360,12 @@ impl PathPolicy {
                         self.path
                     ))
                 }
-            }
+            },
             ContentFilterKind::Delimited => {
-                let start = self.start_marker.as_deref().unwrap_or("// AGY:EDITABLE_START");
+                let start = self
+                    .start_marker
+                    .as_deref()
+                    .unwrap_or("// AGY:EDITABLE_START");
                 let end = self.end_marker.as_deref().unwrap_or("// AGY:EDITABLE_END");
 
                 let norm_orig = strip_delimited_and_normalize(original, start, end);
@@ -379,7 +379,7 @@ impl PathPolicy {
                         self.path
                     ))
                 }
-            }
+            },
         }
     }
 }
@@ -650,7 +650,10 @@ pub fn strip_tests_and_normalize_with_syntax(
 
     // 4. If indentation-based (e.g. Python), strip via indentation hierarchy
     let is_indentation_based = syntax.line_comments.iter().any(|c| c == "#")
-        && (syntax.test_prefixes.iter().any(|p| p.starts_with("test_") || p.starts_with("Test"))
+        && (syntax
+            .test_prefixes
+            .iter()
+            .any(|p| p.starts_with("test_") || p.starts_with("Test"))
             || syntax.test_attributes.iter().any(|a| a.starts_with('@')));
 
     if is_indentation_based {
@@ -691,14 +694,25 @@ fn strip_indentation_test_items(input: &str, syntax: &SyntaxConfig) -> String {
             skipping_indent = None;
         }
 
-        let is_test_attr = syntax.test_attributes.iter().any(|a| trimmed.starts_with(a));
+        let is_test_attr = syntax
+            .test_attributes
+            .iter()
+            .any(|a| trimmed.starts_with(a));
         let is_test_fn = trimmed.starts_with("def ")
             && syntax.test_prefixes.iter().any(|p| {
-                trimmed.strip_prefix("def ").unwrap_or("").trim_start().starts_with(p)
+                trimmed
+                    .strip_prefix("def ")
+                    .unwrap_or("")
+                    .trim_start()
+                    .starts_with(p)
             });
         let is_test_class = trimmed.starts_with("class ")
             && syntax.test_prefixes.iter().any(|p| {
-                trimmed.strip_prefix("class ").unwrap_or("").trim_start().starts_with(p)
+                trimmed
+                    .strip_prefix("class ")
+                    .unwrap_or("")
+                    .trim_start()
+                    .starts_with(p)
             });
 
         if is_test_attr || is_test_fn || is_test_class {
@@ -795,7 +809,10 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
         }
 
         // 1. Rust attribute detection: #[ ... ]
-        if chars[i] == '#' && i.saturating_add(1_usize) < len && chars[i.saturating_add(1_usize)] == '[' {
+        if chars[i] == '#'
+            && i.saturating_add(1_usize) < len
+            && chars[i.saturating_add(1_usize)] == '['
+        {
             let start = i;
             i = i.saturating_add(2_usize);
             let mut bracket_depth = 1_usize;
@@ -841,8 +858,13 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
         }
 
         // 2. Direct test definitions (e.g. Zig `test "..."`, C++ `TEST(...)`, Go `func Test...`)
-        let current_slice: String = chars[i..len.min(i.saturating_add(30_usize))].iter().collect();
-        let matches_direct_test = syntax.test_attributes.iter().any(|a| current_slice.starts_with(a))
+        let current_slice: String = chars[i..len.min(i.saturating_add(30_usize))]
+            .iter()
+            .collect();
+        let matches_direct_test = syntax
+            .test_attributes
+            .iter()
+            .any(|a| current_slice.starts_with(a))
             || syntax.test_prefixes.iter().any(|p| {
                 current_slice.starts_with(&format!("func {p}")) || current_slice.starts_with(p)
             });
@@ -885,7 +907,10 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
                         continue;
                     }
 
-                    if ch == '\'' && i.saturating_add(2_usize) < len && chars[i.saturating_add(2_usize)] == '\'' {
+                    if ch == '\''
+                        && i.saturating_add(2_usize) < len
+                        && chars[i.saturating_add(2_usize)] == '\''
+                    {
                         i = i.saturating_add(3_usize);
                         continue;
                     }
@@ -958,8 +983,20 @@ pub fn matches_directory_scope(rel_path: &str, scope: &str) -> bool {
 
     // 2. Monorepo container match: e.g. "crates/agy-mcp/src/main.rs" matches "src"
     for prefix in &[
-        "crates/", "packages/", "plugins/", "apps/", "services/", "libs/", "modules/",
-        "crates\\", "packages\\", "plugins\\", "apps\\", "services\\", "libs\\", "modules\\",
+        "crates/",
+        "packages/",
+        "plugins/",
+        "apps/",
+        "services/",
+        "libs/",
+        "modules/",
+        "crates\\",
+        "packages\\",
+        "plugins\\",
+        "apps\\",
+        "services\\",
+        "libs\\",
+        "modules\\",
     ] {
         if let Some(sub) = rel_path.strip_prefix(prefix)
             && let Some((_container_item, item_rel)) = sub.split_once(['/', '\\'])
@@ -1021,9 +1058,7 @@ pub fn check_agent_guard_direct(
         return Ok(());
     };
 
-    let relative = candidate
-        .strip_prefix(workspace_root)
-        .unwrap_or(candidate);
+    let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
     // 1. Check disallowed files
@@ -1056,9 +1091,10 @@ pub fn check_agent_guard_direct(
             return Ok(());
         }
 
-        let is_allowed = guard.allowed_dirs.iter().any(|dir| {
-            matches_directory_scope(&rel_lossy, dir)
-        });
+        let is_allowed = guard
+            .allowed_dirs
+            .iter()
+            .any(|dir| matches_directory_scope(&rel_lossy, dir));
 
         if !is_allowed {
             return Err(format!(
@@ -1086,16 +1122,16 @@ pub fn check_agent_path_policies_direct(
     guard: Option<&crate::models::AgentGuard>,
     project: Option<&crate::project::ProjectConfig>,
 ) -> Result<(), String> {
-    let relative = candidate
-        .strip_prefix(workspace_root)
-        .unwrap_or(candidate);
+    let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
     // 1. Collect candidate policies from agent frontmatter
     let mut applicable_policies: Vec<(Option<String>, PathPolicy)> = Vec::new();
     if let Some(g) = guard {
         for p in &g.path_policies {
-            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
+            if matches_directory_scope(&rel_lossy, &p.path)
+                || path_matches_pattern(&rel_lossy, &p.path)
+            {
                 applicable_policies.push((agent_name.map(str::to_owned), p.clone()));
             }
         }
@@ -1104,7 +1140,9 @@ pub fn check_agent_path_policies_direct(
     // 2. Collect candidate policies from project.toml (workspace-wide)
     if let Some(proj) = project {
         for p in proj.all_path_policies() {
-            if matches_directory_scope(&rel_lossy, &p.path) || path_matches_pattern(&rel_lossy, &p.path) {
+            if matches_directory_scope(&rel_lossy, &p.path)
+                || path_matches_pattern(&rel_lossy, &p.path)
+            {
                 applicable_policies.push((agent_name.map(str::to_owned), p));
             }
         }
@@ -1196,8 +1234,16 @@ def add(a, b):
     return a + b + 1
 ";
 
-        assert!(policy.verify_with_syntax(Path::new("app/math.py"), original, with_docs, &syntax).is_ok());
-        assert!(policy.verify_with_syntax(Path::new("app/math.py"), original, tampered, &syntax).is_err());
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("app/math.py"), original, with_docs, &syntax)
+                .is_ok()
+        );
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("app/math.py"), original, tampered, &syntax)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1243,8 +1289,16 @@ def subtract(a, b):
     return a - b
 ";
 
-        assert!(policy.verify_with_syntax(Path::new("app/math.py"), original, with_tests, &syntax).is_ok());
-        assert!(policy.verify_with_syntax(Path::new("app/math.py"), original, tampered, &syntax).is_err());
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("app/math.py"), original, with_tests, &syntax)
+                .is_ok()
+        );
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("app/math.py"), original, tampered, &syntax)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1282,8 +1336,16 @@ test \"calculate returns 42\" {
 }
 ";
 
-        assert!(policy.verify_with_syntax(Path::new("src/main.zig"), original, with_zig_test, &syntax).is_ok());
-        assert!(policy.verify_with_syntax(Path::new("src/main.zig"), original, tampered, &syntax).is_err());
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("src/main.zig"), original, with_zig_test, &syntax)
+                .is_ok()
+        );
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("src/main.zig"), original, tampered, &syntax)
+                .is_err()
+        );
     }
 
     #[test]
@@ -1321,13 +1383,22 @@ TEST(CalcTest, Returns42) {
 }
 ";
 
-        assert!(policy.verify_with_syntax(Path::new("src/main.cpp"), original, with_cpp_test, &syntax).is_ok());
-        assert!(policy.verify_with_syntax(Path::new("src/main.cpp"), original, tampered, &syntax).is_err());
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("src/main.cpp"), original, with_cpp_test, &syntax)
+                .is_ok()
+        );
+        assert!(
+            policy
+                .verify_with_syntax(Path::new("src/main.cpp"), original, tampered, &syntax)
+                .is_err()
+        );
     }
 
     #[test]
     fn test_delimited_policy_enforcement() {
-        let policy = PathPolicy::delimited("src/generated.rs", "// BEGIN AUTOGEN", "// END AUTOGEN");
+        let policy =
+            PathPolicy::delimited("src/generated.rs", "// BEGIN AUTOGEN", "// END AUTOGEN");
 
         let original = "
 // Header

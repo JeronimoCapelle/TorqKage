@@ -4,8 +4,11 @@
 //! Decouples language-specific build tools, compilers, test runners, and build caches
 //! from the `agy-suite` core engine.
 
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
+
 use serde::{Deserialize, Serialize};
 
 /// Default execution timeout for quality and compilation gates (in seconds).
@@ -96,7 +99,10 @@ impl ProjectSecurityConfig {
             SecurityCategory::ShellProfiles => "shell_profiles",
             SecurityCategory::SensitiveExtensions => "sensitive_extensions",
         };
-        !self.disabled_categories.iter().any(|c| c.eq_ignore_ascii_case(name))
+        !self
+            .disabled_categories
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(name))
     }
 
     /// Whether generic words like "password", "credential", "secret" are blocked. Default: true.
@@ -139,8 +145,13 @@ impl ProjectSecurityConfig {
             SecurityCategory::SensitiveExtensions => "sensitive_extensions",
         };
         if blocked {
-            self.disabled_categories.retain(|c| !c.eq_ignore_ascii_case(name));
-        } else if !self.disabled_categories.iter().any(|c| c.eq_ignore_ascii_case(name)) {
+            self.disabled_categories
+                .retain(|c| !c.eq_ignore_ascii_case(name));
+        } else if !self
+            .disabled_categories
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case(name))
+        {
             self.disabled_categories.push(name.to_owned());
         }
     }
@@ -442,7 +453,11 @@ impl ProjectConfig {
             },
             workspace: ProjectWorkspaceConfig {
                 containers: Vec::new(),
-                ignored_paths: vec![".pytest_cache".into(), ".mypy_cache".into(), "__pycache__".into()],
+                ignored_paths: vec![
+                    ".pytest_cache".into(),
+                    ".mypy_cache".into(),
+                    "__pycache__".into(),
+                ],
             },
             gates: BTreeMap::new(),
             sandbox: ProjectSandboxConfig {
@@ -521,7 +536,10 @@ impl ProjectConfig {
 ///
 /// # Errors
 /// Returns an error message if the content fails syntax validation.
-#[allow(clippy::string_slice, reason = "Line parser operates on verified character delimiters")]
+#[allow(
+    clippy::string_slice,
+    reason = "Line parser operates on verified character delimiters"
+)]
 pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
     let mut config = ProjectConfig::default();
     let mut current_section = String::new();
@@ -557,7 +575,9 @@ pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
         {
             let sec_name = section.trim();
             if sec_name == "path_policies" || sec_name == "policies.path_policies" {
-                config.path_policies.push(crate::content_filter::PathPolicy::default());
+                config
+                    .path_policies
+                    .push(crate::content_filter::PathPolicy::default());
                 "path_policies".clone_into(&mut current_section);
                 continue;
             }
@@ -640,51 +660,67 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
             "name" => config.project.name = Some(clean_str.to_owned()),
             "language" => config.project.language = Some(clean_str.to_owned()),
             "version" => config.project.version = Some(clean_str.to_owned()),
-            _ => {}
+            _ => {},
         }
     } else if let Some(gate_name) = section.strip_prefix("gates.") {
-        let gate = config.gates.entry(gate_name.to_owned()).or_insert_with(|| GateDefinition {
-            command: Vec::new(),
-            timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-            failure_message: None,
-            error_regex: None,
-            explain_command: None,
-        });
+        let gate = config
+            .gates
+            .entry(gate_name.to_owned())
+            .or_insert_with(|| GateDefinition {
+                command: Vec::new(),
+                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
+                failure_message: None,
+                error_regex: None,
+                explain_command: None,
+            });
 
         match key {
             "timeout_seconds" => {
                 if let Ok(t) = clean_str.parse::<u64>() {
                     gate.timeout_seconds = t;
                 }
-            }
+            },
             "failure_message" => {
                 gate.failure_message = Some(clean_str.to_owned());
-            }
+            },
             "error_regex" => {
                 gate.error_regex = Some(clean_str.to_owned());
-            }
-            _ => {}
+            },
+            _ => {},
         }
     } else if section == "environment" {
-        config.environment.insert(key.to_owned(), clean_str.to_owned());
+        config
+            .environment
+            .insert(key.to_owned(), clean_str.to_owned());
     } else if section == "security" {
         let is_true = clean_str == "true";
         match key {
-            "block_generic_credentials" => config.security.set_category_blocked(SecurityCategory::GenericCredentials, is_true),
-            "block_vcs_internals" => config.security.set_category_blocked(SecurityCategory::VcsInternals, is_true),
-            "block_ssh_keys" => config.security.set_category_blocked(SecurityCategory::SshKeys, is_true),
-            "block_shell_profiles" => config.security.set_category_blocked(SecurityCategory::ShellProfiles, is_true),
-            "block_sensitive_extensions" => config.security.set_category_blocked(SecurityCategory::SensitiveExtensions, is_true),
-            _ => {}
+            "block_generic_credentials" => config
+                .security
+                .set_category_blocked(SecurityCategory::GenericCredentials, is_true),
+            "block_vcs_internals" => config
+                .security
+                .set_category_blocked(SecurityCategory::VcsInternals, is_true),
+            "block_ssh_keys" => config
+                .security
+                .set_category_blocked(SecurityCategory::SshKeys, is_true),
+            "block_shell_profiles" => config
+                .security
+                .set_category_blocked(SecurityCategory::ShellProfiles, is_true),
+            "block_sensitive_extensions" => config
+                .security
+                .set_category_blocked(SecurityCategory::SensitiveExtensions, is_true),
+            _ => {},
         }
     } else if section == "docs" {
         match key {
             "description" => config.docs.description = Some(clean_str.to_owned()),
             "path" | "paths" => config.docs.paths = vec![clean_str.to_owned()],
             "tool_name" => config.docs.tool_name = Some(clean_str.to_owned()),
-            _ => {}
+            _ => {},
         }
-    } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths") {
+    } else if (section == "project" || section.is_empty()) && (key == "docs" || key == "docs_paths")
+    {
         config.docs.paths = vec![clean_str.to_owned()];
     } else if section == "path_policies" {
         if let Some(last) = config.path_policies.last_mut() {
@@ -693,14 +729,14 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
                 "filter" => match clean_str {
                     "comments_only" | "comments" => {
                         last.filter = crate::content_filter::ContentFilterKind::CommentsOnly;
-                    }
+                    },
                     "tests_only" | "tests" => {
                         last.filter = crate::content_filter::ContentFilterKind::TestsOnly;
-                    }
+                    },
                     "delimited" => {
                         last.filter = crate::content_filter::ContentFilterKind::Delimited;
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 },
                 "start_marker" => last.start_marker = Some(clean_str.to_owned()),
                 "end_marker" => last.end_marker = Some(clean_str.to_owned()),
@@ -709,26 +745,33 @@ fn apply_scalar_field(config: &mut ProjectConfig, section: &str, key: &str, val:
                     if let Some(last_bc) = last.block_comments.last_mut() {
                         clean_str.clone_into(&mut last_bc.start);
                     } else {
-                        last.block_comments.push(crate::content_filter::BlockCommentDelimiters::new(clean_str, ""));
+                        last.block_comments.push(
+                            crate::content_filter::BlockCommentDelimiters::new(clean_str, ""),
+                        );
                     }
-                }
+                },
                 "block_comment_end" => {
                     if let Some(last_bc) = last.block_comments.last_mut() {
                         clean_str.clone_into(&mut last_bc.end);
                     } else {
-                        last.block_comments.push(crate::content_filter::BlockCommentDelimiters::new("", clean_str));
+                        last.block_comments.push(
+                            crate::content_filter::BlockCommentDelimiters::new("", clean_str),
+                        );
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
     } else if section == "policies.syntax" || section == "syntax" {
-        let syntax = config.policies.syntax.get_or_insert_with(crate::content_filter::SyntaxConfig::default);
+        let syntax = config
+            .policies
+            .syntax
+            .get_or_insert_with(crate::content_filter::SyntaxConfig::default);
         match key {
             "line_comment" => syntax.line_comments = vec![clean_str.to_owned()],
             "test_prefix" => syntax.test_prefixes = vec![clean_str.to_owned()],
             "test_attribute" => syntax.test_attributes = vec![clean_str.to_owned()],
-            _ => {}
+            _ => {},
         }
     }
 }
@@ -749,13 +792,16 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
     {
         config.docs.paths = items.to_vec();
     } else if let Some(gate_name) = section.strip_prefix("gates.") {
-        let gate = config.gates.entry(gate_name.to_owned()).or_insert_with(|| GateDefinition {
-            command: Vec::new(),
-            timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-            failure_message: None,
-            error_regex: None,
-            explain_command: None,
-        });
+        let gate = config
+            .gates
+            .entry(gate_name.to_owned())
+            .or_insert_with(|| GateDefinition {
+                command: Vec::new(),
+                timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
+                failure_message: None,
+                error_regex: None,
+                explain_command: None,
+            });
 
         if key == "command" {
             gate.command = items.to_vec();
@@ -778,16 +824,19 @@ fn apply_array_field(config: &mut ProjectConfig, section: &str, key: &str, items
                 "line_comments" => last.line_comments = items.to_vec(),
                 "test_attributes" => last.test_attributes = items.to_vec(),
                 "test_prefixes" => last.test_prefixes = items.to_vec(),
-                _ => {}
+                _ => {},
             }
         }
     } else if section == "policies.syntax" || section == "syntax" {
-        let syntax = config.policies.syntax.get_or_insert_with(crate::content_filter::SyntaxConfig::default);
+        let syntax = config
+            .policies
+            .syntax
+            .get_or_insert_with(crate::content_filter::SyntaxConfig::default);
         match key {
             "line_comments" => syntax.line_comments = items.to_vec(),
             "test_attributes" => syntax.test_attributes = items.to_vec(),
             "test_prefixes" => syntax.test_prefixes = items.to_vec(),
-            _ => {}
+            _ => {},
         }
     }
 }
@@ -848,7 +897,10 @@ extra_banned_files = ["firmware_key.pem", ".secret_payload"]
 
         assert_eq!(parsed.sandbox.bind_mounts, vec!["target", "build/out"]);
         assert_eq!(
-            parsed.environment.get("CARGO_TARGET_DIR").map(String::as_str),
+            parsed
+                .environment
+                .get("CARGO_TARGET_DIR")
+                .map(String::as_str),
             Some("target")
         );
         assert_eq!(
@@ -890,18 +942,30 @@ filter = "tests_only"
         let policies = parsed.all_path_policies();
         assert_eq!(policies.len(), 2);
         assert_eq!(policies[0].path, "src");
-        assert_eq!(policies[0].filter, crate::content_filter::ContentFilterKind::CommentsOnly);
+        assert_eq!(
+            policies[0].filter,
+            crate::content_filter::ContentFilterKind::CommentsOnly
+        );
         assert_eq!(policies[0].block_comments.len(), 1);
         assert_eq!(policies[0].block_comments[0].start, "\"\"\"");
         assert_eq!(policies[0].block_comments[0].end, "\"\"\"");
 
         assert_eq!(policies[1].path, "tests");
-        assert_eq!(policies[1].filter, crate::content_filter::ContentFilterKind::TestsOnly);
+        assert_eq!(
+            policies[1].filter,
+            crate::content_filter::ContentFilterKind::TestsOnly
+        );
     }
 
     #[test]
     fn test_infer_from_workspace_rust() {
-        let temp = std::env::temp_dir().join(format!("agy_proj_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp = std::env::temp_dir().join(format!(
+            "agy_proj_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&temp).unwrap();
         std::fs::write(temp.join("Cargo.toml"), "[package]\nname = \"dummy\"\n").unwrap();
 
@@ -915,7 +979,13 @@ filter = "tests_only"
 
     #[test]
     fn test_infer_from_workspace_zig() {
-        let temp = std::env::temp_dir().join(format!("agy_zig_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp = std::env::temp_dir().join(format!(
+            "agy_zig_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&temp).unwrap();
         std::fs::write(temp.join("build.zig"), "const std = @import(\"std\");\n").unwrap();
 
@@ -974,20 +1044,26 @@ description = "RISC-V architecture specifications and ISA manuals"
             parsed.docs.description.as_deref(),
             Some("RISC-V architecture specifications and ISA manuals")
         );
-        assert_eq!(parsed.docs.display_summary(), "docs, ARCHITECTURE.md, specs/abi");
+        assert_eq!(
+            parsed.docs.display_summary(),
+            "docs, ARCHITECTURE.md, specs/abi"
+        );
 
         // Compact top-level docs declaration
         let compact = r#"
 docs = ["specs", "ARCHITECTURE.md"]
 "#;
         let parsed_compact = parse_project_toml(compact).unwrap();
-        assert_eq!(
-            parsed_compact.docs.paths,
-            vec!["specs", "ARCHITECTURE.md"]
-        );
+        assert_eq!(parsed_compact.docs.paths, vec!["specs", "ARCHITECTURE.md"]);
 
         // Auto-detection on filesystem
-        let temp = std::env::temp_dir().join(format!("agy_docs_detect_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp = std::env::temp_dir().join(format!(
+            "agy_docs_detect_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         std::fs::create_dir_all(temp.join("docs")).unwrap();
         std::fs::create_dir_all(temp.join("specs")).unwrap();
         std::fs::write(temp.join("ARCHITECTURE.md"), "# Architecture\n").unwrap();

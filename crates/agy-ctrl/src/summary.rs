@@ -1,17 +1,27 @@
 //! Headless CLI summary, status printer, and offline validation reports.
 
 use std::path::Path;
-use crate::model::{AgentManifest, ToolItem};
-use crate::vcs::run_plugin_validation;
+
+use crate::{
+    model::{AgentManifest, ToolItem},
+    vcs::run_plugin_validation,
+};
 
 /// Prints an operational status summary of the agent fleet and tool assignments.
 pub(crate) fn print_fleet_status(agents: &[AgentManifest], tools: &[ToolItem]) {
     println!("================================================================================");
     println!("                   AGY-CTRL: AGENT FLEET & CAPABILITY STATUS                   ");
     println!("================================================================================");
-    println!("Total Registered Agents: {:<2} | Total Declared MCP Tools: {:<2}", agents.len(), tools.len());
+    println!(
+        "Total Registered Agents: {:<2} | Total Declared MCP Tools: {:<2}",
+        agents.len(),
+        tools.len()
+    );
     println!("--------------------------------------------------------------------------------");
-    println!("{:<14} | {:<7} | {:<12} | {:<10} | {:<12}", "Agent Name", "Effort", "Permissions", "Tool Count", "Mode");
+    println!(
+        "{:<14} | {:<7} | {:<12} | {:<10} | {:<12}",
+        "Agent Name", "Effort", "Permissions", "Tool Count", "Mode"
+    );
     println!("---------------+---------+--------------+------------+--------------------------");
 
     for agent in agents {
@@ -22,7 +32,11 @@ pub(crate) fn print_fleet_status(agents: &[AgentManifest], tools: &[ToolItem]) {
             agent.effort,
             agent.permission_mode,
             tool_count,
-            if agent.inherit_mcp { "Ambient (UNSAFE)" } else { "Strictly Scoped" }
+            if agent.inherit_mcp {
+                "Ambient (UNSAFE)"
+            } else {
+                "Strictly Scoped"
+            }
         );
     }
 
@@ -65,10 +79,10 @@ pub(crate) fn print_validation_report(workspace_root: &Path) -> Result<(), Strin
         Ok(out) => {
             println!("✔ Validation Passed:\n{out}");
             Ok(())
-        }
+        },
         Err(err) => {
             eprintln!("❌ Validation Failed:\n{err}");
             Err(err)
-        }
+        },
     }
 }

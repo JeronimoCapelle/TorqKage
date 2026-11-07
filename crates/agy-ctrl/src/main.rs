@@ -15,9 +15,18 @@
 //! - [`ui`]: Modular Ratatui rendering pipelines for the Fleet Matrix, Tool Catalog, and Diagnostics.
 //! - [`vcs`]: Jujutsu and Git snapshotting helpers for automated rollbacks and pre-save checkpoints.
 
-#![allow(clippy::print_stdout, reason = "CLI summary flags emit output to stdout")]
-#![allow(clippy::print_stderr, reason = "CLI error diagnostics emit output to stderr")]
-#![allow(clippy::format_push_string, reason = "Convenient markdown and diagnostic generation")]
+#![allow(
+    clippy::print_stdout,
+    reason = "CLI summary flags emit output to stdout"
+)]
+#![allow(
+    clippy::print_stderr,
+    reason = "CLI error diagnostics emit output to stderr"
+)]
+#![allow(
+    clippy::format_push_string,
+    reason = "Convenient markdown and diagnostic generation"
+)]
 
 mod app;
 mod installer;
@@ -29,16 +38,21 @@ mod summary;
 mod ui;
 mod vcs;
 
-use std::io::{self, stdout};
-use std::path::{Path, PathBuf};
-use std::process::ExitCode;
-use std::time::Duration;
+use std::{
+    io::{self, stdout},
+    path::{Path, PathBuf},
+    process::ExitCode,
+    time::Duration,
+};
+
 use agy_common::WorkspaceResolver;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use crossterm::{
+    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
+
 use crate::app::{ActiveTab, App, FleetFocus};
 
 fn main() -> ExitCode {
@@ -54,11 +68,11 @@ fn main() -> ExitCode {
                 Err(e) => {
                     eprintln!("🛑 [agy-ctrl] Failed to load configuration: {e}");
                     return ExitCode::FAILURE;
-                }
+                },
             };
             summary::print_fleet_status(&app.agents, &app.tools);
             ExitCode::SUCCESS
-        }
+        },
         Some("--validate" | "validate") => {
             if let Err(e) = summary::print_validation_report(&workspace_root) {
                 eprintln!("🛑 [agy-ctrl] Validation failed: {e}");
@@ -66,66 +80,74 @@ fn main() -> ExitCode {
             } else {
                 ExitCode::SUCCESS
             }
-        }
+        },
         Some("--launch" | "launch") => {
             let agent_arg = args.get(2).map(String::as_str);
             let has_sandbox = args.iter().any(|a| a == "--sandbox");
             let has_isolated = args.iter().any(|a| a == "--isolated" || a == "--workspace");
             handle_cli_launch(&workspace_root, agent_arg, has_sandbox, has_isolated)
-        }
+        },
         Some("reset-breaker" | "reset-circuit-breaker") => {
             let mut ledger = agy_common::CircuitBreakerLedger::load(&workspace_root);
             if ledger.reset(&workspace_root).is_ok() {
-                println!("✅ [agy-ctrl] Circuit breaker ledger reset successfully in .agy/state/circuit_breaker.json");
+                println!(
+                    "✅ [agy-ctrl] Circuit breaker ledger reset successfully in .agy/state/circuit_breaker.json"
+                );
                 ExitCode::SUCCESS
             } else {
                 eprintln!("🛑 [agy-ctrl] Failed to reset circuit breaker.");
                 ExitCode::FAILURE
             }
-        }
+        },
         Some("workspace" | "ws") => {
             let sub = args.get(2).map(String::as_str);
             let agent = args.get(3).map(String::as_str);
             match (sub, agent) {
                 (Some("ensure"), Some(agent_name)) => {
-                    match agy_common::JujutsuWorkspace::ensure_agent_workspace(&workspace_root, agent_name) {
+                    match agy_common::JujutsuWorkspace::ensure_agent_workspace(
+                        &workspace_root,
+                        agent_name,
+                    ) {
                         Ok(p) => {
                             println!("✅ [agy-ctrl] Workspace ready at: {}", p.display());
                             ExitCode::SUCCESS
-                        }
+                        },
                         Err(e) => {
                             eprintln!("🛑 [agy-ctrl] Failed to ensure workspace: {e}");
                             ExitCode::FAILURE
-                        }
+                        },
                     }
-                }
+                },
                 (Some("forget" | "remove"), Some(agent_name)) => {
-                    match agy_common::JujutsuWorkspace::forget_agent_workspace(&workspace_root, agent_name) {
+                    match agy_common::JujutsuWorkspace::forget_agent_workspace(
+                        &workspace_root,
+                        agent_name,
+                    ) {
                         Ok(()) => {
                             println!("✅ [agy-ctrl] Workspace forgotten for agent: {agent_name}");
                             ExitCode::SUCCESS
-                        }
+                        },
                         Err(e) => {
                             eprintln!("🛑 [agy-ctrl] Failed to forget workspace: {e}");
                             ExitCode::FAILURE
-                        }
+                        },
                     }
-                }
+                },
                 _ => {
                     eprintln!("Usage: agy-ctrl workspace <ensure|forget> <agent-name>");
                     ExitCode::FAILURE
-                }
+                },
             }
-        }
+        },
         Some("--help" | "-h" | "help") => {
             print_cli_usage();
             ExitCode::SUCCESS
-        }
+        },
         Some(agent_name) if !agent_name.starts_with('-') => {
             let has_sandbox = args.iter().any(|a| a == "--sandbox");
             let has_isolated = args.iter().any(|a| a == "--isolated" || a == "--workspace");
             handle_cli_launch(&workspace_root, Some(agent_name), has_sandbox, has_isolated)
-        }
+        },
         _ => {
             // Interactive Ratatui TUI Mode
             if let Err(err) = run_tui(workspace_root) {
@@ -134,37 +156,52 @@ fn main() -> ExitCode {
             } else {
                 ExitCode::SUCCESS
             }
-        }
+        },
     }
 }
 
-fn handle_cli_launch(workspace_root: &Path, agent_arg: Option<&str>, sandbox: bool, isolated: bool) -> ExitCode {
+fn handle_cli_launch(
+    workspace_root: &Path,
+    agent_arg: Option<&str>,
+    sandbox: bool,
+    isolated: bool,
+) -> ExitCode {
     let Some(agent_name) = agent_arg else {
-        eprintln!("🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT> [--sandbox] [--isolated]");
+        eprintln!(
+            "🛑 [agy-ctrl] Missing agent name. Usage: agy-ctrl launch <AGENT> [--sandbox] [--isolated]"
+        );
         return ExitCode::FAILURE;
     };
 
     let agents = model::discover_agents(workspace_root);
     let Some(agent) = agents.into_iter().find(|a| a.name == agent_name) else {
-        eprintln!("🛑 [agy-ctrl] Unknown agent '{agent_name}'. Run 'agy-ctrl --status' to list agents.");
+        eprintln!(
+            "🛑 [agy-ctrl] Unknown agent '{agent_name}'. Run 'agy-ctrl --status' to list agents."
+        );
         return ExitCode::FAILURE;
     };
 
     let resume_conv = session::find_agent_session_for_workspace(&agent.name, workspace_root)
         .map(|s| s.conversation_id);
 
-    match launcher::launch_agy_headless(workspace_root, &agent, sandbox, isolated, resume_conv.as_deref()) {
+    match launcher::launch_agy_headless(
+        workspace_root,
+        &agent,
+        sandbox,
+        isolated,
+        resume_conv.as_deref(),
+    ) {
         Ok(status) => {
             if status.success() {
                 ExitCode::SUCCESS
             } else {
                 ExitCode::FAILURE
             }
-        }
+        },
         Err(err) => {
             eprintln!("🛑 [agy-ctrl] Launch failed:\n{err}");
             ExitCode::FAILURE
-        }
+        },
     }
 }
 
@@ -211,8 +248,8 @@ fn run_tui(workspace_root: PathBuf) -> Result<(), String> {
         .map_err(|e| format!("Failed to enter alternate screen: {e}"))?;
 
     let backend = CrosstermBackend::new(stdout_handle);
-    let mut terminal = Terminal::new(backend)
-        .map_err(|e| format!("Failed to initialize terminal: {e}"))?;
+    let mut terminal =
+        Terminal::new(backend).map_err(|e| format!("Failed to initialize terminal: {e}"))?;
 
     let res = event_loop(&mut terminal, &mut app);
 
@@ -246,14 +283,19 @@ fn event_loop(
                         app.refresh_selected_agent_session();
                         app.refresh_circuit_breaker();
                         app.status_message = Some((
-                            format!("✔ Returned from agy session with agent '{agent_name}' ({status})"),
+                            format!(
+                                "✔ Returned from agy session with agent '{agent_name}' ({status})"
+                            ),
                             false,
                         ));
-                    }
+                    },
                     Err(err) => {
                         app.validation_modal = Some((false, err));
-                        app.status_message = Some(("❌ Pre-launch check failed! View diagnostic modal.".to_owned(), true));
-                    }
+                        app.status_message = Some((
+                            "❌ Pre-launch check failed! View diagnostic modal.".to_owned(),
+                            true,
+                        ));
+                    },
                 }
             }
             continue;
@@ -267,8 +309,8 @@ fn event_loop(
             match event::read().map_err(|e| format!("Read error: {e}"))? {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     handle_key_event(app, key.code, key.modifiers);
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
     }
@@ -279,7 +321,10 @@ fn event_loop(
 fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
     // 1. Modals capture keys first
     if app.show_help {
-        if matches!(code, KeyCode::Esc | KeyCode::Enter | KeyCode::F(1) | KeyCode::Char('q')) {
+        if matches!(
+            code,
+            KeyCode::Esc | KeyCode::Enter | KeyCode::F(1) | KeyCode::Char('q')
+        ) {
             app.show_help = false;
         }
         return;
@@ -289,11 +334,11 @@ fn handle_key_event(app: &mut App, code: KeyCode, modifiers: KeyModifiers) {
         match code {
             KeyCode::Esc | KeyCode::Enter => {
                 app.validation_modal = None;
-            }
+            },
             KeyCode::F(4) | KeyCode::Char('r') => {
                 app.rollback();
-            }
-            _ => {}
+            },
+            _ => {},
         }
         return;
     }
@@ -317,75 +362,75 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
         KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
             app.should_quit = true;
             true
-        }
+        },
         KeyCode::Char('q') => {
             app.should_quit = true;
             true
-        }
+        },
         KeyCode::Char('n') => {
             app.request_launch(false);
             true
-        }
+        },
         KeyCode::F(1) | KeyCode::Char('?') => {
             app.toggle_manual();
             true
-        }
+        },
         KeyCode::Char('i') => {
             app.run_installer_and_diagnostics();
             true
-        }
+        },
         KeyCode::F(2) | KeyCode::Char('S') => {
             app.save_and_validate();
             true
-        }
+        },
         KeyCode::F(8) | KeyCode::Char('b') => {
             app.toggle_sandbox();
             true
-        }
+        },
         KeyCode::Char('w') => {
             app.toggle_isolated_workspace();
             true
-        }
+        },
         KeyCode::Char('c' | 'C' | 'K') => {
             app.reset_circuit_breaker();
             true
-        }
+        },
         KeyCode::Char('p') => {
             app.cycle_selected_agent_policy();
             true
-        }
+        },
         KeyCode::Char('g') if app.active_tab != ActiveTab::Manual => {
             app.toggle_tool_permission_gate();
             true
-        }
+        },
         KeyCode::F(4) => {
             app.rollback();
             true
-        }
+        },
         KeyCode::Tab => {
             app.next_tab();
             true
-        }
+        },
         KeyCode::BackTab => {
             app.prev_tab();
             true
-        }
+        },
         KeyCode::Char('1') => {
             app.active_tab = ActiveTab::FleetOverview;
             true
-        }
+        },
         KeyCode::Char('2') => {
             app.active_tab = ActiveTab::ToolCatalog;
             true
-        }
+        },
         KeyCode::Char('3') => {
             app.active_tab = ActiveTab::DirectivesEditor;
             true
-        }
+        },
         KeyCode::Char('4') => {
             app.active_tab = ActiveTab::Manual;
             true
-        }
+        },
         _ => false,
     }
 }
@@ -394,10 +439,10 @@ fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
     match code {
         KeyCode::Left | KeyCode::Char('h') => {
             app.fleet_focus = FleetFocus::AgentList;
-        }
+        },
         KeyCode::Right | KeyCode::Char('l') => {
             app.fleet_focus = FleetFocus::ToolList;
-        }
+        },
         KeyCode::Up | KeyCode::Char('k') => match app.fleet_focus {
             FleetFocus::AgentList => app.prev_agent(),
             FleetFocus::ToolList => app.prev_tool(),
@@ -412,13 +457,13 @@ fn handle_fleet_overview_keys(app: &mut App, code: KeyCode) {
         },
         KeyCode::Char('n') => match app.fleet_focus {
             FleetFocus::AgentList => app.request_launch(false),
-            FleetFocus::ToolList => {}
+            FleetFocus::ToolList => {},
         },
         KeyCode::Char(' ') => match app.fleet_focus {
             FleetFocus::AgentList => app.toggle_fleet_focus(),
             FleetFocus::ToolList => app.toggle_current_tool(),
         },
-        _ => {}
+        _ => {},
     }
 }
 
@@ -430,13 +475,13 @@ fn handle_tool_catalog_keys(app: &mut App, code: KeyCode) {
             for _ in 0..10 {
                 app.prev_tool();
             }
-        }
+        },
         KeyCode::PageDown => {
             for _ in 0..10 {
                 app.next_tool();
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -444,17 +489,17 @@ const fn handle_directives_editor_keys(app: &mut App, code: KeyCode) {
     match code {
         KeyCode::Up | KeyCode::Char('k') => {
             app.directives_scroll = app.directives_scroll.saturating_sub(1);
-        }
+        },
         KeyCode::Down | KeyCode::Char('j') => {
             app.directives_scroll = app.directives_scroll.saturating_add(1);
-        }
+        },
         KeyCode::PageUp => {
             app.directives_scroll = app.directives_scroll.saturating_sub(10);
-        }
+        },
         KeyCode::PageDown => {
             app.directives_scroll = app.directives_scroll.saturating_add(10);
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -462,34 +507,38 @@ fn handle_manual_keys(app: &mut App, code: KeyCode) {
     match code {
         KeyCode::Char('[' | 'h') | KeyCode::Left => {
             app.prev_manual_section();
-        }
+        },
         KeyCode::Char(']' | 'l') | KeyCode::Right => {
             app.next_manual_section();
-        }
+        },
         KeyCode::Up | KeyCode::Char('k') => {
             app.manual_scroll = app.manual_scroll.saturating_sub(1);
-        }
+        },
         KeyCode::Down | KeyCode::Char('j') => {
             app.manual_scroll = app.manual_scroll.saturating_add(1);
-        }
+        },
         KeyCode::PageUp => {
             app.manual_scroll = app.manual_scroll.saturating_sub(10);
-        }
+        },
         KeyCode::PageDown => {
             app.manual_scroll = app.manual_scroll.saturating_add(10);
-        }
+        },
         KeyCode::Home | KeyCode::Char('g') => {
             app.manual_scroll = 0;
-        }
+        },
         KeyCode::Esc | KeyCode::Enter => {
             app.toggle_manual();
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Unit test assertions"
+)]
 mod tests {
     use super::*;
 

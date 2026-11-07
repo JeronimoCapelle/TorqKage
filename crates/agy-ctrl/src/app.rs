@@ -1,11 +1,17 @@
 //! Application state machine, navigation, tool toggling, and atomic operations.
 
 use std::path::PathBuf;
-use crate::model::{
-    AgentManifest, ToolCategory, ToolItem, discover_agents, load_tools_from_file,
-    update_tool_permission_gate_in_file,
+
+use crate::{
+    model::{
+        AgentManifest, ToolCategory, ToolItem, discover_agents, load_tools_from_file,
+        update_tool_permission_gate_in_file,
+    },
+    vcs::{
+        rollback_agent_file, run_plugin_install, run_plugin_validation, save_agent_to_disk,
+        take_vcs_snapshot,
+    },
 };
-use crate::vcs::{rollback_agent_file, run_plugin_install, run_plugin_validation, save_agent_to_disk, take_vcs_snapshot};
 
 /// Active view tab in the control deck.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,15 +101,24 @@ impl App {
             } else {
                 let plugin_tools = workspace_root.join("plugins/agy-suite/tools.toml");
                 if plugin_tools.is_file() {
-                    eprintln!("[agy-ctrl] Notice: Loaded tools configuration from fallback: {}", plugin_tools.display());
+                    eprintln!(
+                        "[agy-ctrl] Notice: Loaded tools configuration from fallback: {}",
+                        plugin_tools.display()
+                    );
                     load_tools_from_file(&plugin_tools)?
                 } else if let Ok(home) = std::env::var("HOME") {
-                    let home_tools = PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
+                    let home_tools =
+                        PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
                     if home_tools.is_file() {
-                        eprintln!("[agy-ctrl] Notice: Loaded tools configuration from installed plugin: {}", home_tools.display());
+                        eprintln!(
+                            "[agy-ctrl] Notice: Loaded tools configuration from installed plugin: {}",
+                            home_tools.display()
+                        );
                         load_tools_from_file(&home_tools)?
                     } else {
-                        eprintln!("[agy-ctrl] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config.");
+                        eprintln!(
+                            "[agy-ctrl] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config."
+                        );
                         Vec::new()
                     }
                 } else {
@@ -130,7 +145,11 @@ impl App {
             previous_tab: None,
             show_help: false,
             validation_modal: None,
-            status_message: Some(("Press [Enter] Resume, [n] New, [1-4] Views, [?] Manual, [i] Install/Health".to_owned(), false)),
+            status_message: Some((
+                "Press [Enter] Resume, [n] New, [1-4] Views, [?] Manual, [i] Install/Health"
+                    .to_owned(),
+                false,
+            )),
             pending_launch: None,
             active_agent_session: None,
             launch_config: LaunchConfig::default(),
@@ -143,7 +162,8 @@ impl App {
 
     /// Refreshes the circuit breaker state from disk.
     pub(crate) fn refresh_circuit_breaker(&mut self) {
-        self.circuit_breaker_status = Some(agy_common::CircuitBreakerLedger::load(&self.workspace_root));
+        self.circuit_breaker_status =
+            Some(agy_common::CircuitBreakerLedger::load(&self.workspace_root));
     }
 
     /// Toggles Jujutsu workspace isolation (`.agy/workspaces/<agent>`) for launched sessions.
@@ -162,7 +182,10 @@ impl App {
         let mut ledger = agy_common::CircuitBreakerLedger::load(&self.workspace_root);
         if ledger.reset(&self.workspace_root).is_ok() {
             self.circuit_breaker_status = Some(ledger);
-            self.status_message = Some(("Circuit Breaker RESET: 0 consecutive failures".to_owned(), false));
+            self.status_message = Some((
+                "Circuit Breaker RESET: 0 consecutive failures".to_owned(),
+                false,
+            ));
         } else {
             self.status_message = Some(("Failed to reset circuit breaker".to_owned(), true));
         }
@@ -181,7 +204,11 @@ impl App {
     /// Toggles outer-loop Bubblewrap sandbox execution on or off for launched `agy` sessions.
     pub(crate) fn toggle_sandbox(&mut self) {
         self.launch_config.sandbox_enabled = !self.launch_config.sandbox_enabled;
-        let mode = if self.launch_config.sandbox_enabled { "ENABLED (bwrap jail)" } else { "DISABLED (direct host)" };
+        let mode = if self.launch_config.sandbox_enabled {
+            "ENABLED (bwrap jail)"
+        } else {
+            "DISABLED (direct host)"
+        };
         self.status_message = Some((format!("Terminal Sandbox {mode}"), false));
     }
 
@@ -197,14 +224,19 @@ impl App {
     /// Toggles whether the highlighted tool requires an interactive permission prompt (ASK vs ALLOW).
     pub(crate) fn toggle_tool_permission_gate(&mut self) {
         let is_tool_tab = matches!(self.active_tab, ActiveTab::ToolCatalog);
-        let is_fleet_tool = matches!(self.active_tab, ActiveTab::FleetOverview) && self.fleet_focus == FleetFocus::ToolList;
+        let is_fleet_tool = matches!(self.active_tab, ActiveTab::FleetOverview)
+            && self.fleet_focus == FleetFocus::ToolList;
 
         if (is_tool_tab || is_fleet_tool)
             && let Some(tool) = self.current_highlighted_tool_mut()
         {
             tool.safety.require_permission_gate = !tool.safety.require_permission_gate;
             tool.modified = true;
-            let state = if tool.require_permission_gate() { "ASK (Interactive confirmation)" } else { "ALLOW (Autonomous execution)" };
+            let state = if tool.require_permission_gate() {
+                "ASK (Interactive confirmation)"
+            } else {
+                "ALLOW (Autonomous execution)"
+            };
             let name = tool.name.clone();
             self.status_message = Some((format!("Tool '{name}' permission gate: {state}"), false));
         }
@@ -293,9 +325,9 @@ impl App {
     pub(crate) fn active_tool_count(&self) -> usize {
         match self.active_tab {
             ActiveTab::FleetOverview => self.tools.len(),
-            ActiveTab::ToolCatalog => self
-                .selected_category
-                .map_or(self.tools.len(), |cat| self.tools.iter().filter(|t| t.category == cat).count()),
+            ActiveTab::ToolCatalog => self.selected_category.map_or(self.tools.len(), |cat| {
+                self.tools.iter().filter(|t| t.category == cat).count()
+            }),
             ActiveTab::DirectivesEditor | ActiveTab::Manual => 0,
         }
     }
@@ -307,7 +339,12 @@ impl App {
             ActiveTab::FleetOverview => self.tools.get(self.selected_tool_idx),
             ActiveTab::ToolCatalog => self.selected_category.map_or_else(
                 || self.tools.get(self.selected_tool_idx),
-                |cat| self.tools.iter().filter(|t| t.category == cat).nth(self.selected_tool_idx),
+                |cat| {
+                    self.tools
+                        .iter()
+                        .filter(|t| t.category == cat)
+                        .nth(self.selected_tool_idx)
+                },
             ),
             ActiveTab::DirectivesEditor | ActiveTab::Manual => None,
         }
@@ -324,13 +361,16 @@ impl App {
                 } else {
                     self.tools.get_mut(idx)
                 }
-            }
+            },
             ActiveTab::DirectivesEditor | ActiveTab::Manual => None,
         }
     }
 
     /// Toggles the currently highlighted tool on or off for the active agent.
-    #[allow(clippy::collapsible_if, reason = "Disjoint borrowing of self requires sequential if-let blocks")]
+    #[allow(
+        clippy::collapsible_if,
+        reason = "Disjoint borrowing of self requires sequential if-let blocks"
+    )]
     pub(crate) fn toggle_current_tool(&mut self) {
         if let Some(tool) = self.current_highlighted_tool().cloned() {
             if let Some(agent) = self.selected_agent_mut() {
@@ -409,13 +449,22 @@ impl App {
             Ok(msg) => {
                 let diag = crate::installer::run_diagnostics(&self.workspace_root);
                 self.validation_modal = Some((true, format!("{msg}\n\n{}", diag.summary())));
-                self.status_message = Some(("✔ Plugin installed & diagnostics updated!".to_owned(), false));
-            }
+                self.status_message = Some((
+                    "✔ Plugin installed & diagnostics updated!".to_owned(),
+                    false,
+                ));
+            },
             Err(err) => {
                 let diag = crate::installer::run_diagnostics(&self.workspace_root);
-                self.validation_modal = Some((false, format!("Failed to install plugin: {err}\n\n{}", diag.summary())));
-                self.status_message = Some(("❌ Plugin installation failed! Check diagnostics.".to_owned(), true));
-            }
+                self.validation_modal = Some((
+                    false,
+                    format!("Failed to install plugin: {err}\n\n{}", diag.summary()),
+                ));
+                self.status_message = Some((
+                    "❌ Plugin installation failed! Check diagnostics.".to_owned(),
+                    true,
+                ));
+            },
         }
     }
 
@@ -424,14 +473,19 @@ impl App {
         let modified_agents = self.agents.iter().filter(|a| a.modified).count();
         let modified_tools = self.tools.iter().filter(|t| t.modified).count();
         if modified_agents == 0 && modified_tools == 0 {
-            self.status_message = Some(("No changes to save - all agent and tool configs are clean".to_owned(), false));
+            self.status_message = Some((
+                "No changes to save - all agent and tool configs are clean".to_owned(),
+                false,
+            ));
             return;
         }
 
         // 1. Take VCS snapshot
         drop(take_vcs_snapshot(
             &self.workspace_root,
-            &format!("snapshot before saving {modified_agents} agent configs and {modified_tools} tool modifications"),
+            &format!(
+                "snapshot before saving {modified_agents} agent configs and {modified_tools} tool modifications"
+            ),
         ));
 
         // 2. Save modified tool permission gates to disk
@@ -441,8 +495,16 @@ impl App {
             if !tool.modified {
                 continue;
             }
-            drop(update_tool_permission_gate_in_file(&tools_path, &tool.name, tool.require_permission_gate()));
-            drop(update_tool_permission_gate_in_file(&plugin_tools_path, &tool.name, tool.require_permission_gate()));
+            drop(update_tool_permission_gate_in_file(
+                &tools_path,
+                &tool.name,
+                tool.require_permission_gate(),
+            ));
+            drop(update_tool_permission_gate_in_file(
+                &plugin_tools_path,
+                &tool.name,
+                tool.require_permission_gate(),
+            ));
             tool.modified = false;
         }
 
@@ -452,7 +514,10 @@ impl App {
                 continue;
             }
             if let Err(err) = save_agent_to_disk(agent) {
-                self.validation_modal = Some((false, format!("Failed to save {}:\n{err}", agent.file_path.display())));
+                self.validation_modal = Some((
+                    false,
+                    format!("Failed to save {}:\n{err}", agent.file_path.display()),
+                ));
                 return;
             }
         }
@@ -467,17 +532,27 @@ impl App {
                 }
                 self.validation_modal = Some((
                     true,
-                    format!("✔ Pre-flight validation passed!\n\n{report}\n\nReinstalled successfully:\n{install_out}"),
+                    format!(
+                        "✔ Pre-flight validation passed!\n\n{report}\n\nReinstalled successfully:\n{install_out}"
+                    ),
                 ));
-                self.status_message = Some(("✔ Saved, validated, and reinstalled successfully!".to_owned(), false));
-            }
+                self.status_message = Some((
+                    "✔ Saved, validated, and reinstalled successfully!".to_owned(),
+                    false,
+                ));
+            },
             Err(err_report) => {
                 self.validation_modal = Some((
                     false,
-                    format!("🛑 Validation Failed!\n\n{err_report}\n\nPress F4 or 'r' to rollback changes."),
+                    format!(
+                        "🛑 Validation Failed!\n\n{err_report}\n\nPress F4 or 'r' to rollback changes."
+                    ),
                 ));
-                self.status_message = Some(("❌ Validation failed! Check diagnostic modal.".to_owned(), true));
-            }
+                self.status_message = Some((
+                    "❌ Validation failed! Check diagnostic modal.".to_owned(),
+                    true,
+                ));
+            },
         }
     }
 
@@ -485,7 +560,8 @@ impl App {
     pub(crate) fn rollback(&mut self) {
         let mut restored: usize = 0;
         for agent in &mut self.agents {
-            if agent.modified && rollback_agent_file(&self.workspace_root, &agent.file_path).is_ok() {
+            if agent.modified && rollback_agent_file(&self.workspace_root, &agent.file_path).is_ok()
+            {
                 restored = restored.saturating_add(1);
             }
         }

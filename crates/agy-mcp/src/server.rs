@@ -1,13 +1,16 @@
 //! The Model Context Protocol (MCP) server daemon handling JSON-RPC 2.0 requests over stdio.
 
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::{collections::BTreeMap, path::PathBuf};
+
 use serde_json::json;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use crate::actions;
-use crate::models::{AgentGuard, ToolDefinition};
-use crate::protocol::{JsonRpcRequest, JsonRpcResponse};
-use crate::schema::McpTool;
+
+use crate::{
+    actions,
+    models::{AgentGuard, ToolDefinition},
+    protocol::{JsonRpcRequest, JsonRpcResponse},
+    schema::McpTool,
+};
 
 /// State machine managing the MCP server daemon and dispatching JSON-RPC requests.
 #[derive(Debug, Clone)]
@@ -42,7 +45,7 @@ impl McpServer {
                     filtered.len()
                 );
                 (filtered, Some(name))
-            }
+            },
             None => (tools, None),
         };
 
@@ -60,7 +63,10 @@ impl McpServer {
             }
         }
 
-        let mcp_tools = enriched_tools.iter().map(McpTool::from_definition).collect();
+        let mcp_tools = enriched_tools
+            .iter()
+            .map(McpTool::from_definition)
+            .collect();
 
         Self {
             tools: enriched_tools,
@@ -94,14 +100,14 @@ impl McpServer {
                     }
                 });
                 Some(JsonRpcResponse::success(id, result))
-            }
+            },
 
             "tools/list" => {
                 let result = json!({
                     "tools": self.mcp_tools
                 });
                 Some(JsonRpcResponse::success(id, result))
-            }
+            },
 
             "ping" => Some(JsonRpcResponse::success(id, json!({}))),
 
@@ -121,9 +127,10 @@ impl McpServer {
                 }
 
                 let Some(tool) = self.tools.iter().find(|t| t.name == tool_name) else {
-                    let agent_hint = self.agent.as_ref().map_or_else(String::new, |a| {
-                        format!(" (unauthorized for agent '{a}')")
-                    });
+                    let agent_hint = self
+                        .agent
+                        .as_ref()
+                        .map_or_else(String::new, |a| format!(" (unauthorized for agent '{a}')"));
                     return Some(JsonRpcResponse::error(
                         id,
                         -32602,
@@ -138,17 +145,16 @@ impl McpServer {
                     .and_then(|p| p.get("arguments"))
                     .unwrap_or(&empty_args);
 
-                let (content_text, is_error) =
-                    match actions::dispatch_action(
-                        tool,
-                        &self.workspace_root,
-                        arguments,
-                        self.agent.as_deref(),
-                        &self.agent_guards,
-                    ) {
-                        Ok((text, err)) => (text, err),
-                        Err(err_msg) => (err_msg, true),
-                    };
+                let (content_text, is_error) = match actions::dispatch_action(
+                    tool,
+                    &self.workspace_root,
+                    arguments,
+                    self.agent.as_deref(),
+                    &self.agent_guards,
+                ) {
+                    Ok((text, err)) => (text, err),
+                    Err(err_msg) => (err_msg, true),
+                };
 
                 let result = json!({
                     "content": [
@@ -161,7 +167,7 @@ impl McpServer {
                 });
 
                 Some(JsonRpcResponse::success(id, result))
-            }
+            },
 
             unknown => Some(JsonRpcResponse::method_not_found(id, unknown)),
         }
@@ -194,7 +200,7 @@ impl McpServer {
                         stdout.write_all(&response_bytes).await?;
                         stdout.flush().await?;
                     }
-                }
+                },
                 Err(err) => {
                     eprintln!("[agy-mcp] JSON-RPC parse error: {err}");
                     let error_resp = JsonRpcResponse::error(
@@ -206,7 +212,7 @@ impl McpServer {
                     response_bytes.push(b'\n');
                     stdout.write_all(&response_bytes).await?;
                     stdout.flush().await?;
-                }
+                },
             }
         }
 
@@ -323,14 +329,21 @@ mod tests {
             jsonrpc: "2.0".to_owned(),
             id: Some(json!(3)),
             method: "tools/call".to_owned(),
-            params: Some(json!({ "name": "read_project_file", "arguments": { "path": "test.txt" } })),
+            params: Some(
+                json!({ "name": "read_project_file", "arguments": { "path": "test.txt" } }),
+            ),
         };
 
         let resp = server.handle_request(req).expect("response expected");
         let res = resp.result.expect("result expected");
         assert_eq!(res["isError"], false);
         let content = res["content"].as_array().expect("content array");
-        assert!(content[0]["text"].as_str().unwrap_or("").contains("Hello from file_read"));
+        assert!(
+            content[0]["text"]
+                .as_str()
+                .unwrap_or("")
+                .contains("Hello from file_read")
+        );
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }
@@ -418,10 +431,16 @@ mod tests {
         std::fs::write(
             agents_dir.join("coder.md"),
             "---\nname: coder\nmcp_tools:\n  - modify_code\n---\n",
-        ).expect("write mock coder.md");
+        )
+        .expect("write mock coder.md");
 
         // Scope to coder
-        let server = McpServer::new(tools, temp_dir.clone(), Some("coder".to_owned()), BTreeMap::new());
+        let server = McpServer::new(
+            tools,
+            temp_dir.clone(),
+            Some("coder".to_owned()),
+            BTreeMap::new(),
+        );
 
         // 1. tools/list should ONLY have modify_code, NOT eval_symbolic_math
         let list_req = JsonRpcRequest {
@@ -431,7 +450,10 @@ mod tests {
             params: None,
         };
         let list_resp = server.handle_request(list_req).expect("list resp");
-        let tool_list = list_resp.result.unwrap()["tools"].as_array().unwrap().clone();
+        let tool_list = list_resp.result.unwrap()["tools"]
+            .as_array()
+            .unwrap()
+            .clone();
         assert_eq!(tool_list.len(), 1);
         assert_eq!(tool_list[0]["name"], "modify_code");
 

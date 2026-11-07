@@ -1,15 +1,26 @@
 //! Ratatui terminal rendering routines for the agy-ctrl control deck.
 
-#![allow(clippy::indexing_slicing, reason = "Ratatui layout splits produce fixed-length chunk slices")]
-#![allow(clippy::too_many_lines, reason = "Terminal UI rendering pipelines for multi-pane layouts")]
+#![allow(
+    clippy::indexing_slicing,
+    reason = "Ratatui layout splits produce fixed-length chunk slices"
+)]
+#![allow(
+    clippy::too_many_lines,
+    reason = "Terminal UI rendering pipelines for multi-pane layouts"
+)]
 
-use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap};
-use crate::app::{ActiveTab, App, FleetFocus};
-use crate::model::AgentManifest;
+use ratatui::{
+    Frame,
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Tabs, Wrap},
+};
+
+use crate::{
+    app::{ActiveTab, App, FleetFocus},
+    model::AgentManifest,
+};
 
 /// Main draw dispatcher called on every terminal frame.
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
@@ -56,10 +67,25 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     // Title
     let title_para = Paragraph::new(Line::from(vec![
-        Span::styled(" ⚙ AGY-CTRL ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(" POLICY DECK ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ⚙ AGY-CTRL ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            " POLICY DECK ",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
     ]))
-    .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded),
+    );
     frame.render_widget(title_para, header_chunks[0]);
 
     // Tabs
@@ -77,38 +103,70 @@ fn draw_header(frame: &mut Frame<'_>, app: &App, area: Rect) {
     };
 
     let tabs = Tabs::new(tab_titles)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
         .select(selected_tab_idx)
         .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        .highlight_style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        );
     frame.render_widget(tabs, header_chunks[1]);
 
     // Modified tracker & Sandbox state
-    let modified_count = app.agents.iter().filter(|a| a.modified).count().saturating_add(app.tools.iter().filter(|t| t.modified).count());
+    let modified_count = app
+        .agents
+        .iter()
+        .filter(|a| a.modified)
+        .count()
+        .saturating_add(app.tools.iter().filter(|t| t.modified).count());
     let mod_span = if modified_count > 0 {
         Span::styled(
             format!(" [● {modified_count} MODIFIED] "),
-            Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
         )
     } else {
         Span::styled(" [✔ CLEAN] ", Style::default().fg(Color::Green))
     };
 
     let sandbox_span = if app.sandbox_enabled() {
-        Span::styled(" [SANDBOX: ON] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " [SANDBOX: ON] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
         Span::styled(" [SANDBOX: OFF] ", Style::default().fg(Color::DarkGray))
     };
 
     let iso_span = if app.isolated_workspace() {
-        Span::styled(" [ISO: ON] ", Style::default().fg(Color::Black).bg(Color::LightCyan).add_modifier(Modifier::BOLD))
+        Span::styled(
+            " [ISO: ON] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD),
+        )
     } else {
         Span::styled(" [ISO: OFF] ", Style::default().fg(Color::DarkGray))
     };
 
     let mod_para = Paragraph::new(Line::from(vec![mod_span, sandbox_span, iso_span]))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        );
     frame.render_widget(mod_para, header_chunks[2]);
 }
 
@@ -134,7 +192,8 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     };
 
     let agent_viewport = usize::from(area.height.saturating_sub(2));
-    let (agent_offset, agent_visible) = compute_scroll_window(app.selected_agent_idx, app.agents.len(), agent_viewport);
+    let (agent_offset, agent_visible) =
+        compute_scroll_window(app.selected_agent_idx, app.agents.len(), agent_viewport);
 
     let agent_items: Vec<ListItem<'_>> = app
         .agents
@@ -146,7 +205,10 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let is_selected = idx == app.selected_agent_idx;
             let marker = if is_selected { "▶ " } else { "  " };
             let mod_marker = if agent.modified { "*" } else { " " };
-            let policy_badge = match (agent.permission_mode.as_str(), agent.command_execution_policy.as_str()) {
+            let policy_badge = match (
+                agent.permission_mode.as_str(),
+                agent.command_execution_policy.as_str(),
+            ) {
                 ("plan", _) => Span::styled(" [PLAN]", Style::default().fg(Color::Cyan)),
                 (_, "ask" | "prompt") => Span::styled(" [ASK]", Style::default().fg(Color::Yellow)),
                 _ => Span::styled(" [AUTO]", Style::default().fg(Color::Green)),
@@ -158,12 +220,19 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 Span::styled(
                     format!("{:<11}", agent.name),
                     if is_selected {
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::Gray)
                     },
                 ),
-                Span::styled(mod_marker, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    mod_marker,
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 policy_badge,
                 Span::styled(tools_badge, Style::default().fg(Color::DarkGray)),
             ]);
@@ -182,7 +251,9 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let total_agents = app.agents.len();
     let agents_list = List::new(agent_items).block(
         Block::default()
-            .title(format!(" [Active Agents: {agent_pos}/{total_agents} (Enter/l to Launch in agy)] "))
+            .title(format!(
+                " [Active Agents: {agent_pos}/{total_agents} (Enter/l to Launch in agy)] "
+            ))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(agent_border_style),
@@ -219,19 +290,29 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
                 ),
                 Span::styled(
                     "[Enter/n: Start Fresh Session]",
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
                 ),
             )
         },
         |sess| {
             (
                 Span::styled(
-                    format!("Resumable (conv: {}, {} steps)", sess.short_id(), sess.step_count),
-                    Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD),
+                    format!(
+                        "Resumable (conv: {}, {} steps)",
+                        sess.short_id(),
+                        sess.step_count
+                    ),
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     "[Enter/r: Resume]  [n: New Session]",
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
                 ),
             )
         },
@@ -239,7 +320,12 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
 
     let cb_span = match app.circuit_breaker_status.as_ref() {
         Some(cb) if cb.tripped => Span::styled(
-            format!("🛑 TRIPPED ({}/{} strikes - {})", cb.consecutive_failures, cb.max_strikes, cb.last_error_signature.as_deref().unwrap_or("fail")),
+            format!(
+                "🛑 TRIPPED ({}/{} strikes - {})",
+                cb.consecutive_failures,
+                cb.max_strikes,
+                cb.last_error_signature.as_deref().unwrap_or("fail")
+            ),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
         Some(cb) if cb.consecutive_failures > 0 => Span::styled(
@@ -260,7 +346,10 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
             Span::styled(" | Mode: ", Style::default().fg(Color::DarkGray)),
             Span::styled(&agent.permission_mode, Style::default().fg(Color::Yellow)),
             Span::styled(" | Policy: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&agent.command_execution_policy, Style::default().fg(Color::Magenta)),
+            Span::styled(
+                &agent.command_execution_policy,
+                Style::default().fg(Color::Magenta),
+            ),
             Span::styled(" | Native Tools: ", Style::default().fg(Color::DarkGray)),
             Span::styled(
                 if agent.native_tools.is_empty() {
@@ -280,11 +369,19 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
         Line::from(vec![
             Span::styled("Workspace: ", Style::default().fg(Color::DarkGray)),
             if app.isolated_workspace() {
-                Span::styled(format!("Isolated (.agy/workspaces/{})", agent.name), Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    format!("Isolated (.agy/workspaces/{})", agent.name),
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::styled("Direct (@)", Style::default().fg(Color::DarkGray))
             },
-            Span::styled(" [w: toggle] | Circuit Breaker: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                " [w: toggle] | Circuit Breaker: ",
+                Style::default().fg(Color::DarkGray),
+            ),
             cb_span,
             Span::styled(" [k: reset]", Style::default().fg(Color::DarkGray)),
         ]),
@@ -307,7 +404,8 @@ fn draw_agent_tool_checklist(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
     };
 
     let viewport_height = usize::from(area.height.saturating_sub(2));
-    let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
+    let (scroll_offset, visible_count) =
+        compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
 
     let tool_items: Vec<ListItem<'_>> = app
         .tools
@@ -321,7 +419,9 @@ fn draw_agent_tool_checklist(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
 
             let check_box = if is_allowed { "[X] " } else { "[ ] " };
             let check_style = if is_allowed {
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::DarkGray)
             };
@@ -334,12 +434,17 @@ fn draw_agent_tool_checklist(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
                 Span::styled(
                     format!("{:<26}", tool.name),
                     if is_allowed {
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::DarkGray)
                     },
                 ),
-                Span::styled(format!(" ({})", tool.action), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    format!(" ({})", tool.action),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]);
 
             let row_style = if is_highlighted {
@@ -369,17 +474,33 @@ fn draw_agent_tool_checklist(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
 
 fn draw_agent_tool_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let preview_content = app.tools.get(app.selected_tool_idx).map_or_else(
-        || vec![Line::from(Span::styled("Select a tool above to view details", Style::default().fg(Color::DarkGray)))],
-        |tool| vec![
-            Line::from(vec![
-                Span::styled("Tool: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::styled(format!("  [Category: {}]", tool.category.label()), Style::default().fg(Color::Yellow)),
-            ]),
-            Line::from(vec![
-                Span::styled(&tool.description, Style::default().fg(Color::Gray)),
-            ]),
-        ],
+        || {
+            vec![Line::from(Span::styled(
+                "Select a tool above to view details",
+                Style::default().fg(Color::DarkGray),
+            ))]
+        },
+        |tool| {
+            vec![
+                Line::from(vec![
+                    Span::styled("Tool: ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        &tool.name,
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!("  [Category: {}]", tool.category.label()),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ]),
+                Line::from(vec![Span::styled(
+                    &tool.description,
+                    Style::default().fg(Color::Gray),
+                )]),
+            ]
+        },
     );
 
     let preview_para = Paragraph::new(preview_content).block(
@@ -406,7 +527,8 @@ fn draw_tool_catalog(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let viewport_height = usize::from(area.height.saturating_sub(2));
-    let (scroll_offset, visible_count) = compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
+    let (scroll_offset, visible_count) =
+        compute_scroll_window(app.selected_tool_idx, app.tools.len(), viewport_height);
 
     let list_items: Vec<ListItem<'_>> = app
         .tools
@@ -419,13 +541,23 @@ fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             let marker = if is_selected { "▶ " } else { "  " };
 
             let sandbox_badge = if tool.enforce_sandbox() {
-                Span::styled(" [SANDBOX]", Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    " [SANDBOX]",
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::raw("")
             };
 
             let gate_badge = if tool.require_permission_gate() {
-                Span::styled(" [ASK]", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                Span::styled(
+                    " [ASK]",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                )
             } else {
                 Span::styled(" [ALLOW]", Style::default().fg(Color::DarkGray))
             };
@@ -435,7 +567,9 @@ fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
                 Span::styled(
                     &tool.name,
                     if is_selected {
-                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default().fg(Color::Gray)
                     },
@@ -458,7 +592,9 @@ fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let total = app.tools.len();
     let list_widget = List::new(list_items).block(
         Block::default()
-            .title(format!(" [MCP Tool Catalog: {current_pos}/{total} (↑/↓ to scroll)] "))
+            .title(format!(
+                " [MCP Tool Catalog: {current_pos}/{total} (↑/↓ to scroll)] "
+            ))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(Color::Cyan)),
@@ -469,7 +605,12 @@ fn draw_tool_catalog_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
 fn build_tool_guard_lines(tool: &crate::model::ToolItem) -> Vec<Line<'static>> {
     let guard_check = |enabled: bool| {
         if enabled {
-            Span::styled("[X] ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+            Span::styled(
+                "[X] ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )
         } else {
             Span::styled("[ ] ", Style::default().fg(Color::DarkGray))
         }
@@ -484,21 +625,39 @@ fn build_tool_guard_lines(tool: &crate::model::ToolItem) -> Vec<Line<'static>> {
     vec![
         Line::from(vec![
             guard_check(tool.ban_dangerous_files()),
-            Span::styled("ban_dangerous_files      ", Style::default().fg(Color::White)),
+            Span::styled(
+                "ban_dangerous_files      ",
+                Style::default().fg(Color::White),
+            ),
             guard_check(tool.enforce_workspace_bounds()),
-            Span::styled("enforce_workspace_bounds", Style::default().fg(Color::White)),
+            Span::styled(
+                "enforce_workspace_bounds",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             guard_check(tool.mutating()),
-            Span::styled("mutating (modifies disk) ", Style::default().fg(Color::White)),
+            Span::styled(
+                "mutating (modifies disk) ",
+                Style::default().fg(Color::White),
+            ),
             guard_check(tool.tracks_circuit_breaker()),
-            Span::styled("tracks_circuit_breaker  ", Style::default().fg(Color::White)),
+            Span::styled(
+                "tracks_circuit_breaker  ",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             guard_check(tool.enforce_sandbox()),
-            Span::styled("enforce_sandbox (bwrap)  ", Style::default().fg(Color::LightCyan)),
+            Span::styled(
+                "enforce_sandbox (bwrap)  ",
+                Style::default().fg(Color::LightCyan),
+            ),
             guard_check(tool.emit_truncation_notice()),
-            Span::styled("emit_truncation_notice  ", Style::default().fg(Color::White)),
+            Span::styled(
+                "emit_truncation_notice  ",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  require_gates: ", Style::default().fg(Color::Yellow)),
@@ -515,7 +674,12 @@ fn draw_tool_catalog_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let mut detail_lines = vec![
         Line::from(vec![
             Span::styled("Tool Identifier: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&tool.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &tool.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled("Description:     ", Style::default().fg(Color::DarkGray)),
@@ -529,7 +693,10 @@ fn draw_tool_catalog_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Span::styled("]", Style::default().fg(Color::DarkGray)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("─── Execution Parameters ───────────────────────────────", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "─── Execution Parameters ───────────────────────────────",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
     if let Some(ref cmd) = tool.command {
@@ -561,12 +728,18 @@ fn draw_tool_catalog_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 
     detail_lines.push(Line::from(""));
-    detail_lines.push(Line::from(Span::styled("─── Composable Security Guards (tools.toml) ────────────", Style::default().fg(Color::DarkGray))));
+    detail_lines.push(Line::from(Span::styled(
+        "─── Composable Security Guards (tools.toml) ────────────",
+        Style::default().fg(Color::DarkGray),
+    )));
     detail_lines.extend(build_tool_guard_lines(tool));
 
     // List agents currently authorized for this tool
     detail_lines.push(Line::from(""));
-    detail_lines.push(Line::from(Span::styled("─── Authorized Agent Roles ─────────────────────────────", Style::default().fg(Color::DarkGray))));
+    detail_lines.push(Line::from(Span::styled(
+        "─── Authorized Agent Roles ─────────────────────────────",
+        Style::default().fg(Color::DarkGray),
+    )));
 
     let mut authorized_agents = Vec::new();
     for agent in &app.agents {
@@ -576,11 +749,19 @@ fn draw_tool_catalog_details(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 
     if authorized_agents.is_empty() {
-        detail_lines.push(Line::from(Span::styled("  (None — Tool is currently inactive across all agents)", Style::default().fg(Color::Red))));
+        detail_lines.push(Line::from(Span::styled(
+            "  (None — Tool is currently inactive across all agents)",
+            Style::default().fg(Color::Red),
+        )));
     } else {
         detail_lines.push(Line::from(vec![
             Span::styled("  Granted to: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(authorized_agents.join(", "), Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                authorized_agents.join(", "),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
     }
 
@@ -648,42 +829,84 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     // Dynamic context-sensitive shortcuts
     let shortcuts = match app.active_tab {
         ActiveTab::FleetOverview => Line::from(vec![
-            Span::styled(" [Enter Launch] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-            Span::styled("[n New] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [Enter Launch] ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "[n New] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("[w Iso] ", Style::default().fg(Color::LightCyan)),
             Span::styled("[b Sandbox] ", Style::default().fg(Color::Yellow)),
             Span::styled("[p Policy] ", Style::default().fg(Color::Magenta)),
             Span::styled("[c Reset CB] ", Style::default().fg(Color::LightRed)),
-            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled(
+                "[i Install/Health] ",
+                Style::default().fg(Color::LightMagenta),
+            ),
             Span::styled("[Space Toggle] ", Style::default().fg(Color::White)),
             Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
             Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
             Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
         ]),
         ActiveTab::ToolCatalog => Line::from(vec![
-            Span::styled(" [j/k Navigate] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-            Span::styled("[g Toggle Gate (Ask/Allow)] ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled(
+                " [j/k Navigate] ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "[g Toggle Gate (Ask/Allow)] ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "[i Install/Health] ",
+                Style::default().fg(Color::LightMagenta),
+            ),
             Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
             Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
             Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
             Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
         ]),
         ActiveTab::DirectivesEditor => Line::from(vec![
-            Span::styled(" [j/k Scroll Prompt] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [j/k Scroll Prompt] ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("[PageUp/Dn] ", Style::default().fg(Color::Cyan)),
-            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled(
+                "[i Install/Health] ",
+                Style::default().fg(Color::LightMagenta),
+            ),
             Span::styled("[F2 Save] ", Style::default().fg(Color::Green)),
             Span::styled("[F4 Undo] ", Style::default().fg(Color::Red)),
             Span::styled("[?] Manual ", Style::default().fg(Color::Yellow)),
             Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
         ]),
         ActiveTab::Manual => Line::from(vec![
-            Span::styled(" [ [ / ] Sections] ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " [ [ / ] Sections] ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled("[j/k Scroll] ", Style::default().fg(Color::Cyan)),
             Span::styled("[PageUp/Dn] ", Style::default().fg(Color::LightCyan)),
             Span::styled("[g Top] ", Style::default().fg(Color::White)),
-            Span::styled("[i Install/Health] ", Style::default().fg(Color::LightMagenta)),
+            Span::styled(
+                "[i Install/Health] ",
+                Style::default().fg(Color::LightMagenta),
+            ),
             Span::styled("[Esc Deck] ", Style::default().fg(Color::Yellow)),
             Span::styled("[q Quit] ", Style::default().fg(Color::DarkGray)),
         ]),
@@ -706,54 +929,102 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
     frame.render_widget(Clear, modal_area);
 
     let help_text = vec![
-        Line::from(Span::styled("AGY-CTRL KEYBOARD SHORTCUTS & NAVIGATION", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "AGY-CTRL KEYBOARD SHORTCUTS & NAVIGATION",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )),
         Line::from(""),
         Line::from(vec![
-            Span::styled("  Enter / l       ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-            Span::styled("Run pre-flight checks & launch interactive agy session with selected agent", Style::default().fg(Color::White)),
+            Span::styled(
+                "  Enter / l       ",
+                Style::default()
+                    .fg(Color::LightGreen)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Run pre-flight checks & launch interactive agy session with selected agent",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Tab / BackTab   ", Style::default().fg(Color::Cyan)),
-            Span::styled("Switch between Fleet Matrix, Tool Catalog, and Directives", Style::default().fg(Color::White)),
+            Span::styled(
+                "Switch between Fleet Matrix, Tool Catalog, and Directives",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  ↑ / ↓ (or j / k)", Style::default().fg(Color::Cyan)),
-            Span::styled("Navigate agents or tools in the active list", Style::default().fg(Color::White)),
+            Span::styled(
+                "Navigate agents or tools in the active list",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Space           ", Style::default().fg(Color::Cyan)),
-            Span::styled("Toggle tool authorization on/off for selected agent", Style::default().fg(Color::White)),
+            Span::styled(
+                "Toggle tool authorization on/off for selected agent",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  h / l (or ← / →)", Style::default().fg(Color::Cyan)),
-            Span::styled("Switch focus between Agent List and Tool List", Style::default().fg(Color::White)),
+            Span::styled(
+                "Switch focus between Agent List and Tool List",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
-            Span::styled("  F2 (or s)       ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            Span::styled("Atomic Save & Pre-flight Validation (runs agy plugin validate)", Style::default().fg(Color::White)),
+            Span::styled(
+                "  F2 (or s)       ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Atomic Save & Pre-flight Validation (runs agy plugin validate)",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  F4 (or r)       ", Style::default().fg(Color::Red)),
-            Span::styled("Atomic Rollback: revert unsaved changes to disk/VCS state", Style::default().fg(Color::White)),
+            Span::styled(
+                "Atomic Rollback: revert unsaved changes to disk/VCS state",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  w               ", Style::default().fg(Color::Cyan)),
-            Span::styled("Toggle Jujutsu workspace isolation (.agy/workspaces/<agent>)", Style::default().fg(Color::White)),
+            Span::styled(
+                "Toggle Jujutsu workspace isolation (.agy/workspaces/<agent>)",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  k               ", Style::default().fg(Color::Cyan)),
-            Span::styled("Reset 2-strike compiler circuit breaker to clean state", Style::default().fg(Color::White)),
+            Span::styled(
+                "Reset 2-strike compiler circuit breaker to clean state",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  Esc / F1        ", Style::default().fg(Color::Cyan)),
-            Span::styled("Close modal or help dialog", Style::default().fg(Color::White)),
+            Span::styled(
+                "Close modal or help dialog",
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  q               ", Style::default().fg(Color::Cyan)),
             Span::styled("Exit agy-ctrl", Style::default().fg(Color::White)),
         ]),
         Line::from(""),
-        Line::from(Span::styled("Press Esc or Enter to close this help dialog.", Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            "Press Esc or Enter to close this help dialog.",
+            Style::default().fg(Color::DarkGray),
+        )),
     ];
 
     let block = Block::default()
@@ -762,7 +1033,9 @@ fn draw_help_modal(frame: &mut Frame<'_>, area: Rect) {
         .border_type(BorderType::Double)
         .border_style(Style::default().fg(Color::Yellow));
 
-    let modal = Paragraph::new(help_text).block(block).wrap(Wrap { trim: true });
+    let modal = Paragraph::new(help_text)
+        .block(block)
+        .wrap(Wrap { trim: true });
     frame.render_widget(modal, modal_area);
 }
 
@@ -783,7 +1056,10 @@ fn draw_validation_modal(frame: &mut Frame<'_>, area: Rect, is_success: bool, me
             if l.contains('✔') || l.contains("passed") {
                 Line::from(Span::styled(l, Style::default().fg(Color::Green)))
             } else if l.contains('❌') || l.contains("failed") || l.contains("Error") {
-                Line::from(Span::styled(l, Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+                Line::from(Span::styled(
+                    l,
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ))
             } else {
                 Line::from(Span::styled(l, Style::default().fg(Color::White)))
             }
@@ -796,13 +1072,19 @@ fn draw_validation_modal(frame: &mut Frame<'_>, area: Rect, is_success: bool, me
         .border_type(BorderType::Double)
         .border_style(Style::default().fg(border_color));
 
-    let modal = Paragraph::new(lines).block(block).wrap(Wrap { trim: false });
+    let modal = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
     frame.render_widget(modal, modal_area);
 }
 
 /// Calculates the window slice `(scroll_offset, visible_count)` to keep `selected_idx`
 /// centered and fully visible within a viewport of height `viewport_height`.
-const fn compute_scroll_window(selected_idx: usize, total_items: usize, viewport_height: usize) -> (usize, usize) {
+const fn compute_scroll_window(
+    selected_idx: usize,
+    total_items: usize,
+    viewport_height: usize,
+) -> (usize, usize) {
     if viewport_height == 0 || total_items == 0 {
         return (0, 0);
     }
@@ -827,8 +1109,14 @@ const fn compute_scroll_window(selected_idx: usize, total_items: usize, viewport
 }
 
 /// Helper function to create a centered rectangular area for modals.
-#[allow(clippy::arithmetic_side_effects, reason = "Modal centered rectangle percentage layout")]
-#[allow(clippy::indexing_slicing, reason = "Layout split returns array matching constraints length")]
+#[allow(
+    clippy::arithmetic_side_effects,
+    reason = "Modal centered rectangle percentage layout"
+)]
+#[allow(
+    clippy::indexing_slicing,
+    reason = "Layout split returns array matching constraints length"
+)]
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let pad_y = 100_u16.saturating_sub(percent_y) / 2;
     let popup_layout = Layout::default()

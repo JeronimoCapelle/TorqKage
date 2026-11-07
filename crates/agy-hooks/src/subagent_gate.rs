@@ -1,6 +1,7 @@
 //! Pre-tool gate for `invoke_subagent` calls validating declared `pre_launch_checks`.
 
 use std::path::PathBuf;
+
 use agy_common::{PreToolResponse, PreToolUseInput, WorkspaceResolver};
 use serde_json::Value;
 
@@ -48,12 +49,16 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
         .workspace_paths
         .first()
         .cloned()
-        .unwrap_or_else(|| WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+        });
 
     // 1. Check if the target agent declares pre_launch_checks in its markdown file
     let checks = agy_common::find_agent_manifest_path(&root, type_name)
         .and_then(|path| std::fs::read_to_string(path).ok())
-        .map_or_else(Vec::new, |content| agy_common::parse_pre_launch_checks(&content));
+        .map_or_else(Vec::new, |content| {
+            agy_common::parse_pre_launch_checks(&content)
+        });
 
     if checks.is_empty() {
         return PreToolResponse::allow();
@@ -71,16 +76,17 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
                 errors.join("\n\n")
             );
             PreToolResponse::deny(reason)
-        }
+        },
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "Unit test assertions and timestamps")]
 mod tests {
-    use super::*;
     use agy_common::models::ToolCallPayload;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_non_subagent_tool_is_allowed() {

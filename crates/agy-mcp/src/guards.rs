@@ -1,8 +1,12 @@
 //! Composable security guards, path confinement, and UTF-8 truncation primitives.
 
-use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Component, Path, PathBuf},
+};
+
 use agy_common::ProjectSecurityConfig;
+
 use crate::models::{AgentGuard, ToolDefinition};
 
 /// Helper checking if a path matches a wildcard pattern or glob-like expression.
@@ -135,9 +139,9 @@ pub(crate) fn check_dangerous_files_with_security(
 
         // Sensitive extensions (.key, .pem)
         if block_exts {
-            let has_sensitive_ext = p
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("key") || ext.eq_ignore_ascii_case("pem"));
+            let has_sensitive_ext = p.extension().is_some_and(|ext| {
+                ext.eq_ignore_ascii_case("key") || ext.eq_ignore_ascii_case("pem")
+            });
             if has_sensitive_ext {
                 return Err(format!(
                     "Security policy violation: Access to sensitive file pattern '{name}' is blocked."
@@ -213,7 +217,9 @@ pub(crate) fn resolve_safe_path(
     // Reject any raw parent component traversal attempts
     for component in input_path.components() {
         if matches!(component, Component::ParentDir) {
-            return Err("Security policy violation: Path traversal via '..' is forbidden".to_owned());
+            return Err(
+                "Security policy violation: Path traversal via '..' is forbidden".to_owned(),
+            );
         }
     }
 
@@ -226,9 +232,12 @@ pub(crate) fn resolve_safe_path(
     if enforce_bounds {
         // If file exists, check canonical root prefix
         if candidate.exists() {
-            let canonical = candidate
-                .canonicalize()
-                .map_err(|err| format!("Failed to canonicalize path '{}': {err}", candidate.display()))?;
+            let canonical = candidate.canonicalize().map_err(|err| {
+                format!(
+                    "Failed to canonicalize path '{}': {err}",
+                    candidate.display()
+                )
+            })?;
 
             let canonical_root = workspace_root
                 .canonicalize()
@@ -247,7 +256,10 @@ pub(crate) fn resolve_safe_path(
                 && parent.exists()
             {
                 let canonical_parent = parent.canonicalize().map_err(|err| {
-                    format!("Failed to canonicalize parent '{}': {err}", parent.display())
+                    format!(
+                        "Failed to canonicalize parent '{}': {err}",
+                        parent.display()
+                    )
                 })?;
                 let canonical_root = workspace_root
                     .canonicalize()
@@ -255,7 +267,8 @@ pub(crate) fn resolve_safe_path(
 
                 if !canonical_parent.starts_with(&canonical_root) {
                     return Err(
-                        "Security policy violation: Path parent escapes workspace bounds".to_owned(),
+                        "Security policy violation: Path parent escapes workspace bounds"
+                            .to_owned(),
                     );
                 }
             }
@@ -264,14 +277,12 @@ pub(crate) fn resolve_safe_path(
 
     // Check allowed directories whitelist
     if !allowed_directories.is_empty() {
-        let relative = candidate
-            .strip_prefix(workspace_root)
-            .unwrap_or(input_path);
+        let relative = candidate.strip_prefix(workspace_root).unwrap_or(input_path);
 
         let rel_lossy = relative.to_string_lossy();
-        let allowed = allowed_directories.iter().any(|dir| {
-            matches_directory_scope(&rel_lossy, dir)
-        });
+        let allowed = allowed_directories
+            .iter()
+            .any(|dir| matches_directory_scope(&rel_lossy, dir));
 
         if !allowed {
             return Err(format!(
@@ -293,9 +304,7 @@ pub(crate) fn check_enforce_boundaries(
     enforce_dir: Option<&str>,
     enforce_file_target: Option<&str>,
 ) -> Result<(), String> {
-    let relative = candidate
-        .strip_prefix(workspace_root)
-        .unwrap_or(candidate);
+    let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
     // 1. Enforce single-file target locking
@@ -366,8 +375,8 @@ pub(crate) fn check_agent_path_policies(
 }
 
 const COMMON_ROOT_DIRS: &[&str] = &[
-    "src", "lib", "pkg", "app", "cmd", "tests", "test", "spec", "benches", "examples",
-    "docs", "doc", "include", "scripts", "bin", ".git", ".jj", ".agy",
+    "src", "lib", "pkg", "app", "cmd", "tests", "test", "spec", "benches", "examples", "docs",
+    "doc", "include", "scripts", "bin", ".git", ".jj", ".agy",
 ];
 
 /// Helper attempting to resolve a scoped path within declared monorepo subcrate containers.
@@ -443,11 +452,7 @@ fn resolve_in_subcrates(
         }
     }
 
-    if match_count == 1 {
-        unique_match
-    } else {
-        None
-    }
+    if match_count == 1 { unique_match } else { None }
 }
 
 fn collect_candidate_scopes(
@@ -545,7 +550,9 @@ pub(crate) fn resolve_scoped_path_str(
         if clean == clean_target {
             return clean_target;
         }
-        if let Some(fname) = Path::new(&clean_target).file_name().and_then(|f| f.to_str())
+        if let Some(fname) = Path::new(&clean_target)
+            .file_name()
+            .and_then(|f| f.to_str())
             && clean == fname
         {
             return clean_target;
@@ -579,7 +586,10 @@ pub(crate) fn resolve_scoped_path_str(
     // do NOT anchor it into an allowed scope. Leave it intact so security checks will reject it.
     if let Some((agent_name, guards)) = agent_context
         && let Some(guard) = guards.get(agent_name)
-        && guard.disallowed_dirs.iter().any(|d| matches_directory_scope(clean, d))
+        && guard
+            .disallowed_dirs
+            .iter()
+            .any(|d| matches_directory_scope(clean, d))
     {
         return clean.to_owned();
     }
@@ -728,7 +738,9 @@ mod tests {
         assert!(resolve_safe_path(&root, "tests/unit_test.rs", &allowed, false).is_ok());
         assert!(resolve_safe_path(&root, "crates/core/tests/test.rs", &allowed, false).is_ok());
         assert!(resolve_safe_path(&root, "src/main.rs", &allowed, false).is_err());
-        assert!(resolve_safe_path(&root, "docs/fixtures/tests/sample.rs", &allowed, false).is_err());
+        assert!(
+            resolve_safe_path(&root, "docs/fixtures/tests/sample.rs", &allowed, false).is_err()
+        );
     }
 
     #[test]
@@ -785,16 +797,34 @@ mod tests {
 
         // Coder tests
         assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("coder"), &guards).is_ok());
-        assert!(check_agent_guard(&root, &root.join("tests/test.rs"), Some("coder"), &guards).is_err());
-        assert!(check_agent_guard(&root, &root.join("Cargo.toml"), Some("coder"), &guards).is_err());
+        assert!(
+            check_agent_guard(&root, &root.join("tests/test.rs"), Some("coder"), &guards).is_err()
+        );
+        assert!(
+            check_agent_guard(&root, &root.join("Cargo.toml"), Some("coder"), &guards).is_err()
+        );
 
         // Planner tests
-        assert!(check_agent_guard(&root, &root.join("ARCHITECTURE.md"), Some("planner"), &guards).is_ok());
-        assert!(check_agent_guard(&root, &root.join("docs/rfc.md"), Some("planner"), &guards).is_ok());
-        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("planner"), &guards).is_err());
+        assert!(
+            check_agent_guard(
+                &root,
+                &root.join("ARCHITECTURE.md"),
+                Some("planner"),
+                &guards
+            )
+            .is_ok()
+        );
+        assert!(
+            check_agent_guard(&root, &root.join("docs/rfc.md"), Some("planner"), &guards).is_ok()
+        );
+        assert!(
+            check_agent_guard(&root, &root.join("src/lib.rs"), Some("planner"), &guards).is_err()
+        );
 
         // Unrestricted agent
-        assert!(check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok());
+        assert!(
+            check_agent_guard(&root, &root.join("src/lib.rs"), Some("copilot"), &guards).is_ok()
+        );
         assert!(check_agent_guard(&root, &root.join("tests/test.rs"), None, &guards).is_ok());
     }
 
@@ -824,16 +854,72 @@ mod tests {
         let with_code_tamper = "pub fn foo() -> u32 { 2 }";
 
         // doc-author: comments allowed, code edits blocked in src/
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_docs, Some("doc-author"), &guards, None).is_ok());
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("doc-author"), &guards, None).is_err());
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("src/lib.rs"),
+                orig,
+                with_docs,
+                Some("doc-author"),
+                &guards,
+                None
+            )
+            .is_ok()
+        );
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("src/lib.rs"),
+                orig,
+                with_code_tamper,
+                Some("doc-author"),
+                &guards,
+                None
+            )
+            .is_err()
+        );
 
         // test-author: tests allowed in src/, production code edits blocked
-        let with_unit_test = "pub fn foo() -> u32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}";
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_unit_test, Some("test-author"), &guards, None).is_ok());
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("test-author"), &guards, None).is_err());
+        let with_unit_test =
+            "pub fn foo() -> u32 { 1 }\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}";
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("src/lib.rs"),
+                orig,
+                with_unit_test,
+                Some("test-author"),
+                &guards,
+                None
+            )
+            .is_ok()
+        );
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("src/lib.rs"),
+                orig,
+                with_code_tamper,
+                Some("test-author"),
+                &guards,
+                None
+            )
+            .is_err()
+        );
 
         // unconfigured agent: edits allowed
-        assert!(check_agent_path_policies(&root, &root.join("src/lib.rs"), orig, with_code_tamper, Some("coder"), &guards, None).is_ok());
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("src/lib.rs"),
+                orig,
+                with_code_tamper,
+                Some("coder"),
+                &guards,
+                None
+            )
+            .is_ok()
+        );
 
         // Declarative project.toml custom path policy for Python
         let mut proj = agy_common::ProjectConfig::default();
@@ -845,21 +931,53 @@ mod tests {
         });
 
         let py_orig = "def add(a, b):\n    return a + b\n";
-        let py_docs = "def add(a, b):\n    \"\"\"Docstring\"\"\"\n    # comment\n    return a + b\n";
+        let py_docs =
+            "def add(a, b):\n    \"\"\"Docstring\"\"\"\n    # comment\n    return a + b\n";
         let py_tamper = "def add(a, b):\n    return a + b + 1\n";
 
-        assert!(check_agent_path_policies(&root, &root.join("app/math.py"), py_orig, py_docs, Some("doc-author"), &guards, Some(&proj)).is_ok());
-        assert!(check_agent_path_policies(&root, &root.join("app/math.py"), py_orig, py_tamper, Some("doc-author"), &guards, Some(&proj)).is_err());
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("app/math.py"),
+                py_orig,
+                py_docs,
+                Some("doc-author"),
+                &guards,
+                Some(&proj)
+            )
+            .is_ok()
+        );
+        assert!(
+            check_agent_path_policies(
+                &root,
+                &root.join("app/math.py"),
+                py_orig,
+                py_tamper,
+                Some("doc-author"),
+                &guards,
+                Some(&proj)
+            )
+            .is_err()
+        );
     }
 
     #[test]
     fn test_path_matches_pattern_wildcards() {
-        assert!(path_matches_pattern("src/auth/password/hasher.rs", "src/auth/password/**"));
-        assert!(path_matches_pattern("src/auth/password", "src/auth/password/**"));
+        assert!(path_matches_pattern(
+            "src/auth/password/hasher.rs",
+            "src/auth/password/**"
+        ));
+        assert!(path_matches_pattern(
+            "src/auth/password",
+            "src/auth/password/**"
+        ));
         assert!(path_matches_pattern("fixtures/keys/cert.pem", "*.pem"));
         assert!(path_matches_pattern(".env.test", ".env*"));
         assert!(path_matches_pattern("tests/secrets/token.json", "*"));
-        assert!(path_matches_pattern("deep/nested/path/firmware.bin", "firmware.bin"));
+        assert!(path_matches_pattern(
+            "deep/nested/path/firmware.bin",
+            "firmware.bin"
+        ));
     }
 
     #[test]
@@ -881,14 +999,26 @@ mod tests {
         assert!(check_dangerous_files_with_security(path, Some(&sec_allow)).is_ok());
 
         // But unrelated credentials are still blocked
-        assert!(check_dangerous_files_with_security(Path::new("src/secrets/token.txt"), Some(&sec_allow)).is_err());
+        assert!(
+            check_dangerous_files_with_security(
+                Path::new("src/secrets/token.txt"),
+                Some(&sec_allow)
+            )
+            .is_err()
+        );
 
         // With extra_banned_patterns, custom paths are rejected
         let sec_banned = ProjectSecurityConfig {
             extra_banned_patterns: vec!["internal_firmware.bin".into()],
             ..Default::default()
         };
-        assert!(check_dangerous_files_with_security(Path::new("crates/core/internal_firmware.bin"), Some(&sec_banned)).is_err());
+        assert!(
+            check_dangerous_files_with_security(
+                Path::new("crates/core/internal_firmware.bin"),
+                Some(&sec_banned)
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -897,7 +1027,8 @@ mod tests {
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(root.join("src/auth")).expect("create src/auth");
         std::fs::create_dir_all(root.join("docs/specs")).expect("create docs/specs");
-        std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("write root Cargo.toml");
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname = \"demo\"\n")
+            .expect("write root Cargo.toml");
         std::fs::write(root.join("src/auth/hasher.rs"), "// hasher").expect("write hasher.rs");
         std::fs::write(root.join("docs/specs/rv32.md"), "# RV32").expect("write rv32.md");
 
@@ -1003,8 +1134,10 @@ mod tests {
         std::fs::create_dir_all(root.join("crates/core/src")).expect("create crates/core/src");
         std::fs::create_dir_all(root.join("crates/api/src")).expect("create crates/api/src");
 
-        std::fs::write(root.join("crates/core/src/hasher.rs"), "// hasher").expect("write hasher.rs");
-        std::fs::write(root.join("crates/core/src/lib.rs"), "// core lib").expect("write core lib.rs");
+        std::fs::write(root.join("crates/core/src/hasher.rs"), "// hasher")
+            .expect("write hasher.rs");
+        std::fs::write(root.join("crates/core/src/lib.rs"), "// core lib")
+            .expect("write core lib.rs");
         std::fs::write(root.join("crates/api/src/lib.rs"), "// api lib").expect("write api lib.rs");
 
         let mut guards = BTreeMap::new();
@@ -1024,7 +1157,12 @@ mod tests {
 
         // 2. Scoped path with "crates/core/hasher.rs" -> "crates/core/src/hasher.rs"
         assert_eq!(
-            resolve_scoped_path_str(&root, "crates/core/hasher.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "crates/core/hasher.rs",
+                None,
+                Some(("coder", &guards))
+            ),
             "crates/core/src/hasher.rs"
         );
 
@@ -1048,7 +1186,12 @@ mod tests {
 
         // 6. Creating new file with full crates prefix: "crates/core/token.rs" -> "crates/core/src/token.rs"
         assert_eq!(
-            resolve_scoped_path_str(&root, "crates/core/token.rs", None, Some(("coder", &guards))),
+            resolve_scoped_path_str(
+                &root,
+                "crates/core/token.rs",
+                None,
+                Some(("coder", &guards))
+            ),
             "crates/core/src/token.rs"
         );
 

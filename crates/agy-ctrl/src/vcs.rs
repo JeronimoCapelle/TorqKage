@@ -1,9 +1,9 @@
 //! VCS snapshotting, atomic serialization, and Antigravity plugin validation engine.
 
-use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::{fs, path::Path, process::Command};
+
 use agy_common::{DEFAULT_TOOL_TIMEOUT_SECS, DEFAULT_VCS_QUERY_TIMEOUT_SECS, SubprocessSupervisor};
+
 use crate::model::AgentManifest;
 
 /// Writes an agent manifest back to disk.
@@ -20,22 +20,28 @@ pub(crate) fn take_vcs_snapshot(workspace_root: &Path, message: &str) -> String 
         let mut desc_cmd = Command::new("jj");
         desc_cmd.current_dir(workspace_root);
         desc_cmd.args(["log", "-r", "@", "--no-graph", "-T", "description"]);
-        let desc_output = SubprocessSupervisor::run_supervised(desc_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
+        let desc_output =
+            SubprocessSupervisor::run_supervised(desc_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
 
-        let has_description = desc_output.is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty());
+        let has_description =
+            desc_output.is_ok_and(|out| !String::from_utf8_lossy(&out.stdout).trim().is_empty());
         if has_description {
             // Trigger working-copy snapshot without mutating existing description
             let mut status_cmd = Command::new("jj");
             status_cmd.current_dir(workspace_root);
             status_cmd.arg("status");
-            drop(SubprocessSupervisor::run_supervised(status_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS));
+            drop(SubprocessSupervisor::run_supervised(
+                status_cmd,
+                DEFAULT_VCS_QUERY_TIMEOUT_SECS,
+            ));
             return "Existing Jujutsu revision preserved at @".to_owned();
         }
 
         let mut snapshot_cmd = Command::new("jj");
         snapshot_cmd.current_dir(workspace_root);
         snapshot_cmd.args(["describe", "-m", &format!("chore(agy-ctrl): {message}")]);
-        let output = SubprocessSupervisor::run_supervised(snapshot_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
+        let output =
+            SubprocessSupervisor::run_supervised(snapshot_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
 
         if output.is_ok_and(|out| out.status.success()) {
             return "Jujutsu snapshot recorded at @".to_owned();
@@ -61,8 +67,9 @@ fn resolve_plugin_directory(workspace_root: &Path) -> Option<std::path::PathBuf>
 
 /// Executes `agy plugin validate` on the plugin directory.
 pub(crate) fn run_plugin_validation(workspace_root: &Path) -> Result<String, String> {
-    let plugin_dir = resolve_plugin_directory(workspace_root)
-        .ok_or_else(|| "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned())?;
+    let plugin_dir = resolve_plugin_directory(workspace_root).ok_or_else(|| {
+        "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned()
+    })?;
 
     let mut cmd = Command::new("agy");
     cmd.current_dir(workspace_root);
@@ -87,8 +94,9 @@ pub(crate) fn run_plugin_validation(workspace_root: &Path) -> Result<String, Str
 
 /// Reinstalls the validated plugin into `~/.gemini/config/plugins/agy-suite`.
 pub(crate) fn run_plugin_install(workspace_root: &Path) -> Result<String, String> {
-    let plugin_dir = resolve_plugin_directory(workspace_root)
-        .ok_or_else(|| "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned())?;
+    let plugin_dir = resolve_plugin_directory(workspace_root).ok_or_else(|| {
+        "Plugin directory not found in workspace or ~/.gemini/config/plugins/agy-suite".to_owned()
+    })?;
 
     let mut cmd = Command::new("agy");
     cmd.current_dir(workspace_root);
@@ -106,7 +114,10 @@ pub(crate) fn run_plugin_install(workspace_root: &Path) -> Result<String, String
 }
 
 /// Reverts changes to an agent file using VCS or reloading original disk state.
-pub(crate) fn rollback_agent_file(workspace_root: &Path, file_path: &Path) -> Result<String, String> {
+pub(crate) fn rollback_agent_file(
+    workspace_root: &Path,
+    file_path: &Path,
+) -> Result<String, String> {
     if workspace_root.join(".jj").is_dir() {
         let mut cmd = Command::new("jj");
         cmd.current_dir(workspace_root);
@@ -125,7 +136,10 @@ pub(crate) fn rollback_agent_file(workspace_root: &Path, file_path: &Path) -> Re
         let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
 
         if output.is_ok_and(|out| out.status.success()) {
-            return Ok(format!("Checked out {} via 'git checkout'", file_path.display()));
+            return Ok(format!(
+                "Checked out {} via 'git checkout'",
+                file_path.display()
+            ));
         }
     }
 

@@ -15,17 +15,16 @@ pub struct AgyStatePaths {
 }
 
 impl AgyStatePaths {
-    pub const ROOT_DIR: &'static str = ".agy";
-    pub const STATE_DIR: &'static str = "state";
-    pub const WORKSPACES_DIR: &'static str = "workspaces";
+    pub const ACTIVE_AGENT_FILE: &'static str = "active_agent.json";
     pub const ARTIFACTS_DIR: &'static str = "artifacts";
     pub const CACHE_DIR: &'static str = "cache";
-
+    pub const CHECKPOINT_FILE: &'static str = "checkpoint.json";
     pub const CIRCUIT_BREAKER_FILE: &'static str = "circuit_breaker.json";
     pub const HANDOFF_JSON_FILE: &'static str = "handoff.json";
     pub const HANDOFF_MD_FILE: &'static str = "last_handoff.md";
-    pub const ACTIVE_AGENT_FILE: &'static str = "active_agent.json";
-    pub const CHECKPOINT_FILE: &'static str = "checkpoint.json";
+    pub const ROOT_DIR: &'static str = ".agy";
+    pub const STATE_DIR: &'static str = "state";
+    pub const WORKSPACES_DIR: &'static str = "workspaces";
 
     /// Constructs an `AgyStatePaths` instance rooted at `workspace_root`.
     #[must_use]
@@ -157,14 +156,32 @@ mod tests {
         assert_eq!(paths.root(), root.join(".agy"));
         assert_eq!(paths.state_dir(), root.join(".agy/state"));
         assert_eq!(paths.workspaces_dir(), root.join(".agy/workspaces"));
-        assert_eq!(paths.agent_workspace("coder"), root.join(".agy/workspaces/coder"));
+        assert_eq!(
+            paths.agent_workspace("coder"),
+            root.join(".agy/workspaces/coder")
+        );
         assert_eq!(paths.artifacts_dir(), root.join(".agy/artifacts"));
         assert_eq!(paths.cache_dir(), root.join(".agy/cache"));
-        assert_eq!(paths.circuit_breaker_file(), root.join(".agy/state/circuit_breaker.json"));
-        assert_eq!(paths.handoff_json_file(), root.join(".agy/state/handoff.json"));
-        assert_eq!(paths.handoff_md_file(), root.join(".agy/state/last_handoff.md"));
-        assert_eq!(paths.active_agent_file(), root.join(".agy/state/active_agent.json"));
-        assert_eq!(paths.checkpoint_file(), root.join(".agy/artifacts/checkpoint.json"));
+        assert_eq!(
+            paths.circuit_breaker_file(),
+            root.join(".agy/state/circuit_breaker.json")
+        );
+        assert_eq!(
+            paths.handoff_json_file(),
+            root.join(".agy/state/handoff.json")
+        );
+        assert_eq!(
+            paths.handoff_md_file(),
+            root.join(".agy/state/last_handoff.md")
+        );
+        assert_eq!(
+            paths.active_agent_file(),
+            root.join(".agy/state/active_agent.json")
+        );
+        assert_eq!(
+            paths.checkpoint_file(),
+            root.join(".agy/artifacts/checkpoint.json")
+        );
     }
 
     #[test]
@@ -172,7 +189,9 @@ mod tests {
     fn test_ensure_directories_creates_self_protecting_gitignore() {
         let temp_dir = std::env::temp_dir().join(format!("agy_paths_test_{}", std::process::id()));
         let paths = AgyStatePaths::new(&temp_dir);
-        paths.ensure_directories().expect("ensure directories failed");
+        paths
+            .ensure_directories()
+            .expect("ensure directories failed");
 
         assert!(paths.state_dir().is_dir());
         assert!(paths.workspaces_dir().is_dir());

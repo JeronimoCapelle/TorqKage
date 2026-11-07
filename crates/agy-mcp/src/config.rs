@@ -1,9 +1,10 @@
 //! Declarative `tools.toml` parser and inheritance resolution engine.
 
-use std::collections::BTreeMap;
-use std::path::Path;
-use serde::Deserialize;
+use std::{collections::BTreeMap, path::Path};
+
 use agy_common::tools::{RawToolsConfig, ToolDefinition, resolve_tools};
+use serde::Deserialize;
+
 use crate::models::AgentGuard;
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -42,11 +43,19 @@ pub(crate) fn parse_full_config_str(
 /// # Errors
 /// Returns an error if reading the file or parsing TOML fails.
 pub(crate) fn load_full_config_from_path(path: &Path) -> Result<LoadedConfiguration, String> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|err| format!("Failed to read tools configuration at '{}': {err}", path.display()))?;
+    let content = std::fs::read_to_string(path).map_err(|err| {
+        format!(
+            "Failed to read tools configuration at '{}': {err}",
+            path.display()
+        )
+    })?;
 
-    parse_full_config_str(&content)
-        .map_err(|err| format!("Failed to parse tools configuration at '{}': {err}", path.display()))
+    parse_full_config_str(&content).map_err(|err| {
+        format!(
+            "Failed to parse tools configuration at '{}': {err}",
+            path.display()
+        )
+    })
 }
 
 #[cfg(test)]
@@ -84,16 +93,25 @@ mod tests {
         let tools = loaded.tools;
         assert_eq!(tools.len(), 2);
 
-        let test_tool = tools.iter().find(|t| t.name == "modify_code").expect("not found");
+        let test_tool = tools
+            .iter()
+            .find(|t| t.name == "modify_code")
+            .expect("not found");
         assert_eq!(test_tool.description, "Restricted test modifier");
         assert_eq!(test_tool.action, ToolAction::MpatchEdit);
         assert!(test_tool.enforce_workspace_bounds());
         assert!(test_tool.ban_dangerous_files());
         assert_eq!(test_tool.allowed_directories, vec!["tests".to_owned()]);
 
-        let check_tool = tools.iter().find(|t| t.name == "simple_check").expect("not found");
+        let check_tool = tools
+            .iter()
+            .find(|t| t.name == "simple_check")
+            .expect("not found");
         assert_eq!(check_tool.action, ToolAction::StaticCommand);
-        assert_eq!(check_tool.command, vec!["cargo".to_owned(), "check".to_owned()]);
+        assert_eq!(
+            check_tool.command,
+            vec!["cargo".to_owned(), "check".to_owned()]
+        );
     }
 
     #[test]
@@ -116,12 +134,24 @@ mod tests {
         assert_eq!(loaded.tools.len(), 1);
         assert_eq!(loaded.agent_guards.len(), 2);
 
-        let coder_guard = loaded.agent_guards.get("coder").expect("coder guard missing");
+        let coder_guard = loaded
+            .agent_guards
+            .get("coder")
+            .expect("coder guard missing");
         assert_eq!(coder_guard.allowed_dirs, vec!["src".to_owned()]);
-        assert_eq!(coder_guard.disallowed_dirs, vec!["tests".to_owned(), "benches".to_owned()]);
+        assert_eq!(
+            coder_guard.disallowed_dirs,
+            vec!["tests".to_owned(), "benches".to_owned()]
+        );
 
-        let planner_guard = loaded.agent_guards.get("planner").expect("planner guard missing");
+        let planner_guard = loaded
+            .agent_guards
+            .get("planner")
+            .expect("planner guard missing");
         assert_eq!(planner_guard.allowed_dirs, vec!["docs".to_owned()]);
-        assert_eq!(planner_guard.allowed_files, vec!["ARCHITECTURE.md".to_owned()]);
+        assert_eq!(
+            planner_guard.allowed_files,
+            vec!["ARCHITECTURE.md".to_owned()]
+        );
     }
 }

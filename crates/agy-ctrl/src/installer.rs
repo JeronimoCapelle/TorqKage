@@ -2,9 +2,13 @@
 //!
 //! In-deck plugin installation, directory copying, and host system prerequisite diagnostics.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use agy_common::{DEFAULT_TOOL_TIMEOUT_SECS, FastHashSet, SubprocessSupervisor};
+
 use crate::model::load_tools_from_file;
 
 /// Prerequisite binary diagnostic report item.
@@ -53,8 +57,18 @@ impl DiagnosticsReport {
         // Host binaries
         out.push_str("--- Host Binary Prerequisites ---\n");
         for check in &self.binary_checks {
-            let icon = if check.installed { "✔" } else if check.required { "✖" } else { "○" };
-            let req_tag = if check.required { "[Required]" } else { "[Optional]" };
+            let icon = if check.installed {
+                "✔"
+            } else if check.required {
+                "✖"
+            } else {
+                "○"
+            };
+            let req_tag = if check.required {
+                "[Required]"
+            } else {
+                "[Optional]"
+            };
             out.push_str(&format!(
                 "{icon} {req_tag:<10} {:<16} — {}\n",
                 check.name, check.description
@@ -74,13 +88,15 @@ pub(crate) fn is_binary_available(name: &str) -> bool {
 /// and dynamically validates all binaries declared across tools.toml and project.toml.
 #[must_use]
 pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
-    let plugin_path = std::env::var("HOME")
-        .map_or_else(|_| PathBuf::from(".gemini/config/plugins/agy-suite"), |h| {
-            PathBuf::from(h).join(".gemini/config/plugins/agy-suite")
-        });
+    let plugin_path = std::env::var("HOME").map_or_else(
+        |_| PathBuf::from(".gemini/config/plugins/agy-suite"),
+        |h| PathBuf::from(h).join(".gemini/config/plugins/agy-suite"),
+    );
 
     let plugin_installed = plugin_path.exists();
-    let is_symlink = plugin_path.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink());
+    let is_symlink = plugin_path
+        .symlink_metadata()
+        .is_ok_and(|m| m.file_type().is_symlink());
 
     let mut binary_checks = vec![
         BinaryCheck {
@@ -197,7 +213,10 @@ fn ensure_binaries_executable(dest_bin: &Path) {
 /// Discovers the local plugin source bundle either in `<workspace>/plugins/agy-suite`
 /// or directly in `<workspace>` if executed inside an extracted plugin release bundle.
 fn resolve_source_plugin(workspace_root: &Path) -> Result<PathBuf, String> {
-    if workspace_root.join("plugins/agy-suite/plugin.json").is_file() {
+    if workspace_root
+        .join("plugins/agy-suite/plugin.json")
+        .is_file()
+    {
         Ok(workspace_root.join("plugins/agy-suite"))
     } else if workspace_root.join("plugin.json").is_file() {
         Ok(workspace_root.to_path_buf())
@@ -220,7 +239,8 @@ fn resolve_source_plugin(workspace_root: &Path) -> Result<PathBuf, String> {
 pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String, String> {
     let local_plugin = resolve_source_plugin(workspace_root)?;
 
-    let home = std::env::var("HOME").map_err(|e| format!("HOME environment variable error: {e}"))?;
+    let home =
+        std::env::var("HOME").map_err(|e| format!("HOME environment variable error: {e}"))?;
     let target_dir = PathBuf::from(home).join(".gemini/config/plugins");
     std::fs::create_dir_all(&target_dir)
         .map_err(|e| format!("Failed to create {}: {e}", target_dir.display()))?;
@@ -230,17 +250,30 @@ pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String
     // Remove existing target whether it's an old symlink or directory
     if let Ok(meta) = dest.symlink_metadata() {
         if meta.file_type().is_symlink() || !dest.is_dir() {
-            std::fs::remove_file(&dest)
-                .map_err(|e| format!("Failed to remove existing file or symlink {}: {e}", dest.display()))?;
+            std::fs::remove_file(&dest).map_err(|e| {
+                format!(
+                    "Failed to remove existing file or symlink {}: {e}",
+                    dest.display()
+                )
+            })?;
         } else {
-            std::fs::remove_dir_all(&dest)
-                .map_err(|e| format!("Failed to remove old plugin directory {}: {e}", dest.display()))?;
+            std::fs::remove_dir_all(&dest).map_err(|e| {
+                format!(
+                    "Failed to remove old plugin directory {}: {e}",
+                    dest.display()
+                )
+            })?;
         }
     }
 
     // Recursively copy all plugin files and subdirectories directly
-    copy_dir_all(&local_plugin, &dest)
-        .map_err(|e| format!("Failed to copy plugin files from {} to {}: {e}", local_plugin.display(), dest.display()))?;
+    copy_dir_all(&local_plugin, &dest).map_err(|e| {
+        format!(
+            "Failed to copy plugin files from {} to {}: {e}",
+            local_plugin.display(),
+            dest.display()
+        )
+    })?;
 
     // Stage fresh compiled binaries if they exist in workspace target directories
     let dest_bin = dest.join("bin");
@@ -279,7 +312,11 @@ pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Unit test assertions"
+)]
 mod tests {
     use super::*;
 
@@ -298,7 +335,10 @@ mod tests {
 
         assert!(dst.join("a.txt").is_file());
         assert!(dst.join("sub/b.txt").is_file());
-        assert_eq!(std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(), "hello b");
+        assert_eq!(
+            std::fs::read_to_string(dst.join("sub/b.txt")).unwrap(),
+            "hello b"
+        );
 
         drop(std::fs::remove_dir_all(&temp_base));
     }

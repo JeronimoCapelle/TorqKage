@@ -1,6 +1,7 @@
 //! Granular tool-level permission policy enforcement (`enforce-tool-policy`).
 
 use std::path::{Path, PathBuf};
+
 use agy_common::{
     CircuitBreakerLedger, FastHashMap, PreToolResponse, PreToolUseInput, WorkspaceResolver,
 };
@@ -18,7 +19,9 @@ pub(crate) fn execute() {
         .workspace_paths
         .first()
         .cloned()
-        .unwrap_or_else(|| WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+        });
 
     let response = evaluate_policy(&input, &root);
     if let Ok(json) = serde_json::to_string(&response) {
@@ -49,7 +52,10 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
              Autonomous loop halted to prevent token burn and code regression.\n\
              Confirm manual override to allow tool '{tool_name}'?",
             ledger.consecutive_failures,
-            ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
+            ledger
+                .last_error_signature
+                .as_deref()
+                .unwrap_or("Compilation error")
         ));
     }
 
@@ -157,28 +163,28 @@ impl ParsedToolsConfig {
                     let clean = clean_val.trim().trim_matches(['"', '\'']);
                     let target = clean.strip_prefix("base_tools.").unwrap_or(clean);
                     entry.inherit = Some(target.to_owned());
-                }
+                },
                 "category" => {
                     let clean = clean_val.trim().trim_matches(['"', '\'']);
                     let target = clean.strip_prefix("categories.").unwrap_or(clean);
                     entry.category = Some(target.to_owned());
-                }
+                },
                 "mutating" => {
                     entry.mutating = Some(clean_val.trim() == "true");
-                }
+                },
                 "tracks_circuit_breaker" => {
                     entry.tracks_circuit_breaker = Some(clean_val.trim() == "true");
-                }
+                },
                 "require_permission_gate" => {
                     entry.require_permission_gate = Some(clean_val.trim() == "true");
-                }
+                },
                 "require_gates" => {
                     entry.require_gates = parse_string_array(&clean_val);
-                }
+                },
                 "skip_gates" => {
                     entry.skip_gates = parse_string_array(&clean_val);
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -193,19 +199,25 @@ impl ParsedToolsConfig {
         };
 
         let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
-        let cat_name = tool.category.as_deref().or_else(|| base?.category.as_deref());
+        let cat_name = tool
+            .category
+            .as_deref()
+            .or_else(|| base?.category.as_deref());
         let category = cat_name.and_then(|c| self.categories.get(c));
 
         match attr {
-            "mutating" => tool.mutating
+            "mutating" => tool
+                .mutating
                 .or_else(|| base?.mutating)
                 .or_else(|| category?.mutating)
                 .unwrap_or(false),
-            "tracks_circuit_breaker" => tool.tracks_circuit_breaker
+            "tracks_circuit_breaker" => tool
+                .tracks_circuit_breaker
                 .or_else(|| base?.tracks_circuit_breaker)
                 .or_else(|| category?.tracks_circuit_breaker)
                 .unwrap_or(false),
-            "require_permission_gate" => tool.require_permission_gate
+            "require_permission_gate" => tool
+                .require_permission_gate
                 .or_else(|| base?.require_permission_gate)
                 .or_else(|| category?.require_permission_gate)
                 .unwrap_or(false),
@@ -221,26 +233,38 @@ impl ParsedToolsConfig {
         };
 
         let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
-        let cat_name = tool.category.as_deref().or_else(|| base?.category.as_deref());
+        let cat_name = tool
+            .category
+            .as_deref()
+            .or_else(|| base?.category.as_deref());
         let category = cat_name.and_then(|c| self.categories.get(c));
 
         let mut gates = Vec::new();
         if let Some(cat) = category {
             for g in &cat.require_gates {
-                if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+                if !gates
+                    .iter()
+                    .any(|existing: &String| existing.eq_ignore_ascii_case(g))
+                {
                     gates.push(g.clone());
                 }
             }
         }
         if let Some(b) = base {
             for g in &b.require_gates {
-                if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+                if !gates
+                    .iter()
+                    .any(|existing: &String| existing.eq_ignore_ascii_case(g))
+                {
                     gates.push(g.clone());
                 }
             }
         }
         for g in &tool.require_gates {
-            if !gates.iter().any(|existing: &String| existing.eq_ignore_ascii_case(g)) {
+            if !gates
+                .iter()
+                .any(|existing: &String| existing.eq_ignore_ascii_case(g))
+            {
                 gates.push(g.clone());
             }
         }
@@ -254,7 +278,10 @@ impl ParsedToolsConfig {
         }
         skip_gates.extend(tool.skip_gates.clone());
 
-        if skip_gates.iter().any(|s| s == "*" || s.eq_ignore_ascii_case("all")) {
+        if skip_gates
+            .iter()
+            .any(|s| s == "*" || s.eq_ignore_ascii_case("all"))
+        {
             return false;
         }
 
@@ -359,7 +386,10 @@ pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) 
 
 /// Evaluates whether a tool failure tracks strikes against the circuit breaker ledger.
 #[must_use]
-#[allow(dead_code, reason = "Declarative query utility for circuit breaker policy")]
+#[allow(
+    dead_code,
+    reason = "Declarative query utility for circuit breaker policy"
+)]
 pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool {
     find_config_for_tool(tool_name, root)
         .is_some_and(|cfg| cfg.is_tool_attribute(tool_name, "tracks_circuit_breaker"))
@@ -368,9 +398,10 @@ pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "Unit test assertions")]
 mod tests {
-    use super::*;
     use agy_common::models::{HookDecision, ToolCallPayload};
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_read_only_tool_is_allowed() {
@@ -417,7 +448,13 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_tripped_triggers_ask() {
-        let temp_dir = std::env::temp_dir().join(format!("hook_cb_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "hook_cb_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
         drop(std::fs::write(
             temp_dir.join("tools.toml"),
@@ -425,8 +462,20 @@ mod tests {
         ));
 
         let mut ledger = CircuitBreakerLedger::new("coder");
-        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("borrow error")));
-        drop(ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("borrow error")));
+        drop(ledger.record_failure(
+            &temp_dir,
+            Some("coder"),
+            Some("quick_check"),
+            Some("E0502"),
+            Some("borrow error"),
+        ));
+        drop(ledger.record_failure(
+            &temp_dir,
+            Some("coder"),
+            Some("quick_check"),
+            Some("E0502"),
+            Some("borrow error"),
+        ));
         assert!(ledger.tripped);
 
         let input = PreToolUseInput {
@@ -446,7 +495,13 @@ mod tests {
 
     #[test]
     fn test_declarative_mutating_tool_triggers_ask() {
-        let temp_dir = std::env::temp_dir().join(format!("hook_decl_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "hook_decl_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
         drop(std::fs::write(
             temp_dir.join("tools.toml"),
@@ -463,7 +518,11 @@ mod tests {
 
         let res = evaluate_policy(&input, &temp_dir);
         assert_eq!(res.decision, HookDecision::Ask);
-        assert!(res.reason.unwrap().contains("applies automated filesystem or code modifications"));
+        assert!(
+            res.reason
+                .unwrap()
+                .contains("applies automated filesystem or code modifications")
+        );
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

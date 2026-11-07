@@ -1,7 +1,10 @@
 //! Workspace conflict detection for `PreToolUse` safety gate (`check-conflicts`).
 
 use std::path::{Path, PathBuf};
-use agy_common::{GateCheck, GateCheckStatus, PreToolResponse, VcsConflictCheck, WorkspaceResolver};
+
+use agy_common::{
+    GateCheck, GateCheckStatus, PreToolResponse, VcsConflictCheck, WorkspaceResolver,
+};
 
 /// Executes the `check-conflicts` command.
 ///
@@ -29,7 +32,9 @@ pub(crate) fn execute() {
 pub(crate) fn detect_conflicts(root: &Path) -> Option<String> {
     match VcsConflictCheck.execute(root) {
         GateCheckStatus::Passed => None,
-        GateCheckStatus::Failed(reason) => Some(format!("Execution blocked by agy-hooks: {reason}")),
+        GateCheckStatus::Failed(reason) => {
+            Some(format!("Execution blocked by agy-hooks: {reason}"))
+        },
         GateCheckStatus::Warning(warn) => Some(format!("Execution blocked by agy-hooks: {warn}")),
     }
 }

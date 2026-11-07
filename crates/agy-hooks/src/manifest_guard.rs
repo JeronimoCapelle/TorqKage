@@ -3,12 +3,17 @@
 //! Neutralizes the host IDE procedural-macro / `build.rs` execution sandbox escape vector.
 
 use std::path::Path;
+
 use agy_common::{PreToolResponse, PreToolUseInput};
+
 use crate::config::HooksConfig;
 
 pub(crate) fn is_default_fallback_mutation_tool(name: &str) -> bool {
     let bytes = name.as_bytes();
-    if matches!(bytes, b"file_write" | b"write_file" | b"mpatch_edit" | b"modify_code" | b"edit_file") {
+    if matches!(
+        bytes,
+        b"file_write" | b"write_file" | b"mpatch_edit" | b"modify_code" | b"edit_file"
+    ) {
         return true;
     }
     let lower = name.to_ascii_lowercase();
@@ -78,7 +83,9 @@ fn is_manifest_protected(path_str: &str, patterns: &[String]) -> bool {
                     || path_str.ends_with(suffix)
             })
         } else {
-            file_name.as_ref().is_some_and(|f| f.eq_ignore_ascii_case(pat))
+            file_name
+                .as_ref()
+                .is_some_and(|f| f.eq_ignore_ascii_case(pat))
                 || path_str.eq_ignore_ascii_case(pat)
         }
     })
@@ -105,7 +112,11 @@ pub(crate) fn evaluate_manifest_guard(
         crate::policy_gate::is_mutating_tool(tool_name, root)
             || is_default_fallback_mutation_tool(tool_name)
     } else {
-        config.manifest_guard.protected_tools.iter().any(|t| t == tool_name)
+        config
+            .manifest_guard
+            .protected_tools
+            .iter()
+            .any(|t| t == tool_name)
     };
     if !is_mutation_tool {
         return None;
@@ -127,9 +138,10 @@ pub(crate) fn evaluate_manifest_guard(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use agy_common::ToolCallPayload;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_manifest_guard_blocks_cargo_toml() {
@@ -149,7 +161,12 @@ mod tests {
         assert!(resp.is_some());
         if let Some(res) = resp {
             assert_eq!(res.decision, agy_common::HookDecision::Ask);
-            assert!(res.reason.as_deref().unwrap_or("").contains("MANIFEST MUTATION GUARD"));
+            assert!(
+                res.reason
+                    .as_deref()
+                    .unwrap_or("")
+                    .contains("MANIFEST MUTATION GUARD")
+            );
         }
     }
 

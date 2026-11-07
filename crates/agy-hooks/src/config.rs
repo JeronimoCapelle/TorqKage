@@ -1,8 +1,12 @@
 //! Declarative `hooks.toml` parser and hybrid configuration models.
 
-#![allow(clippy::string_slice, reason = "Line and character parser operates on ASCII delimiter offsets")]
+#![allow(
+    clippy::string_slice,
+    reason = "Line and character parser operates on ASCII delimiter offsets"
+)]
 
 use std::path::{Path, PathBuf};
+
 use agy_common::models::HookDecision;
 
 /// Custom declarative check declared in `hooks.toml`.
@@ -187,7 +191,8 @@ impl HooksConfig {
         ];
 
         if let Ok(home) = std::env::var("HOME") {
-            candidates.push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/hooks.toml"));
+            candidates
+                .push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/hooks.toml"));
         }
 
         for path in candidates {
@@ -470,9 +475,9 @@ fn apply_string_field(
                 } else {
                     HookDecision::Deny
                 };
-            }
+            },
             "reason" => val.clone_into(&mut check.reason),
-            _ => {}
+            _ => {},
         }
     } else if section == "session_start_injection"
         && let Some(inj) = current_injection
@@ -486,19 +491,23 @@ fn apply_string_field(
                 if let Ok(n) = val.parse::<usize>() {
                     inj.max_lines = n;
                 }
-            }
+            },
             "timeout_seconds" => {
                 if let Ok(n) = val.parse::<u64>() {
                     inj.timeout_seconds = n;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::indexing_slicing, reason = "Unit test assertions and indexing")]
+#[allow(
+    clippy::unwrap_used,
+    clippy::indexing_slicing,
+    reason = "Unit test assertions and indexing"
+)]
 mod tests {
     use super::*;
 
@@ -536,9 +545,23 @@ reason = "Disk is full"
         assert_eq!(parsed.pre_tool_use.pipeline[0], "circuit_breaker");
         assert_eq!(parsed.pre_tool_use.custom_checks.len(), 1);
         assert_eq!(parsed.pre_tool_use.custom_checks[0].name, "check_disk");
-        assert_eq!(parsed.pre_tool_use.custom_checks[0].matcher, "modify_code|write_file");
-        assert_eq!(parsed.pre_tool_use.custom_checks[0].command, vec!["df", "-h", "."]);
-        assert_eq!(parsed.pre_tool_use.custom_checks[0].fail_if_output_contains.as_deref(), Some("100%"));
-        assert_eq!(parsed.pre_tool_use.custom_checks[0].decision, HookDecision::Deny);
+        assert_eq!(
+            parsed.pre_tool_use.custom_checks[0].matcher,
+            "modify_code|write_file"
+        );
+        assert_eq!(
+            parsed.pre_tool_use.custom_checks[0].command,
+            vec!["df", "-h", "."]
+        );
+        assert_eq!(
+            parsed.pre_tool_use.custom_checks[0]
+                .fail_if_output_contains
+                .as_deref(),
+            Some("100%")
+        );
+        assert_eq!(
+            parsed.pre_tool_use.custom_checks[0].decision,
+            HookDecision::Deny
+        );
     }
 }

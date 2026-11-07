@@ -1,6 +1,7 @@
 //! `ProtoJSON` models and lifecycle event payload schemas for Antigravity hooks.
 
 use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
 
 /// Output decision for Antigravity `PreToolUse` hooks.
@@ -140,7 +141,10 @@ pub struct PostToolUseInput {
 }
 
 /// Empty response emitted on `stdout` when no action or state change is returned.
-#[allow(clippy::empty_structs_with_brackets, reason = "Explicit empty object {} required by ProtoJSON")]
+#[allow(
+    clippy::empty_structs_with_brackets,
+    reason = "Explicit empty object {} required by ProtoJSON"
+)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmptyResponse {}
 
@@ -409,11 +413,7 @@ impl HandoffRecord {
             }
         }
 
-        if found_any {
-            Some(record)
-        } else {
-            None
-        }
+        if found_any { Some(record) } else { None }
     }
 }
 
@@ -455,7 +455,10 @@ impl PipelineHandoff {
     }
 
     /// Formats an actionable prompt block for session context injection.
-    #[allow(clippy::format_push_string, reason = "Constructing human-readable prompt string")]
+    #[allow(
+        clippy::format_push_string,
+        reason = "Constructing human-readable prompt string"
+    )]
     #[must_use]
     pub fn to_injection_message(&self) -> String {
         let mut msg = format!(
@@ -469,10 +472,16 @@ impl PipelineHandoff {
         msg.push_str(&format!("Summary: {}\n", self.summary));
 
         if !self.deliverables.is_empty() {
-            msg.push_str(&format!("Deliverables / Specs: {}.\n", self.deliverables.join(", ")));
+            msg.push_str(&format!(
+                "Deliverables / Specs: {}.\n",
+                self.deliverables.join(", ")
+            ));
         }
         if !self.modified_files.is_empty() {
-            msg.push_str(&format!("Modified Files: {}.\n", self.modified_files.join(", ")));
+            msg.push_str(&format!(
+                "Modified Files: {}.\n",
+                self.modified_files.join(", ")
+            ));
         }
         msg
     }
@@ -554,7 +563,11 @@ impl CircuitBreakerLedger {
     ///
     /// # Errors
     /// Returns `io::Error` if saving fails.
-    pub fn record_success(&mut self, workspace_root: &Path, tool_name: Option<&str>) -> std::io::Result<()> {
+    pub fn record_success(
+        &mut self,
+        workspace_root: &Path,
+        tool_name: Option<&str>,
+    ) -> std::io::Result<()> {
         self.consecutive_failures = 0;
         self.tripped = false;
         self.last_error_signature = None;
@@ -586,7 +599,11 @@ impl CircuitBreakerLedger {
         }
         self.last_error_signature = error_sig.map(ToOwned::to_owned);
         self.last_error_details = error_details.map(|d| {
-            d.lines().filter(|l| !l.trim().is_empty()).take(25).collect::<Vec<_>>().join("\n")
+            d.lines()
+                .filter(|l| !l.trim().is_empty())
+                .take(25)
+                .collect::<Vec<_>>()
+                .join("\n")
         });
         self.last_tool = tool_name.map(ToOwned::to_owned);
         self.last_updated = format!("{}", jiff::Timestamp::now());
@@ -609,7 +626,10 @@ impl CircuitBreakerLedger {
 
 /// Extracts a compiler error signature from output, guided by optional custom prefix or pattern.
 #[must_use]
-pub fn extract_compiler_error_signature(output: &str, custom_prefix: Option<&str>) -> Option<String> {
+pub fn extract_compiler_error_signature(
+    output: &str,
+    custom_prefix: Option<&str>,
+) -> Option<String> {
     if let Some(prefix) = custom_prefix {
         for line in output.lines() {
             if let Some(idx) = line.find(prefix) {
@@ -678,7 +698,9 @@ mod tests {
         let tool = parsed.tool_call.expect("tool call missing");
         assert_eq!(tool.name, "run_command");
         assert_eq!(
-            tool.args.get("CommandLine").and_then(serde_json::Value::as_str),
+            tool.args
+                .get("CommandLine")
+                .and_then(serde_json::Value::as_str),
             Some("cargo test")
         );
 
@@ -690,7 +712,10 @@ mod tests {
         // Deny output
         let deny_resp = PreToolResponse::deny("Rule violation");
         let deny_json = serde_json::to_string(&deny_resp).expect("serialize failed");
-        assert_eq!(deny_json, r#"{"decision":"deny","reason":"Rule violation"}"#);
+        assert_eq!(
+            deny_json,
+            r#"{"decision":"deny","reason":"Rule violation"}"#
+        );
     }
 
     #[test]
@@ -708,7 +733,10 @@ mod tests {
         // System
         let sys_msg = InjectStep::system("System initialisation complete");
         let sys_json = serde_json::to_string(&sys_msg).expect("serialize failed");
-        assert_eq!(sys_json, r#"{"systemMessage":{"systemMessage":"System initialisation complete"}}"#);
+        assert_eq!(
+            sys_json,
+            r#"{"systemMessage":{"systemMessage":"System initialisation complete"}}"#
+        );
 
         // Roundtrip deserialization
         let parsed_eph: InjectStep = serde_json::from_str(&eph_json).expect("deserialize failed");
@@ -729,7 +757,10 @@ mod tests {
 
         let with_notice = PreInvocationResponse::ephemeral("WIP detected");
         let notice_json = serde_json::to_string(&with_notice).expect("serialize failed");
-        assert_eq!(notice_json, r#"{"injectSteps":[{"ephemeralMessage":"WIP detected"}]}"#);
+        assert_eq!(
+            notice_json,
+            r#"{"injectSteps":[{"ephemeralMessage":"WIP detected"}]}"#
+        );
     }
 
     #[test]
@@ -762,7 +793,10 @@ mod tests {
 
     #[test]
     fn test_circuit_breaker_trips_at_max_strikes() {
-        let temp_dir = std::env::temp_dir().join(format!("cb_test_{}", jiff::Timestamp::now().as_nanosecond()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "cb_test_{}",
+            jiff::Timestamp::now().as_nanosecond()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
 
         let mut ledger = CircuitBreakerLedger::new("coder");
@@ -770,12 +804,28 @@ mod tests {
         assert!(!ledger.tripped);
 
         // Strike 1
-        ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        ledger
+            .record_failure(
+                &temp_dir,
+                Some("coder"),
+                Some("quick_check"),
+                Some("E0502"),
+                Some("cannot borrow as mutable"),
+            )
+            .unwrap();
         assert_eq!(ledger.consecutive_failures, 1);
         assert!(!ledger.tripped);
 
         // Strike 2: Circuit breaker trips!
-        ledger.record_failure(&temp_dir, Some("coder"), Some("quick_check"), Some("E0502"), Some("cannot borrow as mutable")).unwrap();
+        ledger
+            .record_failure(
+                &temp_dir,
+                Some("coder"),
+                Some("quick_check"),
+                Some("E0502"),
+                Some("cannot borrow as mutable"),
+            )
+            .unwrap();
         assert_eq!(ledger.consecutive_failures, 2);
         assert!(ledger.tripped);
         assert_eq!(ledger.last_error_signature.as_deref(), Some("E0502"));
@@ -786,7 +836,9 @@ mod tests {
         assert!(loaded.tripped);
 
         // Record success: resets to clean
-        ledger.record_success(&temp_dir, Some("quick_check")).unwrap();
+        ledger
+            .record_success(&temp_dir, Some("quick_check"))
+            .unwrap();
         assert_eq!(ledger.consecutive_failures, 0);
         assert!(!ledger.tripped);
 
@@ -800,7 +852,10 @@ mod tests {
     #[test]
     fn test_extract_bracketed_error_code() {
         let sample_output = "error[E0502]: cannot borrow `*self` as mutable, as it is also borrowed as immutable\n  --> src/main.rs:10:5";
-        assert_eq!(extract_bracketed_error_code(sample_output), Some("E0502".to_owned()));
+        assert_eq!(
+            extract_bracketed_error_code(sample_output),
+            Some("E0502".to_owned())
+        );
 
         let clean_output = "Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s";
         assert_eq!(extract_bracketed_error_code(clean_output), None);

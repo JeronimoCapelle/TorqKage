@@ -2,8 +2,7 @@
 //!
 //! Declarative sandboxing detection, Bubblewrap jail creation, and security isolation primitives.
 
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
 
 /// Checks if the current process is already executing inside an outer sandbox or container.
 #[must_use]
@@ -27,10 +26,7 @@ where
     F: Fn(&str) -> bool,
 {
     // 1. Explicit environment variable set by agy-ctrl or outer orchestrator
-    if env_lookup("AGY_OUTER_SANDBOX")
-        || env_lookup("SANDBOX")
-        || env_lookup("CONTAINER")
-    {
+    if env_lookup("AGY_OUTER_SANDBOX") || env_lookup("SANDBOX") || env_lookup("CONTAINER") {
         return true;
     }
 
@@ -82,7 +78,9 @@ where
         ];
         if !comm_trimmed.is_empty()
             && !known_host_inits.contains(&comm_trimmed)
-            && (comm_trimmed == "tini" || comm_trimmed == "dumb-init" || comm_trimmed.contains("bwrap"))
+            && (comm_trimmed == "tini"
+                || comm_trimmed == "dumb-init"
+                || comm_trimmed.contains("bwrap"))
         {
             return true;
         }
@@ -102,9 +100,13 @@ pub fn build_bubblewrap_command(
     let mut cmd = Command::new("bwrap");
     cmd.args([
         "--unshare-all",
-        "--tmpfs", "/",
-        "--dir", "/tmp",
-        "--ro-bind", "/usr", "/usr",
+        "--tmpfs",
+        "/",
+        "--dir",
+        "/tmp",
+        "--ro-bind",
+        "/usr",
+        "/usr",
     ]);
 
     if Path::new("/bin").is_symlink() {
@@ -181,7 +183,9 @@ mod tests {
 
     #[test]
     fn test_is_inside_outer_sandbox_env() {
-        assert!(is_inside_outer_sandbox_with(|var| var == "AGY_OUTER_SANDBOX"));
+        assert!(is_inside_outer_sandbox_with(
+            |var| var == "AGY_OUTER_SANDBOX"
+        ));
         assert!(is_inside_outer_sandbox_with(|var| var == "SANDBOX"));
         assert!(is_inside_outer_sandbox_with(|var| var == "CONTAINER"));
     }
@@ -189,7 +193,12 @@ mod tests {
     #[test]
     fn test_build_bubblewrap_command_structure() {
         let root = Path::new("/tmp");
-        let cmd = build_bubblewrap_command("python3", &[String::from("-c")], &[String::from("print(1)")], root);
+        let cmd = build_bubblewrap_command(
+            "python3",
+            &[String::from("-c")],
+            &[String::from("print(1)")],
+            root,
+        );
         let program = cmd.get_program().to_string_lossy();
         assert_eq!(program, "bwrap");
     }

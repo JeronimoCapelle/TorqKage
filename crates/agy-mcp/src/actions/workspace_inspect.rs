@@ -1,21 +1,34 @@
 //! In-process Jujutsu subagent workspace inspection action for the MCP daemon.
 
 use std::path::Path;
+
 use agy_common::JujutsuWorkspace;
 
-pub(crate) fn execute(workspace_root: &Path, arguments: &serde_json::Value) -> Result<(String, bool), String> {
+pub(crate) fn execute(
+    workspace_root: &Path,
+    arguments: &serde_json::Value,
+) -> Result<(String, bool), String> {
     let agent = arguments
         .get("agent")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| "Missing required parameter 'agent' for inspect_agent_workspace".to_owned())?;
+        .ok_or_else(|| {
+            "Missing required parameter 'agent' for inspect_agent_workspace".to_owned()
+        })?;
 
-    if !agent.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
-        return Err(format!("Invalid agent name '{agent}': must contain only alphanumeric, dash, or underscore characters"));
+    if !agent
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    {
+        return Err(format!(
+            "Invalid agent name '{agent}': must contain only alphanumeric, dash, or underscore characters"
+        ));
     }
 
     match JujutsuWorkspace::inspect_agent_workspace(workspace_root, agent) {
         Ok(output) => Ok((output, false)),
-        Err(e) => Err(format!("Failed to inspect isolated workspace for agent '{agent}': {e}")),
+        Err(e) => Err(format!(
+            "Failed to inspect isolated workspace for agent '{agent}': {e}"
+        )),
     }
 }
 

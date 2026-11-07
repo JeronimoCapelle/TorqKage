@@ -1,13 +1,16 @@
 //! `file_read` action handler with path confinement and safe truncation.
 
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
+
 use agy_common::ProjectConfig;
-use crate::guards::{
-    check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
-    resolve_scoped_path_str, truncate_output,
+
+use crate::{
+    guards::{
+        check_dangerous_files_with_security, check_enforce_boundaries, resolve_safe_path,
+        resolve_scoped_path_str, truncate_output,
+    },
+    models::{AgentGuard, ToolDefinition},
 };
-use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded file read action.
 ///
@@ -54,8 +57,12 @@ pub(crate) fn execute(
     let raw_content = std::fs::read_to_string(&safe_path)
         .map_err(|err| format!("Failed to read file '{}': {err}", safe_path.display()))?;
 
-    let start_line = arguments.get("start_line").and_then(serde_json::Value::as_u64);
-    let end_line = arguments.get("end_line").and_then(serde_json::Value::as_u64);
+    let start_line = arguments
+        .get("start_line")
+        .and_then(serde_json::Value::as_u64);
+    let end_line = arguments
+        .get("end_line")
+        .and_then(serde_json::Value::as_u64);
 
     let content_to_process = if start_line.is_some() || end_line.is_some() {
         slice_lines(&raw_content, start_line, end_line)
@@ -114,7 +121,8 @@ mod tests {
         std::fs::create_dir_all(temp.join("src/auth")).expect("create src/auth");
         std::fs::create_dir_all(temp.join("docs/specs")).expect("create docs/specs");
         std::fs::write(temp.join("src/auth/hasher.rs"), "pub fn hash() {}").expect("write hasher");
-        std::fs::write(temp.join("Cargo.toml"), "[package]\nname = \"demo\"\n").expect("write Cargo.toml");
+        std::fs::write(temp.join("Cargo.toml"), "[package]\nname = \"demo\"\n")
+            .expect("write Cargo.toml");
         std::fs::write(temp.join("docs/specs/rv32.md"), "# RV32 Spec").expect("write spec");
 
         let mut guards = BTreeMap::new();
@@ -134,7 +142,8 @@ mod tests {
 
         // 1. Coder reads scoped relative path "auth/hasher.rs" -> resolves to "src/auth/hasher.rs"
         let args = serde_json::json!({ "path": "auth/hasher.rs" });
-        let res = execute(&default_tool, &temp, &args, Some("coder"), &guards).expect("read auth/hasher.rs");
+        let res = execute(&default_tool, &temp, &args, Some("coder"), &guards)
+            .expect("read auth/hasher.rs");
         assert!(res.contains("pub fn hash() {}"));
 
         // 2. Read root Cargo.toml (with tool allowing workspace root)
@@ -143,7 +152,8 @@ mod tests {
             ..Default::default()
         };
         let root_args = serde_json::json!({ "path": "Cargo.toml" });
-        let res_root = execute(&root_tool, &temp, &root_args, Some("coder"), &guards).expect("read Cargo.toml");
+        let res_root = execute(&root_tool, &temp, &root_args, Some("coder"), &guards)
+            .expect("read Cargo.toml");
         assert!(res_root.contains("name = \"demo\""));
 
         // 3. Tool with enforce_dir "docs" reading "specs/rv32.md" -> resolves to "docs/specs/rv32.md"

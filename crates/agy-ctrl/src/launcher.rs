@@ -2,13 +2,18 @@
 //!
 //! Interactive process launcher and pre-flight validation pipeline for dispatching `agy` sessions from `agy-ctrl`.
 
-use std::io::{self, stdout};
-use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
+use std::{
+    io::{self, stdout},
+    path::Path,
+    process::{Command, ExitStatus, Stdio},
+};
+
+use crossterm::{
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
+use ratatui::{Terminal, backend::CrosstermBackend};
+
 use crate::model::AgentManifest;
 
 /// Result of evaluating pre-launch checks prior to starting an `agy` session.
@@ -59,7 +64,10 @@ impl PreLaunchReport {
 /// Executes all mandatory and advisory pre-launch checks before booting an `agy` session.
 ///
 /// This provides a modular, extensible hook for gating agent execution.
-pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest) -> PreLaunchReport {
+pub(crate) fn run_pre_launch_checks(
+    workspace_root: &Path,
+    agent: &AgentManifest,
+) -> PreLaunchReport {
     let mut report = PreLaunchReport::new(&agent.name);
 
     // Check 1: Verify agy executable is discoverable in system PATH
@@ -89,10 +97,14 @@ pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest
     let tools_toml = workspace_root.join("tools.toml");
     let plugin_tools = workspace_root.join("plugins/agy-suite/tools.toml");
     let has_home_tools = std::env::var("HOME").is_ok_and(|home| {
-        Path::new(&home).join(".gemini/config/plugins/agy-suite/tools.toml").is_file()
+        Path::new(&home)
+            .join(".gemini/config/plugins/agy-suite/tools.toml")
+            .is_file()
     });
     if !tools_toml.is_file() && !plugin_tools.is_file() && !has_home_tools {
-        report.warnings.push("No tools.toml configuration found in workspace or plugin install.".to_owned());
+        report
+            .warnings
+            .push("No tools.toml configuration found in workspace or plugin install.".to_owned());
     }
 
     // Check 5: Air-gapped / security notice
@@ -108,10 +120,10 @@ pub(crate) fn run_pre_launch_checks(workspace_root: &Path, agent: &AgentManifest
         match agy_common::evaluate_pre_flight_checks(workspace_root, &check_refs) {
             Ok(warns) => {
                 report.warnings.extend(warns);
-            }
+            },
             Err(errs) => {
                 report.errors.extend(errs);
-            }
+            },
         }
     }
 
@@ -151,9 +163,11 @@ pub(crate) fn launch_agy_interactive(
         match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
             Ok(ws_path) => (ws_path, true),
             Err(e) => {
-                eprintln!("⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root.");
+                eprintln!(
+                    "⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root."
+                );
                 (workspace_root.to_path_buf(), false)
-            }
+            },
         }
     } else {
         (workspace_root.to_path_buf(), false)
@@ -162,15 +176,34 @@ pub(crate) fn launch_agy_interactive(
     // Print friendly launcher header
     println!("\n================================================================================");
     if let Some(conv_id) = resume_conversation {
-        println!("🚀 [agy-ctrl] RESUMING previous agy session for agent: {}", agent.name);
+        println!(
+            "🚀 [agy-ctrl] RESUMING previous agy session for agent: {}",
+            agent.name
+        );
         println!("   Conversation ID: {conv_id}");
     } else {
-        println!("🚀 [agy-ctrl] Launching fresh agy session with agent: {}", agent.name);
+        println!(
+            "🚀 [agy-ctrl] Launching fresh agy session with agent: {}",
+            agent.name
+        );
     }
-    println!("   Effort: {} | Permissions: {} | Policy: {}", agent.effort, agent.permission_mode, agent.command_execution_policy);
-    println!("   Sandbox: {}", if sandbox { "ENABLED (Bubblewrap isolation)" } else { "DISABLED (direct host)" });
+    println!(
+        "   Effort: {} | Permissions: {} | Policy: {}",
+        agent.effort, agent.permission_mode, agent.command_execution_policy
+    );
+    println!(
+        "   Sandbox: {}",
+        if sandbox {
+            "ENABLED (Bubblewrap isolation)"
+        } else {
+            "DISABLED (direct host)"
+        }
+    );
     if was_isolated {
-        println!("   Workspace: {} (🛡️ Jujutsu Isolated Workspace)", effective_workspace.display());
+        println!(
+            "   Workspace: {} (🛡️ Jujutsu Isolated Workspace)",
+            effective_workspace.display()
+        );
         println!("   (Main working copy @ and editor buffers are fully protected)");
     } else {
         println!("   Workspace: {}", workspace_root.display());
@@ -200,11 +233,21 @@ pub(crate) fn launch_agy_interactive(
     let status_res = cmd.status();
 
     if was_isolated {
-        println!("\n--------------------------------------------------------------------------------");
-        println!("🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}", agent.name);
+        println!(
+            "\n--------------------------------------------------------------------------------"
+        );
+        println!(
+            "🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}",
+            agent.name
+        );
         println!("   Changes are committed to workspace '{}@'.", agent.name);
-        println!("   Use 'jj workspace list' or 'jj diff -R .agy/workspaces/{}' to inspect.", agent.name);
-        println!("--------------------------------------------------------------------------------");
+        println!(
+            "   Use 'jj workspace list' or 'jj diff -R .agy/workspaces/{}' to inspect.",
+            agent.name
+        );
+        println!(
+            "--------------------------------------------------------------------------------"
+        );
     }
 
     // 4. Resume Ratatui & crossterm alternate screen regardless of status
@@ -237,9 +280,11 @@ pub(crate) fn launch_agy_headless(
         match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
             Ok(ws_path) => (ws_path, true),
             Err(e) => {
-                eprintln!("⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root.");
+                eprintln!(
+                    "⚠ [agy-ctrl] Failed to initialize isolated workspace: {e}. Falling back to root."
+                );
                 (workspace_root.to_path_buf(), false)
-            }
+            },
         }
     } else {
         (workspace_root.to_path_buf(), false)
@@ -250,14 +295,22 @@ pub(crate) fn launch_agy_headless(
             "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
-            if was_isolated { "YES (.agy/workspaces)" } else { "NO" }
+            if was_isolated {
+                "YES (.agy/workspaces)"
+            } else {
+                "NO"
+            }
         );
     } else {
         println!(
             "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {}, Isolated: {})",
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
-            if was_isolated { "YES (.agy/workspaces)" } else { "NO" }
+            if was_isolated {
+                "YES (.agy/workspaces)"
+            } else {
+                "NO"
+            }
         );
     }
 
@@ -279,10 +332,15 @@ pub(crate) fn launch_agy_headless(
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let res = cmd.status().map_err(|e| format!("Failed to spawn 'agy': {e}"));
+    let res = cmd
+        .status()
+        .map_err(|e| format!("Failed to spawn 'agy': {e}"));
 
     if was_isolated {
-        println!("\n🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}", agent.name);
+        println!(
+            "\n🏁 [agy-ctrl] Session ended in isolated workspace: .agy/workspaces/{}",
+            agent.name
+        );
         println!("   Changes are committed to workspace '{}@'.", agent.name);
     }
 
@@ -297,9 +355,10 @@ pub(crate) fn launch_agy_headless(
     reason = "Unit test assertions"
 )]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
     use crate::model::AgentRoleFlags;
-    use std::path::PathBuf;
 
     #[test]
     fn test_pre_launch_report_diagnostics() {
@@ -342,7 +401,12 @@ mod tests {
 
         let report = run_pre_launch_checks(Path::new("."), &manifest);
         assert!(!report.is_ok());
-        assert!(report.errors.iter().any(|e| e.contains("unsaved modifications")));
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("unsaved modifications"))
+        );
     }
 
     #[test]
@@ -380,7 +444,12 @@ mod tests {
         let report = run_pre_launch_checks(&temp_dir, &manifest);
         // The only errors should be missing manifest file and possibly agy CLI if PATH is weird,
         // but no cargo check errors from gatekeeper
-        assert!(!report.errors.iter().any(|e| e.contains("requires 100% clean compilation")));
+        assert!(
+            !report
+                .errors
+                .iter()
+                .any(|e| e.contains("requires 100% clean compilation"))
+        );
     }
 
     #[test]

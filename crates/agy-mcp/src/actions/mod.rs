@@ -13,12 +13,10 @@ pub(crate) mod workspace_ensure;
 pub(crate) mod workspace_inspect;
 pub(crate) mod workspace_merge;
 
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::process::Command;
-use agy_common::{
-    CircuitBreakerLedger, SubprocessSupervisor, extract_compiler_error_signature,
-};
+use std::{collections::BTreeMap, path::Path, process::Command};
+
+use agy_common::{CircuitBreakerLedger, SubprocessSupervisor, extract_compiler_error_signature};
+
 use crate::models::{AgentGuard, ToolAction, ToolDefinition};
 
 /// Executes a command either sandboxed via Bubblewrap or directly with supervisor hygiene.
@@ -130,30 +128,33 @@ pub(crate) fn dispatch_action(
 
     let execution_result = match tool.action {
         ToolAction::FileRead => {
-            let content = file_read::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content =
+                file_read::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
-        }
+        },
 
         ToolAction::FileWrite => {
-            let content = file_write::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content =
+                file_write::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
-        }
+        },
 
         ToolAction::MpatchEdit => {
-            let content = mpatch_edit::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content =
+                mpatch_edit::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
             Ok((content, false))
-        }
+        },
 
         ToolAction::FileSearch => {
             let content = file_search::execute(tool, workspace_root, arguments)?;
             Ok((content, false))
-        }
+        },
 
         ToolAction::StaticCommand => static_cmd::execute(tool, workspace_root),
 
         ToolAction::ParameterizedCommand => {
             parameterized_cmd::execute(tool, workspace_root, arguments)
-        }
+        },
 
         ToolAction::CargoJsonDiagnostics => cargo_json::execute(tool, workspace_root),
 
@@ -192,7 +193,10 @@ fn update_circuit_breaker(
 
     let mut ledger = CircuitBreakerLedger::load(workspace_root);
     let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
-    let custom_pattern = project.gates.values().find_map(|g| g.error_regex.as_deref());
+    let custom_pattern = project
+        .gates
+        .values()
+        .find_map(|g| g.error_regex.as_deref());
 
     match result {
         Ok((mut output, is_error)) => {
@@ -223,7 +227,7 @@ fn update_circuit_breaker(
                 drop(ledger.record_success(workspace_root, Some(&tool.name)));
             }
             Ok((output, is_error))
-        }
+        },
         Err(err) => {
             let error_sig = extract_compiler_error_signature(&err, custom_pattern);
             drop(ledger.record_failure(
@@ -234,7 +238,7 @@ fn update_circuit_breaker(
                 Some(&err),
             ));
             Err(err)
-        }
+        },
     }
 }
 
@@ -243,14 +247,14 @@ fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> R
     if !required_gates.is_empty() {
         let gate_names: Vec<&str> = required_gates.iter().map(String::as_str).collect();
         match agy_common::gatekeeper::evaluate_pre_flight_checks(workspace_root, &gate_names) {
-            Ok(_warnings) => {}
+            Ok(_warnings) => {},
             Err(errors) => {
                 return Err(format!(
                     "Pre-flight gate check failed for tool '{}':\n{}",
                     tool.name,
                     errors.join("\n\n")
                 ));
-            }
+            },
         }
     }
 
@@ -269,7 +273,13 @@ mod tests {
 
     #[test]
     fn test_update_circuit_breaker_trips_on_consecutive_failures() {
-        let temp_dir = std::env::temp_dir().join(format!("mcp_cb_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_cb_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
 
         let tool = ToolDefinition {
@@ -288,7 +298,8 @@ mod tests {
             &temp_dir,
             Some("coder"),
             Ok(("error[E0502]: borrow error".to_owned(), true)),
-        ).unwrap();
+        )
+        .unwrap();
         assert!(res1.1);
         assert!(!res1.0.contains("CIRCUIT BREAKER TRIPPED"));
 
@@ -298,7 +309,8 @@ mod tests {
             &temp_dir,
             Some("coder"),
             Ok(("error[E0502]: borrow error".to_owned(), true)),
-        ).unwrap();
+        )
+        .unwrap();
         assert!(res2.1);
         assert!(res2.0.contains("CIRCUIT BREAKER TRIPPED - 2/2 FAILURES"));
 
@@ -308,7 +320,8 @@ mod tests {
             &temp_dir,
             Some("coder"),
             Ok(("Clean check".to_owned(), false)),
-        ).unwrap();
+        )
+        .unwrap();
         assert!(!res3.1);
 
         let ledger = CircuitBreakerLedger::load(&temp_dir);
@@ -320,7 +333,13 @@ mod tests {
 
     #[test]
     fn test_evaluate_pre_flight_guards_passes_clean() {
-        let temp_dir = std::env::temp_dir().join(format!("mcp_guards_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_guards_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
 
         let tool = ToolDefinition {

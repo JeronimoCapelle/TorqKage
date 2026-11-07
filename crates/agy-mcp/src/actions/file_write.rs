@@ -1,13 +1,16 @@
 //! `file_write` action handler with path confinement, directory allowlisting, and security guards.
 
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
+
 use agy_common::ProjectConfig;
-use crate::guards::{
-    check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
-    check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
+
+use crate::{
+    guards::{
+        check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
+        check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
+    },
+    models::{AgentGuard, ToolDefinition},
 };
-use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded file write action.
 ///
@@ -77,8 +80,12 @@ pub(crate) fn execute(
     if let Some(parent) = safe_path.parent()
         && !parent.exists()
     {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| format!("Failed to create parent directory '{}': {err}", parent.display()))?;
+        std::fs::create_dir_all(parent).map_err(|err| {
+            format!(
+                "Failed to create parent directory '{}': {err}",
+                parent.display()
+            )
+        })?;
     }
 
     std::fs::write(&safe_path, content.as_bytes())
@@ -102,8 +109,9 @@ pub(crate) fn execute(
     reason = "Unit test assertions"
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn create_test_dir(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -269,7 +277,8 @@ mod tests {
         });
         assert!(execute(&tool, &temp, &args, Some("coder"), &guards).is_ok());
         assert!(temp.join("src/auth/jwt.rs").exists());
-        let content = std::fs::read_to_string(temp.join("src/auth/jwt.rs")).expect("read created file");
+        let content =
+            std::fs::read_to_string(temp.join("src/auth/jwt.rs")).expect("read created file");
         assert!(content.contains("pub fn verify()"));
 
         // 2. Tool with enforce_dir "docs" creates "rfcs/001.md" -> created in docs/rfcs/001.md

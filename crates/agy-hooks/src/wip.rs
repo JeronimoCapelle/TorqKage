@@ -1,9 +1,13 @@
 //! `PreInvocation` working tree change detector.
 
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
+    process::Command,
+};
+
 use agy_common::{PreInvocationInput, PreInvocationResponse, WorkspaceResolver};
+
 use crate::stdin::read_stdin_payload;
 
 /// Executes the `detect-wip` hook.
@@ -70,7 +74,7 @@ fn detect_wip_changes(
                     })
                     .collect();
                 filtered.join("\n")
-            }
+            },
             _ => String::new(),
         }
     } else {
@@ -98,7 +102,7 @@ fn detect_wip_changes(
                     })
                     .collect();
                 filtered.join("\n")
-            }
+            },
             _ => String::new(),
         }
     };
@@ -167,6 +171,9 @@ mod tests {
     fn test_cache_path_generation() {
         let paths = agy_common::AgyStatePaths::new("/home/user/project");
         let path = paths.wip_cache_file(Some("test-conv-123"));
-        assert_eq!(path, PathBuf::from("/home/user/project/.agy/cache/wip/.wip_test-conv-123.hash"));
+        assert_eq!(
+            path,
+            PathBuf::from("/home/user/project/.agy/cache/wip/.wip_test-conv-123.hash")
+        );
     }
 }

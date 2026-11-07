@@ -1,6 +1,7 @@
 //! Dynamic repository and workspace root resolution.
 
 use std::path::{Path, PathBuf};
+
 use crate::error::{AgyError, Result};
 
 /// Resolves the canonical repository or workspace root.
@@ -32,7 +33,8 @@ impl WorkspaceResolver {
                         let trimmed = target.trim();
                         let full_target = jj_dir.join(trimmed);
                         if let Ok(canonical_target) = full_target.canonicalize()
-                            && let Some(main_repo) = canonical_target.parent().and_then(|p| p.parent())
+                            && let Some(main_repo) =
+                                canonical_target.parent().and_then(|p| p.parent())
                         {
                             return Ok(main_repo.to_path_buf());
                         }
@@ -51,7 +53,11 @@ impl WorkspaceResolver {
                         let full_gitdir = candidate.join(gitdir_rel.trim());
                         if let Ok(canonical_gitdir) = full_gitdir.canonicalize() {
                             if canonical_gitdir.to_string_lossy().contains("worktrees") {
-                                if let Some(repo) = canonical_gitdir.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                if let Some(repo) = canonical_gitdir
+                                    .parent()
+                                    .and_then(|p| p.parent())
+                                    .and_then(|p| p.parent())
+                                {
                                     return Ok(repo.to_path_buf());
                                 }
                             } else if let Some(main_repo) = canonical_gitdir.parent() {
@@ -95,7 +101,10 @@ mod tests {
     fn test_find_root_from_secondary_jj_workspace_pointer() {
         let temp_dir = std::env::temp_dir().join(format!(
             "agy_test_resolver_{}",
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         let main_repo = temp_dir.join("main_repo");
         let main_jj_repo = main_repo.join(".jj/repo");

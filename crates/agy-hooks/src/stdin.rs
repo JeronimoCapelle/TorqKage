@@ -27,6 +27,6 @@ pub(crate) fn read_stdin_payload<T: serde::de::DeserializeOwned + Default>() -> 
         Err(err) => {
             eprintln!("agy-hooks: warning: failed to parse stdin JSON payload: {err}");
             T::default()
-        }
+        },
     }
 }

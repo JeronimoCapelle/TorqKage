@@ -1,10 +1,15 @@
 //! Jujutsu (`jj`) workspace and isolation primitives.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use crate::error::{AgyError, Result};
-use crate::limits::DEFAULT_VCS_QUERY_TIMEOUT_SECS;
-use crate::supervisor::SubprocessSupervisor;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+use crate::{
+    error::{AgyError, Result},
+    limits::DEFAULT_VCS_QUERY_TIMEOUT_SECS,
+    supervisor::SubprocessSupervisor,
+};
 
 /// Primitives for managing isolated Jujutsu workspaces.
 #[derive(Debug, Clone, Copy)]
@@ -30,11 +35,15 @@ impl JujutsuWorkspace {
         let mut cmd = Command::new("jj");
         cmd.args(["--color=never", "workspace", "root"]);
         cmd.current_dir(workspace_root);
-        let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS).ok()?;
+        let output =
+            SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS).ok()?;
         if output.status.success() {
             let path_str = String::from_utf8_lossy(&output.stdout).trim().to_owned();
             let p = Path::new(&path_str);
-            return p.file_name().and_then(|n| n.to_str()).map(ToOwned::to_owned);
+            return p
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(ToOwned::to_owned);
         }
         None
     }
@@ -64,17 +73,23 @@ impl JujutsuWorkspace {
 
     /// Checks if an isolated workspace has zero uncommitted changes.
     #[must_use]
-    #[allow(clippy::print_stderr, reason = "Advisory notice when jj binary is absent")]
+    #[allow(
+        clippy::print_stderr,
+        reason = "Advisory notice when jj binary is absent"
+    )]
     pub fn is_workspace_clean(ws_path: &Path) -> bool {
         if !is_jj_in_path() {
-            eprintln!("[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot check workspace clean state.");
+            eprintln!(
+                "[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot check workspace clean state."
+            );
             return false;
         }
 
         let mut cmd = Command::new("jj");
         cmd.args(["--color=never", "diff", "--summary"]);
         cmd.current_dir(ws_path);
-        let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) else {
+        let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        else {
             return false;
         };
 
@@ -108,14 +123,21 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if Jujutsu is not installed, not initialized, or workspace creation fails.
-    #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess and symlink errors")]
+    #[allow(
+        clippy::print_stderr,
+        reason = "Diagnostic logging for subprocess and symlink errors"
+    )]
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 
         if !is_jj_in_path() {
-            eprintln!("[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot initialize isolated agent workspace.");
-            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+            eprintln!(
+                "[agy-common] Advisory: 'jj' (Jujutsu) CLI not found in PATH; cannot initialize isolated agent workspace."
+            );
+            return Err(AgyError::Process(
+                "Jujutsu 'jj' CLI binary not found in PATH".to_owned(),
+            ));
         }
 
         if !Self::is_jj_repo(&repo_root) {
@@ -151,10 +173,19 @@ impl JujutsuWorkspace {
         if !Self::workspace_exists(&repo_root, agent) {
             let dest_str = agent_ws_path.to_str().unwrap_or(agent);
             let mut cmd = Command::new("jj");
-            cmd.args(["--color=never", "workspace", "add", "--name", agent, dest_str]);
+            cmd.args([
+                "--color=never",
+                "workspace",
+                "add",
+                "--name",
+                agent,
+                dest_str,
+            ]);
             cmd.current_dir(&repo_root);
             let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-                .map_err(|e| AgyError::Process(format!("Failed to execute 'jj workspace add': {e}")))?;
+                .map_err(|e| {
+                    AgyError::Process(format!("Failed to execute 'jj workspace add': {e}"))
+                })?;
 
             if !output.status.success() {
                 return Err(AgyError::Process(format!(
@@ -174,14 +205,14 @@ impl JujutsuWorkspace {
                         agent_ws_path.display(),
                         out.status
                     );
-                }
+                },
                 Err(e) => {
                     eprintln!(
                         "[agy-common] warning: failed to execute 'jj new default@' in {}: {e}",
                         agent_ws_path.display()
                     );
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -223,7 +254,10 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if workspace forget fails.
-    #[allow(clippy::print_stderr, reason = "Diagnostic logging for subprocess errors")]
+    #[allow(
+        clippy::print_stderr,
+        reason = "Diagnostic logging for subprocess errors"
+    )]
     pub fn forget_agent_workspace(workspace_root: &Path, agent: &str) -> Result<()> {
         let ws_path = crate::state::AgyStatePaths::new(workspace_root).agent_workspace(agent);
         if Self::workspace_exists(workspace_root, agent) {
@@ -231,7 +265,11 @@ impl JujutsuWorkspace {
                 .args(["--color=never", "workspace", "forget", agent])
                 .current_dir(workspace_root)
                 .status()
-                .map_err(|e| AgyError::Process(format!("Failed to execute 'jj workspace forget {agent}': {e}")))?;
+                .map_err(|e| {
+                    AgyError::Process(format!(
+                        "Failed to execute 'jj workspace forget {agent}': {e}"
+                    ))
+                })?;
             if !status.success() {
                 eprintln!(
                     "[agy-common] warning: 'jj workspace forget {agent}' exited with non-zero status: {status}"
@@ -253,7 +291,9 @@ impl JujutsuWorkspace {
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 
         if !is_jj_in_path() {
-            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+            return Err(AgyError::Process(
+                "Jujutsu 'jj' CLI binary not found in PATH".to_owned(),
+            ));
         }
 
         if !Self::is_jj_repo(&repo_root) {
@@ -280,24 +320,47 @@ impl JujutsuWorkspace {
         let mut diff_cmd = Command::new("jj");
         diff_cmd.args(["--color=never", "diff"]);
         diff_cmd.current_dir(&agent_ws_path);
-        let diff_out = SubprocessSupervisor::run_supervised(diff_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            .map_err(|e| AgyError::Process(format!("Failed to execute 'jj diff' in {}: {e}", agent_ws_path.display())))?;
+        let diff_out =
+            SubprocessSupervisor::run_supervised(diff_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                .map_err(|e| {
+                    AgyError::Process(format!(
+                        "Failed to execute 'jj diff' in {}: {e}",
+                        agent_ws_path.display()
+                    ))
+                })?;
         let diff_str = String::from_utf8_lossy(&diff_out.stdout).trim().to_owned();
 
         // Retrieve revisions log
         let mut log_cmd = Command::new("jj");
-        log_cmd.args(["--color=never", "log", "-r", "roots(default@..@)::@", "--no-graph"]);
+        log_cmd.args([
+            "--color=never",
+            "log",
+            "-r",
+            "roots(default@..@)::@",
+            "--no-graph",
+        ]);
         log_cmd.current_dir(&agent_ws_path);
         let log_out = SubprocessSupervisor::run_supervised(log_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
             .ok()
-            .and_then(|out| if out.status.success() { Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()) } else { None })
+            .and_then(|out| {
+                if out.status.success() {
+                    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+                } else {
+                    None
+                }
+            })
             .unwrap_or_default();
 
         if diff_str.is_empty() && (log_out.is_empty() || log_out.contains("(empty)")) {
-            return Ok(format!("Agent workspace '{agent}' is clean (0 uncommitted or branched changes)."));
+            return Ok(format!(
+                "Agent workspace '{agent}' is clean (0 uncommitted or branched changes)."
+            ));
         }
 
-        let mut output = format!("=== Isolated Workspace: '{agent}' ({}) ===\n", agent_ws_path.display());
+        let mut output = format!(
+            "=== Isolated Workspace: '{agent}' ({}) ===\n",
+            agent_ws_path.display()
+        );
         if !log_out.is_empty() {
             output.push_str("--- Revisions ---\n");
             output.push_str(&log_out);
@@ -324,12 +387,18 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if rebase, conflicts, or quality gates fail.
-    pub fn merge_agent_workspace(workspace_root: &Path, agent: &str, strategy: Option<&str>) -> Result<String> {
+    pub fn merge_agent_workspace(
+        workspace_root: &Path,
+        agent: &str,
+        strategy: Option<&str>,
+    ) -> Result<String> {
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 
         if !is_jj_in_path() {
-            return Err(AgyError::Process("Jujutsu 'jj' CLI binary not found in PATH".to_owned()));
+            return Err(AgyError::Process(
+                "Jujutsu 'jj' CLI binary not found in PATH".to_owned(),
+            ));
         }
 
         if !Self::is_jj_repo(&repo_root) {
@@ -355,13 +424,24 @@ impl JujutsuWorkspace {
         // Check if there are any changes to merge
         let is_clean = Self::is_workspace_clean(&agent_ws_path);
         let mut log_revs_cmd = Command::new("jj");
-        log_revs_cmd.args(["--color=never", "log", "-r", &format!("default@..{agent}@"), "--no-graph", "-T", "id\n"]);
+        log_revs_cmd.args([
+            "--color=never",
+            "log",
+            "-r",
+            &format!("default@..{agent}@"),
+            "--no-graph",
+            "-T",
+            "id\n",
+        ]);
         log_revs_cmd.current_dir(&repo_root);
-        let revs_out = SubprocessSupervisor::run_supervised(log_revs_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            .map_or_default(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned());
+        let revs_out =
+            SubprocessSupervisor::run_supervised(log_revs_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                .map_or_default(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned());
 
         if is_clean && revs_out.is_empty() {
-            return Ok(format!("Isolated workspace '{agent}' has no changes to merge into '@'."));
+            return Ok(format!(
+                "Isolated workspace '{agent}' has no changes to merge into '@'."
+            ));
         }
 
         let start_op_id = query_current_op_id(&repo_root);
@@ -391,7 +471,11 @@ impl JujutsuWorkspace {
                     "✅ Successfully merged isolated workspace for '{agent}' onto '@' (strategy: {strat}):\n\
                      - Quality gates passed: {}\n\
                      - Workspace '{}' forgotten and cleaned up.",
-                    if gate_names.is_empty() { "none configured".to_owned() } else { gate_names.join(", ") },
+                    if gate_names.is_empty() {
+                        "none configured".to_owned()
+                    } else {
+                        gate_names.join(", ")
+                    },
                     agent_ws_path.display()
                 );
                 if !warnings.is_empty() {
@@ -403,7 +487,7 @@ impl JujutsuWorkspace {
                     }
                 }
                 Ok(report)
-            }
+            },
             Err(errors) => {
                 restore_op(&repo_root, start_op_id.as_deref());
                 Err(AgyError::Process(format!(
@@ -412,7 +496,7 @@ impl JujutsuWorkspace {
                     errors.join("\n"),
                     agent_ws_path.display()
                 )))
-            }
+            },
         }
     }
 }
@@ -421,16 +505,34 @@ fn snapshot_workspace(ws_path: &Path) {
     let mut status_cmd = Command::new("jj");
     status_cmd.args(["--color=never", "status"]);
     status_cmd.current_dir(ws_path);
-    drop(SubprocessSupervisor::run_supervised(status_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS));
+    drop(SubprocessSupervisor::run_supervised(
+        status_cmd,
+        DEFAULT_VCS_QUERY_TIMEOUT_SECS,
+    ));
 }
 
 fn query_current_op_id(repo_root: &Path) -> Option<String> {
     let mut op_cmd = Command::new("jj");
-    op_cmd.args(["--color=never", "op", "log", "-n", "1", "--no-graph", "-T", "id"]);
+    op_cmd.args([
+        "--color=never",
+        "op",
+        "log",
+        "-n",
+        "1",
+        "--no-graph",
+        "-T",
+        "id",
+    ]);
     op_cmd.current_dir(repo_root);
     SubprocessSupervisor::run_supervised(op_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
         .ok()
-        .and_then(|out| if out.status.success() { Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()) } else { None })
+        .and_then(|out| {
+            if out.status.success() {
+                Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+            } else {
+                None
+            }
+        })
         .filter(|id| !id.is_empty())
 }
 
@@ -439,20 +541,33 @@ fn restore_op(repo_root: &Path, op_id: Option<&str>) {
         let mut restore_cmd = Command::new("jj");
         restore_cmd.args(["--color=never", "op", "restore", id]);
         restore_cmd.current_dir(repo_root);
-        drop(SubprocessSupervisor::run_supervised(restore_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS));
+        drop(SubprocessSupervisor::run_supervised(
+            restore_cmd,
+            DEFAULT_VCS_QUERY_TIMEOUT_SECS,
+        ));
     }
 }
 
 fn execute_merge_vcs_steps(repo_root: &Path, agent: &str, strategy: &str) -> Result<()> {
     if strategy == "squash" {
         let mut squash_cmd = Command::new("jj");
-        squash_cmd.args(["--color=never", "squash", "--from", &format!("{agent}@"), "--into", "@"]);
+        squash_cmd.args([
+            "--color=never",
+            "squash",
+            "--from",
+            &format!("{agent}@"),
+            "--into",
+            "@",
+        ]);
         squash_cmd.current_dir(repo_root);
-        let squash_res = SubprocessSupervisor::run_supervised(squash_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            .map_err(|e| AgyError::Process(format!("Failed to execute 'jj squash': {e}")))?;
+        let squash_res =
+            SubprocessSupervisor::run_supervised(squash_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                .map_err(|e| AgyError::Process(format!("Failed to execute 'jj squash': {e}")))?;
         if !squash_res.status.success() {
             let stderr = String::from_utf8_lossy(&squash_res.stderr);
-            return Err(AgyError::Process(format!("'jj squash --from {agent}@ --into @' failed: {stderr}")));
+            return Err(AgyError::Process(format!(
+                "'jj squash --from {agent}@ --into @' failed: {stderr}"
+            )));
         }
     } else {
         // Rebase revision(s) onto @
@@ -460,19 +575,29 @@ fn execute_merge_vcs_steps(repo_root: &Path, agent: &str, strategy: &str) -> Res
         let mut rebase_cmd = Command::new("jj");
         rebase_cmd.args(["--color=never", "rebase", "-s", &roots_expr, "-d", "@"]);
         rebase_cmd.current_dir(repo_root);
-        let rebase_res = SubprocessSupervisor::run_supervised(rebase_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
+        let rebase_res =
+            SubprocessSupervisor::run_supervised(rebase_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS);
         let rebase_success = match rebase_res {
             Ok(ref out) if out.status.success() => true,
             _ => {
                 let mut fallback_cmd = Command::new("jj");
-                fallback_cmd.args(["--color=never", "rebase", "-s", &format!("{agent}@"), "-d", "@"]);
+                fallback_cmd.args([
+                    "--color=never",
+                    "rebase",
+                    "-s",
+                    &format!("{agent}@"),
+                    "-d",
+                    "@",
+                ]);
                 fallback_cmd.current_dir(repo_root);
                 SubprocessSupervisor::run_supervised(fallback_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
                     .is_ok_and(|out| out.status.success())
-            }
+            },
         };
         if !rebase_success {
-            return Err(AgyError::Process(format!("Failed to rebase revisions from agent '{agent}' onto '@'")));
+            return Err(AgyError::Process(format!(
+                "Failed to rebase revisions from agent '{agent}' onto '@'"
+            )));
         }
 
         // Create new working copy commit on top of rebased changes
@@ -480,10 +605,14 @@ fn execute_merge_vcs_steps(repo_root: &Path, agent: &str, strategy: &str) -> Res
         new_cmd.args(["--color=never", "new", &format!("{agent}@")]);
         new_cmd.current_dir(repo_root);
         let new_res = SubprocessSupervisor::run_supervised(new_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            .map_err(|e| AgyError::Process(format!("Failed to advance working copy via 'jj new': {e}")))?;
+            .map_err(|e| {
+                AgyError::Process(format!("Failed to advance working copy via 'jj new': {e}"))
+            })?;
         if !new_res.status.success() {
             let stderr = String::from_utf8_lossy(&new_res.stderr);
-            return Err(AgyError::Process(format!("'jj new {agent}@' failed: {stderr}")));
+            return Err(AgyError::Process(format!(
+                "'jj new {agent}@' failed: {stderr}"
+            )));
         }
     }
     Ok(())
@@ -491,9 +620,17 @@ fn execute_merge_vcs_steps(repo_root: &Path, agent: &str, strategy: &str) -> Res
 
 fn check_conflicts(repo_root: &Path, _agent: &str, agent_ws_path: &Path) -> Result<()> {
     let mut conf_cmd = Command::new("jj");
-    conf_cmd.args(["--color=never", "log", "-r", "conflicts() & @::", "--no-graph"]);
+    conf_cmd.args([
+        "--color=never",
+        "log",
+        "-r",
+        "conflicts() & @::",
+        "--no-graph",
+    ]);
     conf_cmd.current_dir(repo_root);
-    if let Ok(conf_out) = SubprocessSupervisor::run_supervised(conf_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS) {
+    if let Ok(conf_out) =
+        SubprocessSupervisor::run_supervised(conf_cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+    {
         let conf_str = String::from_utf8_lossy(&conf_out.stdout).trim().to_owned();
         if !conf_str.is_empty() {
             return Err(AgyError::Process(format!(
@@ -548,7 +685,10 @@ mod tests {
             .unwrap()
             .to_path_buf();
         assert!(JujutsuWorkspace::workspace_exists(&root, "default"));
-        assert!(!JujutsuWorkspace::workspace_exists(&root, "non_existent_workspace_12345"));
+        assert!(!JujutsuWorkspace::workspace_exists(
+            &root,
+            "non_existent_workspace_12345"
+        ));
     }
 
     #[test]

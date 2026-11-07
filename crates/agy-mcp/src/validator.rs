@@ -1,6 +1,7 @@
 //! Validation engine verifying tool specifications and host binary prerequisites.
 
 use agy_common::DEFAULT_MISSING_BINARIES_PREVIEW;
+
 use crate::models::{OutputCapture, ToolAction, ToolDefinition};
 
 /// Diagnostic summary produced when inspecting the declarative toolset at boot.
@@ -31,14 +32,21 @@ impl ValidationReport {
 
             let sample = missing_names.join(", ");
             let suffix = if self.missing_binaries.len() > DEFAULT_MISSING_BINARIES_PREVIEW {
-                format!(" +{} more", self.missing_binaries.len().saturating_sub(DEFAULT_MISSING_BINARIES_PREVIEW))
+                format!(
+                    " +{} more",
+                    self.missing_binaries
+                        .len()
+                        .saturating_sub(DEFAULT_MISSING_BINARIES_PREVIEW)
+                )
             } else {
                 String::new()
             };
 
             format!(
                 "[agy-mcp] Loaded {} tools: {} operational, {} with missing binaries [{sample}{suffix}]",
-                self.total_tools, self.verified_tools, self.missing_binaries.len()
+                self.total_tools,
+                self.verified_tools,
+                self.missing_binaries.len()
             )
         }
     }
@@ -54,8 +62,7 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
 
     for tool in tools {
         match tool.action {
-            ToolAction::StaticCommand
-            | ToolAction::ParameterizedCommand => {
+            ToolAction::StaticCommand | ToolAction::ParameterizedCommand => {
                 if tool.output_capture == OutputCapture::JsonSpans {
                     report.warnings.push(format!(
                         "Tool '{}' specifies output_capture='json_spans' on a command action; falling back to combined output. Use 'cargo_json_diagnostics' action for structured compiler spans.",
@@ -67,23 +74,33 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
                     if which::which(binary).is_ok() {
                         report.verified_tools = report.verified_tools.saturating_add(1);
                     } else {
-                        report.missing_binaries.push((tool.name.clone(), binary.to_owned()));
+                        report
+                            .missing_binaries
+                            .push((tool.name.clone(), binary.to_owned()));
                     }
                 } else {
-                    report.warnings.push(format!("Tool '{}' has command action but empty command vector", tool.name));
+                    report.warnings.push(format!(
+                        "Tool '{}' has command action but empty command vector",
+                        tool.name
+                    ));
                 }
-            }
+            },
             ToolAction::CargoJsonDiagnostics => {
                 if let Some(binary) = tool.primary_binary() {
                     if which::which(binary).is_ok() {
                         report.verified_tools = report.verified_tools.saturating_add(1);
                     } else {
-                        report.missing_binaries.push((tool.name.clone(), binary.to_owned()));
+                        report
+                            .missing_binaries
+                            .push((tool.name.clone(), binary.to_owned()));
                     }
                 } else {
-                    report.warnings.push(format!("Tool '{}' has command action but empty command vector", tool.name));
+                    report.warnings.push(format!(
+                        "Tool '{}' has command action but empty command vector",
+                        tool.name
+                    ));
                 }
-            }
+            },
             ToolAction::FileRead
             | ToolAction::FileWrite
             | ToolAction::MpatchEdit
@@ -95,10 +112,13 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
             | ToolAction::WorkspaceMerge => {
                 // In-process native actions are always verified
                 report.verified_tools = report.verified_tools.saturating_add(1);
-            }
+            },
             ToolAction::Unknown(ref act) => {
-                report.warnings.push(format!("Tool '{}' specifies unrecognized action '{act}'", tool.name));
-            }
+                report.warnings.push(format!(
+                    "Tool '{}' specifies unrecognized action '{act}'",
+                    tool.name
+                ));
+            },
         }
     }
 
@@ -151,6 +171,9 @@ mod tests {
 
         let report = validate_tools(&tools);
         assert_eq!(report.warnings.len(), 1);
-        assert!(report.warnings[0].contains("specifies output_capture='json_spans' on a command action"));
+        assert!(
+            report.warnings[0]
+                .contains("specifies output_capture='json_spans' on a command action")
+        );
     }
 }

@@ -1,10 +1,9 @@
 //! Agent scoping and tool allowlisting for `agy-mcp`.
 
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-use agy_common::FastHashSet;
-use agy_common::frontmatter::AgentFrontmatter;
+use std::{collections::BTreeMap, fs, path::Path};
+
+use agy_common::{FastHashSet, frontmatter::AgentFrontmatter};
+
 use crate::models::AgentGuard;
 
 /// Resolves the requested agent from command line arguments, environment variables, or `.pipeline/active_agent.json`.
@@ -72,11 +71,17 @@ fn read_active_agent_from_state(workspace_root: &Path) -> Option<String> {
 /// Reads directly from the agent Markdown frontmatter (`mcp_tools:`).
 /// If no agent file exists or if no tools are listed, returns an empty set (air-gapped default deny).
 #[must_use]
-pub(crate) fn resolve_allowed_tools(workspace_root: &Path, agent_name: &str) -> FastHashSet<String> {
+pub(crate) fn resolve_allowed_tools(
+    workspace_root: &Path,
+    agent_name: &str,
+) -> FastHashSet<String> {
     parse_tools_from_agent_files(workspace_root, agent_name).unwrap_or_default()
 }
 
-fn parse_tools_from_agent_files(workspace_root: &Path, agent_name: &str) -> Option<FastHashSet<String>> {
+fn parse_tools_from_agent_files(
+    workspace_root: &Path,
+    agent_name: &str,
+) -> Option<FastHashSet<String>> {
     let path = agy_common::find_agent_manifest_path(workspace_root, agent_name)?;
     if path.is_file()
         && let Ok(content) = fs::read_to_string(&path)
@@ -149,7 +154,11 @@ pub(crate) fn resolve_agent_guards(
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit tests allow panics on test setup")]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Unit tests allow panics on test setup"
+)]
 mod tests {
     use super::*;
 
@@ -171,19 +180,26 @@ mod tests {
 
     #[test]
     fn test_read_active_agent_from_state() {
-        let temp_dir = std::env::temp_dir().join(format!("agy_agent_scope_test_{}", std::process::id()));
+        let temp_dir =
+            std::env::temp_dir().join(format!("agy_agent_scope_test_{}", std::process::id()));
         let paths = agy_common::AgyStatePaths::new(&temp_dir);
         let state_dir = paths.state_dir();
         fs::create_dir_all(&state_dir).expect("create state dir");
 
         // 1. JSON state
         fs::write(paths.active_agent_file(), r#"{"agent": "test-author"}"#).expect("write json");
-        assert_eq!(read_active_agent_from_state(&temp_dir), Some("test-author".to_owned()));
+        assert_eq!(
+            read_active_agent_from_state(&temp_dir),
+            Some("test-author".to_owned())
+        );
 
         // 2. Text fallback
         fs::remove_file(paths.active_agent_file()).expect("remove json");
         fs::write(state_dir.join("active_agent"), "finisher\n").expect("write txt");
-        assert_eq!(read_active_agent_from_state(&temp_dir), Some("finisher".to_owned()));
+        assert_eq!(
+            read_active_agent_from_state(&temp_dir),
+            Some("finisher".to_owned())
+        );
 
         drop(fs::remove_dir_all(&temp_dir));
     }

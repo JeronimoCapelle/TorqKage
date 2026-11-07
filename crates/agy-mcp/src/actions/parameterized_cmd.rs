@@ -1,9 +1,12 @@
 //! `parameterized_cmd` action handler executing bounded host binaries with argument regex validation.
 
 use std::path::Path;
-use crate::actions::execute_supervised_command_with_detector;
-use crate::guards::truncate_output;
-use crate::models::{OutputCapture, ToolDefinition};
+
+use crate::{
+    actions::execute_supervised_command_with_detector,
+    guards::truncate_output,
+    models::{OutputCapture, ToolDefinition},
+};
 
 fn validate_and_build_args(
     tool: &ToolDefinition,
@@ -47,15 +50,12 @@ fn validate_and_build_args(
     Ok(dynamic_args)
 }
 
-fn format_captured_output(
-    output: &std::process::Output,
-    tool: &ToolDefinition,
-) -> String {
+fn format_captured_output(output: &std::process::Output, tool: &ToolDefinition) -> String {
     match tool.output_capture {
         OutputCapture::ExitCodeOnly => {
             let code = output.status.code().unwrap_or(-1);
             format!("Process exited with status code {code}.")
-        }
+        },
 
         OutputCapture::Stderr => {
             let stderr_str = String::from_utf8_lossy(&output.stderr);
@@ -65,12 +65,13 @@ fn format_captured_output(
                 return fallback.clone();
             }
             stderr_str.into_owned()
-        }
+        },
 
         OutputCapture::Both => {
             let stdout_str = String::from_utf8_lossy(&output.stdout);
             let stderr_str = String::from_utf8_lossy(&output.stderr);
-            if stdout_str.trim().is_empty() && stderr_str.trim().is_empty()
+            if stdout_str.trim().is_empty()
+                && stderr_str.trim().is_empty()
                 && let Some(fallback) = &tool.empty_fallback
             {
                 return fallback.clone();
@@ -82,7 +83,7 @@ fn format_captured_output(
             } else {
                 format!("{stdout_str}\n--- stderr ---\n{stderr_str}")
             }
-        }
+        },
 
         OutputCapture::Stdout | OutputCapture::JsonSpans => {
             let text = String::from_utf8_lossy(&output.stdout);
@@ -92,7 +93,7 @@ fn format_captured_output(
                 return fallback.clone();
             }
             text.into_owned()
-        }
+        },
     }
 }
 
@@ -131,7 +132,10 @@ where
 
     let dynamic_args = validate_and_build_args(tool, arguments)?;
 
-    let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
+    let binary = tool
+        .command
+        .first()
+        .ok_or_else(|| "Empty command".to_owned())?;
     let base_args = tool.command.get(1..).unwrap_or(&[]);
 
     let output = execute_supervised_command_with_detector(
@@ -157,7 +161,8 @@ where
     let raw_text = format_captured_output(&output, tool);
 
     // Apply error fallback if configured and process failed
-    let final_text = if is_error && tool.error_fallback.as_deref() == Some("token_smart_not_found") {
+    let final_text = if is_error && tool.error_fallback.as_deref() == Some("token_smart_not_found")
+    {
         if raw_text.contains("could not find") || raw_text.contains("not found") {
             format!(
                 "Item not found in module tree. Verify item path or inspect module tree via inspect_module_structure.\n\n{raw_text}"
@@ -196,10 +201,15 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
     if pattern == "^E[0-9]{4}$" {
         return val.len() == 5
             && val.starts_with('E')
-            && val.get(1..).is_some_and(|digits| digits.chars().all(|c| c.is_ascii_digit()));
+            && val
+                .get(1..)
+                .is_some_and(|digits| digits.chars().all(|c| c.is_ascii_digit()));
     }
 
-    if let Some(inner) = pattern.strip_prefix("^[").and_then(|p| p.strip_suffix("]+$")) {
+    if let Some(inner) = pattern
+        .strip_prefix("^[")
+        .and_then(|p| p.strip_suffix("]+$"))
+    {
         let allow_lower = inner.contains("a-z");
         let allow_upper = inner.contains("A-Z");
         let allow_digit = inner.contains("0-9");
@@ -232,23 +242,33 @@ fn matches_pattern(val: &str, pattern: &str) -> bool {
     reason = "Unit test assertions"
 )]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::models::ToolArg;
-    use serde_json::json;
 
     #[test]
     fn test_pattern_matching() {
         assert!(matches_pattern("Processor", "^[a-zA-Z0-9_:]+$"));
         assert!(matches_pattern("types::state", "^[a-zA-Z0-9_:]+$"));
         assert!(matches_pattern("unit-test_1", "^[a-zA-Z0-9_-]+$"));
-        assert!(matches_pattern("struct ToolDefinition", "^[^\\x00-\\x1f]+$"));
+        assert!(matches_pattern(
+            "struct ToolDefinition",
+            "^[^\\x00-\\x1f]+$"
+        ));
         assert!(!matches_pattern("bad\0text", "^[^\\x00-\\x1f]+$"));
-        assert!(matches_pattern("import sympy\nx = sympy.Symbol('x')", "^[^\\x00]+$"));
+        assert!(matches_pattern(
+            "import sympy\nx = sympy.Symbol('x')",
+            "^[^\\x00]+$"
+        ));
         assert!(!matches_pattern("bad\0code", "^[^\\x00]+$"));
         assert!(!matches_pattern("foo; rm -rf /", "^[a-zA-Z0-9_:]+$"));
         assert!(!matches_pattern("foo bar", "^[a-zA-Z0-9_:]+$"));
         // Enhanced pattern tests: file paths, VCS revisions, rustc error codes
-        assert!(matches_pattern("crates/agy-mcp/src/lib.rs", "^[a-zA-Z0-9_./-]+$"));
+        assert!(matches_pattern(
+            "crates/agy-mcp/src/lib.rs",
+            "^[a-zA-Z0-9_./-]+$"
+        ));
         assert!(matches_pattern("HEAD~1", "^[a-zA-Z0-9_@~^.:-]+$"));
         assert!(matches_pattern("default@", "^[a-zA-Z0-9_@~^.:-]+$"));
         assert!(matches_pattern("E0308", "^E[0-9]{4}$"));
@@ -338,7 +358,11 @@ mod tests {
         let temp = create_test_dir("ast_grep");
         let tool = ToolDefinition {
             name: "ast_grep_rewrite".to_owned(),
-            command: vec!["ast-grep".to_owned(), "run".to_owned(), "--update-all".to_owned()],
+            command: vec![
+                "ast-grep".to_owned(),
+                "run".to_owned(),
+                "--update-all".to_owned(),
+            ],
             args: vec![
                 ToolArg {
                     name: "pattern".to_owned(),
@@ -504,7 +528,10 @@ mod tests {
 
         let (out, is_err) = execute(&tool, &temp, &args).unwrap();
         assert!(!is_err);
-        assert!(out.contains("NETWORK_BLOCKED"), "Expected network to be blocked in bwrap jail, got: {out}");
+        assert!(
+            out.contains("NETWORK_BLOCKED"),
+            "Expected network to be blocked in bwrap jail, got: {out}"
+        );
         assert!(!out.contains("CONNECTED"));
     }
 }

@@ -16,7 +16,10 @@
 //! - `record-handoff`: Captures session state and modified files to `.agy/state/` upon session termination.
 //! - `inject-wake`: Injects prior handoff state into Turn 1 of new conversation sessions.
 
-#![allow(clippy::print_stdout, reason = "CLI hook tool emits ProtoJSON directly to stdout")]
+#![allow(
+    clippy::print_stdout,
+    reason = "CLI hook tool emits ProtoJSON directly to stdout"
+)]
 #![allow(clippy::print_stderr, reason = "CLI diagnostics are emitted to stderr")]
 
 mod config;
@@ -39,40 +42,40 @@ fn main() -> ExitCode {
         "pre-tool-use" | "tool-use" => {
             pre_tool_use::execute();
             ExitCode::SUCCESS
-        }
+        },
         "detect-wip" => {
             wip::execute();
             ExitCode::SUCCESS
-        }
+        },
         "check-conflicts" => {
             conflicts::execute();
             ExitCode::SUCCESS
-        }
+        },
         "check-subagent" => {
             subagent_gate::execute();
             ExitCode::SUCCESS
-        }
+        },
         "enforce-tool-policy" => {
             policy_gate::execute();
             ExitCode::SUCCESS
-        }
+        },
         "record-handoff" => {
             handoff::execute_record_handoff();
             ExitCode::SUCCESS
-        }
+        },
         "inject-wake" => {
             handoff::execute_inject_wake();
             ExitCode::SUCCESS
-        }
+        },
         "help" | "--help" | "-h" => {
             print_usage();
             ExitCode::SUCCESS
-        }
+        },
         _ => {
             eprintln!("agy-hooks: unknown command '{command}'");
             print_usage();
             ExitCode::FAILURE
-        }
+        },
     }
 }
 
@@ -83,11 +86,25 @@ fn print_usage() {
     eprintln!("  agy-hooks <COMMAND>");
     eprintln!();
     eprintln!("COMMANDS:");
-    eprintln!("  pre-tool-use          Unified hybrid PreToolUse hook evaluating hooks.toml pipeline (alias: tool-use)");
-    eprintln!("  detect-wip            PreInvocation ephemeral notification on working tree modification");
-    eprintln!("  check-conflicts       PreToolUse hook blocking builds/tests when unresolved conflicts exist");
-    eprintln!("  check-subagent        PreToolUse hook blocking subagent dispatch when pre-launch quality gates fail");
-    eprintln!("  enforce-tool-policy   PreToolUse hook enforcing granular ASK vs ALLOW decision per tool");
-    eprintln!("  record-handoff        Stop hook recording session metadata to .agy/state/last_handoff.md");
-    eprintln!("  inject-wake           SessionStart hook injecting last handoff state into conversation");
+    eprintln!(
+        "  pre-tool-use          Unified hybrid PreToolUse hook evaluating hooks.toml pipeline (alias: tool-use)"
+    );
+    eprintln!(
+        "  detect-wip            PreInvocation ephemeral notification on working tree modification"
+    );
+    eprintln!(
+        "  check-conflicts       PreToolUse hook blocking builds/tests when unresolved conflicts exist"
+    );
+    eprintln!(
+        "  check-subagent        PreToolUse hook blocking subagent dispatch when pre-launch quality gates fail"
+    );
+    eprintln!(
+        "  enforce-tool-policy   PreToolUse hook enforcing granular ASK vs ALLOW decision per tool"
+    );
+    eprintln!(
+        "  record-handoff        Stop hook recording session metadata to .agy/state/last_handoff.md"
+    );
+    eprintln!(
+        "  inject-wake           SessionStart hook injecting last handoff state into conversation"
+    );
 }

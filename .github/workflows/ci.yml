@@ -12,26 +12,67 @@ env:
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  ci:
+  sanity:
+    name: Sanity & File Hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Sanity check (no credentials or oversized files)
+        run: |
+          echo "==> Verifying no sensitive .env files committed..."
+          if find . -maxdepth 3 \( -name ".env" -o -name ".env.local" \) | grep -v "/target/" | grep .; then
+            echo "::error::Sensitive .env files detected in repository."
+            exit 1
+          fi
+
+          echo "==> Verifying no oversized binaries (>25MB)..."
+          OVERSIZED=$(find . -type f -not -path "*/.*/*" -not -path "./target/*" -size +25M)
+          if [ -n "$OVERSIZED" ]; then
+            echo "::error::Files exceeding 25MB detected: $OVERSIZED"
+            exit 1
+          fi
+          echo "==> Sanity checks passed cleanly."
+
+  security-audit:
+    name: Supply Chain & License Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Security, License & Banned Dependency Audit (cargo-deny)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+
+  quality-gate:
     name: Build, Test & Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust toolchain (Nightly / Rust 2024)
+        uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy, rustfmt
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
+      - name: Verify code formatting (rustfmt)
+        run: cargo fmt --check
+
       - name: Verify compilation across all workspace crates
         run: cargo check --workspace --all-targets
+
+      - name: Enforce strict pedantic linter clean rules (clippy)
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Execute automated unit and integration tests
         run: cargo test --workspace
 
-      - name: Enforce strict pedantic linter clean rules
-        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Execute documentation tests
+        run: cargo test --workspace --doc

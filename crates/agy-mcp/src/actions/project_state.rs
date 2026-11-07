@@ -1,7 +1,7 @@
 //! In-process project state inspection for the MCP daemon.
 
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
+
 use agy_common::{
     AgyStatePaths, DEFAULT_VCS_QUERY_TIMEOUT_SECS, JujutsuWorkspace, SubprocessSupervisor,
 };
@@ -12,7 +12,8 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
     let handoff = read_last_handoff(workspace_root);
     let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
 
-    let mut out = format!("# Project State: Ready\n- Branch: {branch}\n- Working Copy: {git_status}\n");
+    let mut out =
+        format!("# Project State: Ready\n- Branch: {branch}\n- Working Copy: {git_status}\n");
     if !project.docs.paths.is_empty() {
         out.push_str("- Documentation & Specs: ");
         out.push_str(&project.docs.paths.join(", "));
@@ -29,7 +30,15 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
 fn query_current_branch(root: &Path) -> String {
     if JujutsuWorkspace::is_jj_repo(root) {
         let mut cmd = Command::new("jj");
-        cmd.args(["--color=never", "log", "-r", "@", "--no-graph", "-T", "bookmarks"]);
+        cmd.args([
+            "--color=never",
+            "log",
+            "-r",
+            "@",
+            "--no-graph",
+            "-T",
+            "bookmarks",
+        ]);
         cmd.current_dir(root);
         if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
             && out.status.success()
@@ -116,7 +125,11 @@ fn read_last_handoff(root: &Path) -> Option<String> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, reason = "Unit test assertions")]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "Unit test assertions"
+)]
 mod tests {
     use super::*;
 
@@ -143,7 +156,9 @@ mod tests {
 
         let (output, is_error) = execute(&temp);
         assert!(!is_error);
-        assert!(output.contains("- Documentation & Specs: docs, specs/rv32.md (grep via 'query_project_spec')"));
+        assert!(output.contains(
+            "- Documentation & Specs: docs, specs/rv32.md (grep via 'query_project_spec')"
+        ));
 
         drop(std::fs::remove_dir_all(&temp));
     }

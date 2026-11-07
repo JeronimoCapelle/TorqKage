@@ -9,8 +9,11 @@
     reason = "Integration test assertions"
 )]
 
-use std::io::Write;
-use std::process::{Command, Stdio};
+use std::{
+    io::Write,
+    process::{Command, Stdio},
+};
+
 use agy_common::{
     PreInvocationInput, PreInvocationResponse, SessionStartInput, SessionStartResponse, StopInput,
     StopResponse,
@@ -32,11 +35,15 @@ fn run_hook_subcommand(subcmd: &str, stdin_json: Option<&str>) -> (bool, String,
 
     if let Some(json) = stdin_json {
         if let Some(mut stdin) = child.stdin.take() {
-            stdin.write_all(json.as_bytes()).expect("write to stdin failed");
+            stdin
+                .write_all(json.as_bytes())
+                .expect("write to stdin failed");
         }
     }
 
-    let output = child.wait_with_output().expect("failed to read hook output");
+    let output = child
+        .wait_with_output()
+        .expect("failed to read hook output");
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
 
@@ -67,7 +74,8 @@ fn test_record_handoff_and_inject_wake_roundtrip_e2e() {
     let stop_json = serde_json::to_string(&stop_input).expect("serialize stop input");
     let (success_stop, stdout_stop, _) = run_hook_subcommand("record-handoff", Some(&stop_json));
     assert!(success_stop);
-    let stop_resp: StopResponse = serde_json::from_str(&stdout_stop).expect("valid StopResponse JSON");
+    let stop_resp: StopResponse =
+        serde_json::from_str(&stdout_stop).expect("valid StopResponse JSON");
     assert_eq!(stop_resp.decision, None); // {} permits stop
 
     // Check that .agy/state/last_handoff.md was created
@@ -90,7 +98,8 @@ fn test_record_handoff_and_inject_wake_roundtrip_e2e() {
     let (success_wake, stdout_wake, _) = run_hook_subcommand("inject-wake", Some(&start_json));
     assert!(success_wake);
 
-    let wake_resp: SessionStartResponse = serde_json::from_str(&stdout_wake).expect("valid SessionStartResponse");
+    let wake_resp: SessionStartResponse =
+        serde_json::from_str(&stdout_wake).expect("valid SessionStartResponse");
     assert_eq!(wake_resp.inject_steps.len(), 1);
 
     // Clean up temp workspace
@@ -121,7 +130,8 @@ fn test_detect_wip_consecutive_burns_zero_tokens_e2e() {
     // Immediate second call should be clean/unchanged -> burns 0 tokens ({})
     let (success2, stdout2, _) = run_hook_subcommand("detect-wip", Some(&input_json));
     assert!(success2);
-    let resp2: PreInvocationResponse = serde_json::from_str(&stdout2).expect("valid PreInvocationResponse");
+    let resp2: PreInvocationResponse =
+        serde_json::from_str(&stdout2).expect("valid PreInvocationResponse");
     assert_eq!(resp2.inject_steps, None);
     assert_eq!(stdout2, "{}");
 }
@@ -130,7 +140,8 @@ fn test_detect_wip_consecutive_burns_zero_tokens_e2e() {
 fn test_check_conflicts_e2e() {
     let (success, stdout, _) = run_hook_subcommand("check-conflicts", None);
     assert!(success);
-    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    let resp: agy_common::PreToolResponse =
+        serde_json::from_str(&stdout).expect("valid PreToolResponse");
     // Clean working repo should allow
     assert_eq!(resp.decision, agy_common::HookDecision::Allow);
 }
@@ -148,7 +159,8 @@ fn test_pre_tool_use_read_only_allowed_e2e() {
     let input_json = serde_json::to_string(&payload).expect("serialize payload");
     let (success, stdout, _) = run_hook_subcommand("pre-tool-use", Some(&input_json));
     assert!(success);
-    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    let resp: agy_common::PreToolResponse =
+        serde_json::from_str(&stdout).expect("valid PreToolResponse");
     assert_eq!(resp.decision, agy_common::HookDecision::Allow);
 }
 
@@ -165,6 +177,7 @@ fn test_pre_tool_use_mutating_asks_e2e() {
     let input_json = serde_json::to_string(&payload).expect("serialize payload");
     let (success, stdout, _) = run_hook_subcommand("pre-tool-use", Some(&input_json));
     assert!(success);
-    let resp: agy_common::PreToolResponse = serde_json::from_str(&stdout).expect("valid PreToolResponse");
+    let resp: agy_common::PreToolResponse =
+        serde_json::from_str(&stdout).expect("valid PreToolResponse");
     assert_eq!(resp.decision, agy_common::HookDecision::Ask);
 }

@@ -1,11 +1,16 @@
 //! Data models, YAML frontmatter parser/serializer, and tool catalog definitions.
 
-use std::fs;
-use std::path::{Path, PathBuf};
-use agy_common::FastHashSet;
-use agy_common::tools::{
-    RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
-    ToolSafetyPolicy, ToolSandboxPolicy, resolve_tools,
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use agy_common::{
+    FastHashSet,
+    tools::{
+        RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
+        ToolSafetyPolicy, ToolSandboxPolicy, resolve_tools,
+    },
 };
 
 /// Category of an MCP tool for filtering and visual grouping.
@@ -109,8 +114,16 @@ impl ToolItem {
             sandbox: def.sandbox,
             preconditions: def.preconditions,
             formatting: def.formatting,
-            command: if def.command.is_empty() { None } else { Some(def.command) },
-            allowed_directories: if def.allowed_directories.is_empty() { None } else { Some(def.allowed_directories) },
+            command: if def.command.is_empty() {
+                None
+            } else {
+                Some(def.command)
+            },
+            allowed_directories: if def.allowed_directories.is_empty() {
+                None
+            } else {
+                Some(def.allowed_directories)
+            },
             timeout_seconds: Some(def.timeout_seconds),
             output_capture: Some(format!("{:?}", def.output_capture).to_lowercase()),
             modified: false,
@@ -161,7 +174,12 @@ impl ToolItem {
     #[must_use]
     pub(crate) fn infer_category(name: &str) -> ToolCategory {
         let n = name.to_ascii_lowercase();
-        if n.contains("test") || n.contains("fuzz") || n.contains("mutation") || n.contains("mutant") || n.contains("insta") {
+        if n.contains("test")
+            || n.contains("fuzz")
+            || n.contains("mutation")
+            || n.contains("mutant")
+            || n.contains("insta")
+        {
             ToolCategory::Testing
         } else if n.contains("bench")
             || n.contains("profile")
@@ -196,7 +214,12 @@ impl ToolItem {
             || n.contains("hack")
         {
             ToolCategory::Release
-        } else if n.contains("search") || n.contains("read") || n.contains("write") || n.contains("modify") || n.contains("patch") {
+        } else if n.contains("search")
+            || n.contains("read")
+            || n.contains("write")
+            || n.contains("modify")
+            || n.contains("patch")
+        {
             ToolCategory::Filesystem
         } else if n.contains("inspect")
             || n.contains("query")
@@ -222,8 +245,10 @@ impl ToolItem {
 /// # Errors
 /// Returns an error if reading or parsing the file fails.
 pub(crate) fn load_tools_from_file(path: &Path) -> Result<Vec<ToolItem>, String> {
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-    let raw: RawToolsConfig = toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    let raw: RawToolsConfig =
+        toml::from_str(&content).map_err(|e| format!("Failed to parse {}: {e}", path.display()))?;
     let defs = resolve_tools(&raw);
     let mut items: Vec<ToolItem> = defs.into_iter().map(ToolItem::from_definition).collect();
     items.sort_by(|a, b| a.name.cmp(&b.name));
@@ -277,10 +302,11 @@ pub(crate) fn update_tool_permission_gate_in_file(
         } else if gate_idx < lines.len() {
             lines.remove(gate_idx);
         }
-    } else if require_gate
-        && let Some(start_idx) = section_start_idx
-    {
-        lines.insert(start_idx.saturating_add(1), "require_permission_gate = true".to_owned());
+    } else if require_gate && let Some(start_idx) = section_start_idx {
+        lines.insert(
+            start_idx.saturating_add(1),
+            "require_permission_gate = true".to_owned(),
+        );
     }
 
     let mut new_content = lines.join("\n");
@@ -345,22 +371,25 @@ impl AgentManifest {
     /// Cycles the agent's permission mode and command execution policy:
     /// Autonomous (acceptEdits / off) -> Supervised (acceptEdits / ask) -> Planning (plan / off).
     pub(crate) fn cycle_permission_policy(&mut self) -> &'static str {
-        let desc = match (self.permission_mode.as_str(), self.command_execution_policy.as_str()) {
+        let desc = match (
+            self.permission_mode.as_str(),
+            self.command_execution_policy.as_str(),
+        ) {
             ("acceptEdits", "off") => {
                 "acceptEdits".clone_into(&mut self.permission_mode);
                 "ask".clone_into(&mut self.command_execution_policy);
                 "Supervised (ASK before commands)"
-            }
+            },
             ("acceptEdits", "ask" | "prompt") => {
                 "plan".clone_into(&mut self.permission_mode);
                 "off".clone_into(&mut self.command_execution_policy);
                 "Planning (Read-only PLAN mode)"
-            }
+            },
             _ => {
                 "acceptEdits".clone_into(&mut self.permission_mode);
                 "off".clone_into(&mut self.command_execution_policy);
                 "Autonomous (ALLOW all commands)"
-            }
+            },
         };
         self.modified = true;
         desc
@@ -372,13 +401,19 @@ impl AgentManifest {
         let mut out = String::new();
         out.push_str("---\n");
         out.push_str(&format!("name: {}\n", self.name));
-        out.push_str(&format!("description: \"{}\"\n", self.description.replace('"', "\\\"")));
+        out.push_str(&format!(
+            "description: \"{}\"\n",
+            self.description.replace('"', "\\\"")
+        ));
         out.push_str(&format!("effort: {}\n", self.effort));
         if !self.permission_mode.is_empty() {
             out.push_str(&format!("permissionMode: {}\n", self.permission_mode));
         }
         if !self.command_execution_policy.is_empty() {
-            out.push_str(&format!("commandExecutionPolicy: {}\n", self.command_execution_policy));
+            out.push_str(&format!(
+                "commandExecutionPolicy: {}\n",
+                self.command_execution_policy
+            ));
         }
         if self.role_flags.main_agent {
             out.push_str("mainAgent: true\n");
@@ -458,12 +493,16 @@ impl AgentManifest {
 
 /// Parses an agent Markdown file into an `AgentManifest`.
 pub(crate) fn parse_agent_file(path: &Path) -> Result<AgentManifest, String> {
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    let content =
+        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
     parse_agent_markdown(path.to_path_buf(), &content)
 }
 
 /// Parses an agent Markdown content string.
-pub(crate) fn parse_agent_markdown(file_path: PathBuf, content: &str) -> Result<AgentManifest, String> {
+pub(crate) fn parse_agent_markdown(
+    file_path: PathBuf,
+    content: &str,
+) -> Result<AgentManifest, String> {
     let parsed = agy_common::frontmatter::AgentFrontmatter::parse(content)?;
     let mut name = parsed.name;
     if name.is_empty()
@@ -527,14 +566,18 @@ pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
     let mut seen_names = FastHashSet::default();
 
     for dir in candidates {
-        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
 
         for entry in entries.flatten() {
             let path = entry.path();
             if path.extension() != Some(std::ffi::OsStr::new("md")) {
                 continue;
             }
-            let Ok(agent) = parse_agent_file(&path) else { continue };
+            let Ok(agent) = parse_agent_file(&path) else {
+                continue;
+            };
             if seen_names.insert(agent.name.clone()) {
                 agents.push(agent);
             }
@@ -551,14 +594,38 @@ mod tests {
 
     #[test]
     fn test_tool_category_inference() {
-        assert_eq!(ToolItem::infer_category("cargo_clippy"), ToolCategory::Compilation);
-        assert_eq!(ToolItem::infer_category("cargo_nextest"), ToolCategory::Testing);
-        assert_eq!(ToolItem::infer_category("llvm_mca"), ToolCategory::Profiling);
-        assert_eq!(ToolItem::infer_category("write_file"), ToolCategory::Filesystem);
-        assert_eq!(ToolItem::infer_category("modify_code"), ToolCategory::Filesystem);
-        assert_eq!(ToolItem::infer_category("cargo_deny"), ToolCategory::Release);
-        assert_eq!(ToolItem::infer_category("inspect_project_state"), ToolCategory::Diagnostics);
-        assert_eq!(ToolItem::infer_category("unknown_custom_tool"), ToolCategory::Other);
+        assert_eq!(
+            ToolItem::infer_category("cargo_clippy"),
+            ToolCategory::Compilation
+        );
+        assert_eq!(
+            ToolItem::infer_category("cargo_nextest"),
+            ToolCategory::Testing
+        );
+        assert_eq!(
+            ToolItem::infer_category("llvm_mca"),
+            ToolCategory::Profiling
+        );
+        assert_eq!(
+            ToolItem::infer_category("write_file"),
+            ToolCategory::Filesystem
+        );
+        assert_eq!(
+            ToolItem::infer_category("modify_code"),
+            ToolCategory::Filesystem
+        );
+        assert_eq!(
+            ToolItem::infer_category("cargo_deny"),
+            ToolCategory::Release
+        );
+        assert_eq!(
+            ToolItem::infer_category("inspect_project_state"),
+            ToolCategory::Diagnostics
+        );
+        assert_eq!(
+            ToolItem::infer_category("unknown_custom_tool"),
+            ToolCategory::Other
+        );
     }
 
     #[test]
@@ -602,7 +669,10 @@ You are a test agent. Always pass tests.
         assert!(!manifest.inherit_mcp);
         assert_eq!(manifest.mcp_tools, vec!["cargo_clippy", "cargo_test"]);
         assert_eq!(manifest.allowed_subagents, vec!["mini"]);
-        assert_eq!(manifest.pre_launch_checks, vec!["compilation", "vcs_conflicts"]);
+        assert_eq!(
+            manifest.pre_launch_checks,
+            vec!["compilation", "vcs_conflicts"]
+        );
         assert!(manifest.directives.contains("You are a test agent."));
 
         let serialized = manifest.serialize();

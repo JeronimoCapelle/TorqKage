@@ -1,10 +1,10 @@
 //! `cargo_json_diagnostics` action handler parsing compiler JSON streams.
 
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
+
 use agy_common::SubprocessSupervisor;
-use crate::guards::truncate_output;
-use crate::models::ToolDefinition;
+
+use crate::{guards::truncate_output, models::ToolDefinition};
 
 /// Executes a cargo command with `--message-format=json`, filtering compiler diagnostics.
 ///
@@ -20,14 +20,23 @@ pub(crate) fn execute(
         return Err(format!("Tool '{}' has no command configured", tool.name));
     }
 
-    let binary = tool.command.first().ok_or_else(|| "Empty command".to_owned())?;
+    let binary = tool
+        .command
+        .first()
+        .ok_or_else(|| "Empty command".to_owned())?;
     if !binary.contains('/') && which::which(binary).is_err() {
-        return Err(format!("Configured compiler binary '{binary}' for tool '{}' is not installed on host ($PATH)", tool.name));
+        return Err(format!(
+            "Configured compiler binary '{binary}' for tool '{}' is not installed on host ($PATH)",
+            tool.name
+        ));
     }
     let mut args: Vec<String> = tool.command.get(1..).unwrap_or(&[]).to_vec();
 
     // Ensure --color=never is supplied if not already present
-    if !args.iter().any(|a| a == "--color" || a.starts_with("--color=")) {
+    if !args
+        .iter()
+        .any(|a| a == "--color" || a.starts_with("--color="))
+    {
         args.push("--color=never".to_owned());
     }
 
@@ -42,17 +51,26 @@ pub(crate) fn execute(
 
     if rendered_diagnostics.is_empty() {
         if output.status.success() {
-            return Ok(("Verification passed: 0 errors, 0 warnings.".to_owned(), false));
+            return Ok((
+                "Verification passed: 0 errors, 0 warnings.".to_owned(),
+                false,
+            ));
         }
 
         // Check if stderr contains something relevant (e.g. build failure or panic)
         let stderr_str = String::from_utf8_lossy(&output.stderr);
         let trimmed_stderr = stderr_str.trim();
         if !trimmed_stderr.is_empty() {
-            return Ok((format!("Verification check failed:\n{trimmed_stderr}"), true));
+            return Ok((
+                format!("Verification check failed:\n{trimmed_stderr}"),
+                true,
+            ));
         }
 
-        return Ok(("Verification failed with non-zero exit code.".to_owned(), true));
+        return Ok((
+            "Verification failed with non-zero exit code.".to_owned(),
+            true,
+        ));
     }
 
     let joined = rendered_diagnostics.join("\n\n");
@@ -80,7 +98,10 @@ fn parse_cargo_json(stdout: &str) -> (Vec<String>, bool) {
             && val.get("reason").and_then(serde_json::Value::as_str) == Some("compiler-message")
             && let Some(message) = val.get("message")
         {
-            let level = message.get("level").and_then(serde_json::Value::as_str).unwrap_or("info");
+            let level = message
+                .get("level")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("info");
             if level == "error" {
                 has_errors = true;
             }

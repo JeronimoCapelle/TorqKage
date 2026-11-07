@@ -12,10 +12,15 @@
 //! internally by `rustc`, processing 8-byte and 4-byte chunks with zero indexing and
 //! zero casting for maximum hardware throughput.
 
-#![allow(clippy::module_name_repetitions, reason = "Explicit FastHashMap/FastHashSet/FastHasher names for clear unqualified imports")]
+#![allow(
+    clippy::module_name_repetitions,
+    reason = "Explicit FastHashMap/FastHashSet/FastHasher names for clear unqualified imports"
+)]
 
-use std::collections::{HashMap, HashSet};
-use std::hash::{BuildHasherDefault, Hasher};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::{BuildHasherDefault, Hasher},
+};
 
 /// Golden-ratio multiplicative constant used in rustc-hash and `FxHash`.
 const K: u64 = 0x517c_c1b7_2722_0a95;
@@ -112,8 +117,9 @@ pub fn fast_set_with_capacity<T>(capacity: usize) -> FastHashSet<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::hash::Hash;
+
+    use super::*;
 
     fn compute_hash<T: Hash>(val: &T) -> u64 {
         let mut hasher = FastHasher::default();

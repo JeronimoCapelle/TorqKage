@@ -15,7 +15,10 @@
 //! - [`server`]: Asynchronous JSON-RPC 2.0 event loop powered by Tokio.
 //! - [`validator`]: Startup and pre-flight validation verifying binaries, schemas, and guards.
 
-#![allow(clippy::print_stderr, reason = "Daemon diagnostics are logged to stderr")]
+#![allow(
+    clippy::print_stderr,
+    reason = "Daemon diagnostics are logged to stderr"
+)]
 
 mod actions;
 mod agent_scope;
@@ -27,8 +30,8 @@ mod schema;
 mod server;
 mod validator;
 
-use std::path::PathBuf;
-use std::process::ExitCode;
+use std::{path::PathBuf, process::ExitCode};
+
 use agy_common::WorkspaceResolver;
 use server::McpServer;
 
@@ -37,14 +40,17 @@ async fn main() -> ExitCode {
     let (workspace_root, config_path, agent_name) = resolve_workspace_and_config();
 
     eprintln!("[agy-mcp] Workspace root: '{}'", workspace_root.display());
-    eprintln!("[agy-mcp] Loading declarative tools configuration from '{}'...", config_path.display());
+    eprintln!(
+        "[agy-mcp] Loading declarative tools configuration from '{}'...",
+        config_path.display()
+    );
 
     let loaded_config = match config::load_full_config_from_path(&config_path) {
         Ok(t) => t,
         Err(err) => {
             eprintln!("🛑 [agy-mcp] Startup failure: {err}");
             return ExitCode::FAILURE;
-        }
+        },
     };
 
     let report = validator::validate_tools(&loaded_config.tools);
@@ -60,12 +66,7 @@ async fn main() -> ExitCode {
         guards.entry(k).or_insert(v);
     }
 
-    let server = McpServer::new(
-        loaded_config.tools,
-        workspace_root,
-        agent_name,
-        guards,
-    );
+    let server = McpServer::new(loaded_config.tools, workspace_root, agent_name, guards);
 
     if let Err(err) = server.run_stdio().await {
         eprintln!("🛑 [agy-mcp] Stdio loop error: {err}");

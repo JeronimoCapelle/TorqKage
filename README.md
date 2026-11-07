@@ -1,6 +1,6 @@
 # agy-suite
 
-[![CI](https://github.com/owner/agy-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/owner/agy-suite/actions/workflows/ci.yml)
+[![CI](https://github.com/JeronimoCapelle/agy-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/JeronimoCapelle/agy-suite/actions/workflows/ci.yml)
 [![Rust Edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org/)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)

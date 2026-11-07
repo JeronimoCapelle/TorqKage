@@ -1,10 +1,18 @@
 //! Unified declarative `PreToolUse` hybrid execution engine.
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
-use agy_common::{CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput, WorkspaceResolver};
-use crate::config::{CustomCheck, HooksConfig, matches_pattern};
-use crate::{conflicts, manifest_guard, policy_gate, stdin, subagent_gate};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+use agy_common::{
+    CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput, WorkspaceResolver,
+};
+
+use crate::{
+    config::{CustomCheck, HooksConfig, matches_pattern},
+    conflicts, manifest_guard, policy_gate, stdin, subagent_gate,
+};
 
 /// Executes the unified `pre-tool-use` hook.
 pub(crate) fn execute() {
@@ -14,7 +22,9 @@ pub(crate) fn execute() {
         .workspace_paths
         .first()
         .cloned()
-        .unwrap_or_else(|| WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from(".")));
+        .unwrap_or_else(|| {
+            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+        });
 
     let config = HooksConfig::load(&root);
     let response = evaluate_pre_tool_use(&input, &root, &config);
@@ -55,21 +65,24 @@ pub(crate) fn evaluate_pre_tool_use(
                              Autonomous loop halted to prevent token burn and code regression.\n\
                              Confirm manual override to allow tool '{tool_name}'?",
                             ledger.consecutive_failures,
-                            ledger.last_error_signature.as_deref().unwrap_or("Compilation error")
+                            ledger
+                                .last_error_signature
+                                .as_deref()
+                                .unwrap_or("Compilation error")
                         ));
                     }
                 }
-            }
+            },
             "manifest_guard" => {
                 if let Some(resp) = manifest_guard::evaluate_manifest_guard(input, root, config) {
                     return resp;
                 }
-            }
+            },
             "path_policies" => {
                 if let Some(resp) = evaluate_path_policies(input, root) {
                     return resp;
                 }
-            }
+            },
             "subagent_admission" => {
                 if tool_name == "invoke_subagent" {
                     let resp = subagent_gate::evaluate_tool_invocation(input);
@@ -77,14 +90,14 @@ pub(crate) fn evaluate_pre_tool_use(
                         return resp;
                     }
                 }
-            }
+            },
             "vcs_conflicts" => {
                 if policy_gate::tool_requires_gate(tool_name, root, "vcs_conflicts")
                     && let Some(reason) = conflicts::detect_conflicts(root)
                 {
                     return PreToolResponse::deny(reason);
                 }
-            }
+            },
             "tool_policy" => {
                 if policy_gate::is_tool_gated_in_config(tool_name, root) {
                     return PreToolResponse::ask(format!(
@@ -96,10 +109,10 @@ pub(crate) fn evaluate_pre_tool_use(
                         "Policy Gate: Tool '{tool_name}' applies automated filesystem or code modifications. Confirm execution?"
                     ));
                 }
-            }
+            },
             _ => {
                 // Non-native stages continue to declarative custom checks
-            }
+            },
         }
     }
 
@@ -108,9 +121,7 @@ pub(crate) fn evaluate_pre_tool_use(
         let matches = policy_gate::tool_requires_gate(tool_name, root, &check.name)
             || (!check.matcher.is_empty() && matches_pattern(tool_name, &check.matcher));
 
-        if matches
-            && let Some(resp) = execute_custom_check(check, root)
-        {
+        if matches && let Some(resp) = execute_custom_check(check, root) {
             return resp;
         }
     }
@@ -197,7 +208,10 @@ fn resolve_active_agent(input: &PreToolUseInput, root: &Path) -> Option<String> 
     clippy::collapsible_if,
     reason = "Deterministic priority resolution of tool argument payloads"
 )]
-pub(crate) fn evaluate_path_policies(input: &PreToolUseInput, root: &Path) -> Option<PreToolResponse> {
+pub(crate) fn evaluate_path_policies(
+    input: &PreToolUseInput,
+    root: &Path,
+) -> Option<PreToolResponse> {
     let tc = input.tool_call.as_ref()?;
     let tool_name = tc.name.as_str();
 
@@ -247,10 +261,23 @@ pub(crate) fn evaluate_path_policies(input: &PreToolUseInput, root: &Path) -> Op
 
         // 2. Check path policies (content filter)
         let original = std::fs::read_to_string(&full_path).unwrap_or_default();
-        let new_content_opt = if let Some(c) = tc.args.get("content").or_else(|| tc.args.get("Content")).and_then(serde_json::Value::as_str) {
+        let new_content_opt = if let Some(c) = tc
+            .args
+            .get("content")
+            .or_else(|| tc.args.get("Content"))
+            .and_then(serde_json::Value::as_str)
+        {
             Some(c.to_owned())
-        } else if let Some(target) = tc.args.get("target").or_else(|| tc.args.get("Target")).and_then(serde_json::Value::as_str)
-            && let Some(replacement) = tc.args.get("replacement").or_else(|| tc.args.get("Replacement")).and_then(serde_json::Value::as_str)
+        } else if let Some(target) = tc
+            .args
+            .get("target")
+            .or_else(|| tc.args.get("Target"))
+            .and_then(serde_json::Value::as_str)
+            && let Some(replacement) = tc
+                .args
+                .get("replacement")
+                .or_else(|| tc.args.get("Replacement"))
+                .and_then(serde_json::Value::as_str)
         {
             Some(original.replace(target, replacement))
         } else {
@@ -278,9 +305,10 @@ pub(crate) fn evaluate_path_policies(input: &PreToolUseInput, root: &Path) -> Op
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "Unit test assertions")]
 mod tests {
-    use super::*;
     use agy_common::models::ToolCallPayload;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_unified_read_only_tool_allowed() {
@@ -334,12 +362,22 @@ mod tests {
 
         let res = evaluate_pre_tool_use(&input, Path::new("."), &config);
         assert_eq!(res.decision, HookDecision::Deny);
-        assert!(res.reason.unwrap().contains("Simulated custom check failure"));
+        assert!(
+            res.reason
+                .unwrap()
+                .contains("Simulated custom check failure")
+        );
     }
 
     #[test]
     fn test_explicit_category_gate_triggers_vcs_conflicts_and_custom_checks() {
-        let temp_dir = std::env::temp_dir().join(format!("gate_test_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let temp_dir = std::env::temp_dir().join(format!(
+            "gate_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
         drop(std::fs::create_dir_all(&temp_dir));
         drop(std::fs::write(
             temp_dir.join("tools.toml"),
@@ -357,10 +395,26 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
         ));
 
         // Verify policy_gate resolves category gates & skip_gates from tools.toml on disk
-        assert!(policy_gate::tool_requires_gate("my_compiler", &temp_dir, "vcs_conflicts"));
-        assert!(policy_gate::tool_requires_gate("my_compiler", &temp_dir, "custom_sentinel"));
-        assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "vcs_conflicts"));
-        assert!(!policy_gate::tool_requires_gate("my_unfettered_tool", &temp_dir, "custom_sentinel"));
+        assert!(policy_gate::tool_requires_gate(
+            "my_compiler",
+            &temp_dir,
+            "vcs_conflicts"
+        ));
+        assert!(policy_gate::tool_requires_gate(
+            "my_compiler",
+            &temp_dir,
+            "custom_sentinel"
+        ));
+        assert!(!policy_gate::tool_requires_gate(
+            "my_unfettered_tool",
+            &temp_dir,
+            "vcs_conflicts"
+        ));
+        assert!(!policy_gate::tool_requires_gate(
+            "my_unfettered_tool",
+            &temp_dir,
+            "custom_sentinel"
+        ));
 
         // PreToolUse custom check triggers purely via declarative require_gates
         let mut config = HooksConfig::default();
@@ -383,7 +437,12 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
 
         let res_gated = evaluate_pre_tool_use(&input_gated, &temp_dir, &config);
         assert_eq!(res_gated.decision, HookDecision::Deny);
-        assert!(res_gated.reason.unwrap().contains("Custom sentinel gate blocked execution"));
+        assert!(
+            res_gated
+                .reason
+                .unwrap()
+                .contains("Custom sentinel gate blocked execution")
+        );
 
         let input_skipped = PreToolUseInput {
             tool_call: Some(ToolCallPayload {
@@ -406,7 +465,9 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
             .unwrap()
             .as_nanos();
         let temp_dir = std::env::temp_dir().join(format!("agy_hook_policy_test_{unique_id}"));
-        drop(std::fs::create_dir_all(temp_dir.join("plugins/agy-suite/agents")));
+        drop(std::fs::create_dir_all(
+            temp_dir.join("plugins/agy-suite/agents"),
+        ));
         drop(std::fs::create_dir_all(temp_dir.join("src")));
 
         let doc_author_manifest = "---\nname: doc-writer\nallowed_dirs:\n  - docs\n  - src\npath_policies:\n  - path: src\n    filter: comments_only\n---\n";
@@ -438,7 +499,12 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
         };
         let res_disallowed = evaluate_pre_tool_use(&input_disallowed, &temp_dir, &config);
         assert_eq!(res_disallowed.decision, HookDecision::Deny);
-        assert!(res_disallowed.reason.unwrap().contains("Security policy violation"));
+        assert!(
+            res_disallowed
+                .reason
+                .unwrap()
+                .contains("Security policy violation")
+        );
 
         // 2. Tool attempting code tamper in src/ gets DENIED
         let input_tamper = PreToolUseInput {
@@ -458,7 +524,12 @@ skip_gates = ["vcs_conflicts", "custom_sentinel"]
         };
         let res_tamper = evaluate_pre_tool_use(&input_tamper, &temp_dir, &config);
         assert_eq!(res_tamper.decision, HookDecision::Deny);
-        assert!(res_tamper.reason.unwrap().contains("Security policy violation"));
+        assert!(
+            res_tamper
+                .reason
+                .unwrap()
+                .contains("Security policy violation")
+        );
 
         // 3. Tool adding valid doc comments gets ALLOWED
         let input_docs = PreToolUseInput {

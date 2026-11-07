@@ -1,9 +1,12 @@
 //! `static_command` action handler executing pre-configured argv vectors with zero shell injection.
 
 use std::path::Path;
-use crate::actions::execute_supervised_command;
-use crate::guards::truncate_output;
-use crate::models::{OutputCapture, ToolDefinition};
+
+use crate::{
+    actions::execute_supervised_command,
+    guards::truncate_output,
+    models::{OutputCapture, ToolDefinition},
+};
 
 /// Executes a static argv command vector.
 ///
@@ -16,7 +19,10 @@ pub(crate) fn execute(
     workspace_root: &Path,
 ) -> Result<(String, bool), String> {
     if tool.command.is_empty() {
-        return Err(format!("Tool '{}' has an empty command definition", tool.name));
+        return Err(format!(
+            "Tool '{}' has an empty command definition",
+            tool.name
+        ));
     }
 
     let program = tool.command.first().map_or("", String::as_str);
@@ -42,7 +48,7 @@ pub(crate) fn execute(
             } else {
                 format!("Command '{program}' failed (exit code {code})")
             }
-        }
+        },
 
         OutputCapture::Stdout => {
             let out = String::from_utf8_lossy(&output.stdout);
@@ -51,7 +57,7 @@ pub(crate) fn execute(
             } else {
                 out.into_owned()
             }
-        }
+        },
 
         OutputCapture::Stderr => {
             let err = String::from_utf8_lossy(&output.stderr);
@@ -60,7 +66,7 @@ pub(crate) fn execute(
             } else {
                 err.into_owned()
             }
-        }
+        },
 
         OutputCapture::Both | OutputCapture::JsonSpans => {
             let out = String::from_utf8_lossy(&output.stdout);
@@ -72,7 +78,7 @@ pub(crate) fn execute(
             } else {
                 format!("{out}\n--- stderr ---\n{err}")
             }
-        }
+        },
     };
 
     let truncated = truncate_output(

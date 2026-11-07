@@ -1,8 +1,11 @@
 //! Process hygiene and Linux orphan prevention.
 
 use std::process::{Child, Command, ExitStatus};
-use crate::error::{AgyError, Result};
-use crate::limits::PROCESS_KILL_GRACE_WAIT;
+
+use crate::{
+    error::{AgyError, Result},
+    limits::PROCESS_KILL_GRACE_WAIT,
+};
 
 /// Drop guard ensuring child process groups are forcefully terminated if parent drops.
 pub struct ChildGuard {

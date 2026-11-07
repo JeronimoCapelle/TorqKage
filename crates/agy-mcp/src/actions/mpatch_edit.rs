@@ -1,14 +1,17 @@
 //! `mpatch_edit` action handler applying fuzzy Aider search/replace blocks and unified diffs.
 
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
+
 use agy_common::ProjectConfig;
-use mpatch::{patch_content_str, ApplyOptions};
-use crate::guards::{
-    check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
-    check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
+use mpatch::{ApplyOptions, patch_content_str};
+
+use crate::{
+    guards::{
+        check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
+        check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
+    },
+    models::{AgentGuard, ToolDefinition},
 };
-use crate::models::{AgentGuard, ToolDefinition};
 
 /// Executes a bounded fuzzy code modification using `mpatch`.
 ///
@@ -66,8 +69,12 @@ pub(crate) fn execute(
         ));
     }
 
-    let original = std::fs::read_to_string(&safe_path)
-        .map_err(|err| format!("Failed to read target file '{}': {err}", safe_path.display()))?;
+    let original = std::fs::read_to_string(&safe_path).map_err(|err| {
+        format!(
+            "Failed to read target file '{}': {err}",
+            safe_path.display()
+        )
+    })?;
 
     let options = ApplyOptions::new();
 
@@ -106,8 +113,12 @@ pub(crate) fn execute(
         Some(&project),
     )?;
 
-    std::fs::write(&safe_path, new_content.as_bytes())
-        .map_err(|err| format!("Failed to write patched file '{}': {err}", safe_path.display()))?;
+    std::fs::write(&safe_path, new_content.as_bytes()).map_err(|err| {
+        format!(
+            "Failed to write patched file '{}': {err}",
+            safe_path.display()
+        )
+    })?;
 
     let lines_before = original.lines().count();
     let lines_after = new_content.lines().count();
@@ -135,8 +146,12 @@ fn apply_exact_aider_block(original: &str, patch: &str) -> Option<String> {
     let replace_start = divider_idx.saturating_add(DIVIDER_MARKER.len());
     let replace_block = patch.get(replace_start..replace_idx)?;
 
-    let search_clean = search_block.trim_start_matches(['\r', '\n']).trim_end_matches(['\r', '\n']);
-    let replace_clean = replace_block.trim_start_matches(['\r', '\n']).trim_end_matches(['\r', '\n']);
+    let search_clean = search_block
+        .trim_start_matches(['\r', '\n'])
+        .trim_end_matches(['\r', '\n']);
+    let replace_clean = replace_block
+        .trim_start_matches(['\r', '\n'])
+        .trim_end_matches(['\r', '\n']);
 
     if search_clean.is_empty() {
         return None;
@@ -160,8 +175,9 @@ fn apply_exact_aider_block(original: &str, patch: &str) -> Option<String> {
     reason = "Unit test assertions"
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn create_test_dir(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(

@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
 use crate::models::{ToolAction, ToolDefinition};
 
 /// An individual Model Context Protocol (MCP) tool description emitted during `tools/list`.
@@ -112,12 +113,15 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
         | ToolAction::WorkspaceInspect
         | ToolAction::WorkspaceMerge => build_parameterized_schema(&def.args),
 
-        ToolAction::StaticCommand | ToolAction::CargoJsonDiagnostics | ToolAction::ProjectState | ToolAction::Unknown(_) => {
+        ToolAction::StaticCommand
+        | ToolAction::CargoJsonDiagnostics
+        | ToolAction::ProjectState
+        | ToolAction::Unknown(_) => {
             json!({
                 "type": "object",
                 "properties": {}
             })
-        }
+        },
     }
 }
 

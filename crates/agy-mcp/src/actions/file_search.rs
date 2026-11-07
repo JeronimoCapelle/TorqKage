@@ -1,9 +1,13 @@
 //! `file_search` action handler providing fast pattern search across repository files.
 
 use std::path::Path;
+
 use agy_common::{ProjectConfig, ProjectSecurityConfig};
-use crate::guards::{check_dangerous_files_with_security, truncate_output};
-use crate::models::ToolDefinition;
+
+use crate::{
+    guards::{check_dangerous_files_with_security, truncate_output},
+    models::ToolDefinition,
+};
 
 /// Executes a bounded pattern search across files.
 ///
@@ -53,9 +57,21 @@ pub(crate) fn execute(
         searched_targets.push(rel_display);
 
         if target.is_dir() {
-            walk_and_search(target, workspace_root, &pattern_lower, &project.security, &mut matches)?;
+            walk_and_search(
+                target,
+                workspace_root,
+                &pattern_lower,
+                &project.security,
+                &mut matches,
+            )?;
         } else if target.is_file() {
-            search_single_file(target, workspace_root, &pattern_lower, &project.security, &mut matches);
+            search_single_file(
+                target,
+                workspace_root,
+                &pattern_lower,
+                &project.security,
+                &mut matches,
+            );
         }
     }
 
@@ -66,9 +82,15 @@ pub(crate) fn execute(
                 project.docs.display_summary()
             ));
         }
-        let fallback_display = targets
-            .first()
-            .map_or_else(|| ".".to_owned(), |p| p.strip_prefix(workspace_root).unwrap_or(p).display().to_string());
+        let fallback_display = targets.first().map_or_else(
+            || ".".to_owned(),
+            |p| {
+                p.strip_prefix(workspace_root)
+                    .unwrap_or(p)
+                    .display()
+                    .to_string()
+            },
+        );
         return Ok(format!(
             "Search target directory '{fallback_display}' does not exist in repository."
         ));
@@ -195,8 +217,9 @@ fn walk_and_search(
     reason = "Unit test assertions"
 )]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     fn create_test_dir(tag: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
