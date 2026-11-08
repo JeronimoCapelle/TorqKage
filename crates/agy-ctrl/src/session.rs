@@ -234,9 +234,11 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
+        let mock_ws = temp_dir.join("workspace_a");
         let gemini_dir = temp_dir.join(".gemini/antigravity-cli");
         let convs_dir = gemini_dir.join("conversations");
         std::fs::create_dir_all(&convs_dir).unwrap();
+        std::fs::create_dir_all(&mock_ws).unwrap();
 
         let db_path = gemini_dir.join("conversation_summaries.db");
         let history_path = gemini_dir.join("history.jsonl");
@@ -254,12 +256,13 @@ mod tests {
         )
         .unwrap();
 
+        let uris_json = format!("[\"{}\"]", mock_ws.display());
         conn.execute(
             "INSERT INTO conversation_summaries VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 "test-uuid-1234",
                 "mock_agent",
-                "[\"/home/infinite/projects/rust/agy-suite\"]",
+                uris_json,
                 "2026-11-07T00:00:00Z",
                 5,
                 "Testing session"
@@ -269,8 +272,8 @@ mod tests {
 
         std::fs::write(convs_dir.join("test-uuid-1234.db"), b"").unwrap();
 
-        let ws = Path::new("/home/infinite/projects/rust/agy-suite");
-        let res = query_session_from_sources(&db_path, &convs_dir, &history_path, "mock_agent", ws);
+        let res =
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "mock_agent", &mock_ws);
         assert!(res.is_some());
         let session = res.unwrap();
         assert_eq!(session.conversation_id, "test-uuid-1234");
@@ -288,9 +291,13 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ));
+        let mock_ws = temp_dir.join("cli_project");
+        let other_ws = temp_dir.join("other_project");
         let gemini_dir = temp_dir.join(".gemini/antigravity-cli");
         let convs_dir = gemini_dir.join("conversations");
         std::fs::create_dir_all(&convs_dir).unwrap();
+        std::fs::create_dir_all(&mock_ws).unwrap();
+        std::fs::create_dir_all(&other_ws).unwrap();
 
         let db_path = gemini_dir.join("conversation_summaries.db");
         let history_path = gemini_dir.join("history.jsonl");
@@ -325,42 +332,146 @@ mod tests {
         // history.jsonl records the workspace path
         let hist_entry = serde_json::json!({
             "conversationId": "cli-uuid-5678",
-            "workspace": "/home/infinite/projects/rust/Pure-V",
+            "workspace": mock_ws.display().to_string(),
             "display": "Test prompt"
         });
         std::fs::write(&history_path, format!("{hist_entry}\n")).unwrap();
 
         std::fs::write(convs_dir.join("cli-uuid-5678.db"), b"").unwrap();
 
-        let ws_match = Path::new("/home/infinite/projects/rust/Pure-V");
         let res =
-            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", ws_match);
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", &mock_ws);
         assert!(res.is_some());
         let session = res.unwrap();
         assert_eq!(session.conversation_id, "cli-uuid-5678");
         assert_eq!(session.step_count, 47);
 
         // Mismatched workspace should return None
-        let ws_mismatch = Path::new("/home/infinite/projects/rust/other-repo");
         let res_none =
-            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", ws_mismatch);
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", &other_ws);
         assert!(res_none.is_none());
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }
 
     #[test]
-    fn test_live_session_discovery_pure_v() {
-        let ws = Path::new("/home/infinite/projects/rust/Pure-V");
-        if ws.is_dir() {
-            let session = find_agent_session_for_workspace("copilot", ws);
-            assert!(
-                session.is_some(),
-                "Expected copilot session f1bb6355 to be found for Pure-V workspace"
-            );
-            let s = session.unwrap();
-            assert_eq!(s.conversation_id, "f1bb6355-7b30-4670-970e-2a56fb49cae1");
-            assert!(s.step_count >= 47);
-        }
+    fn test_rusqlite_session_discovery_ignores_zero_steps() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agy-ctrl-test-session-zero-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mock_ws = temp_dir.join("zero_project");
+        let gemini_dir = temp_dir.join(".gemini/antigravity-cli");
+        let convs_dir = gemini_dir.join("conversations");
+        std::fs::create_dir_all(&convs_dir).unwrap();
+        std::fs::create_dir_all(&mock_ws).unwrap();
+
+        let db_path = gemini_dir.join("conversation_summaries.db");
+        let history_path = gemini_dir.join("history.jsonl");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                agent_name TEXT,
+                workspace_uris TEXT,
+                last_modified_time TEXT,
+                step_count INTEGER,
+                preview TEXT
+            )",
+            [],
+        )
+        .unwrap();
+
+        // 0 step conversation should not be eligible for resumption
+        let uris_json = format!("[\"{}\"]", mock_ws.display());
+        conn.execute(
+            "INSERT INTO conversation_summaries VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                "zero-uuid-9999",
+                "copilot",
+                uris_json,
+                "2026-11-07T23:00:00Z",
+                0,
+                ""
+            ],
+        )
+        .unwrap();
+
+        std::fs::write(convs_dir.join("zero-uuid-9999.db"), b"").unwrap();
+
+        let res =
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", &mock_ws);
+        assert!(res.is_none());
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_rusqlite_session_discovery_subdirectory_matching() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agy-ctrl-test-session-sub-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mock_ws = temp_dir.join("root_project");
+        let sub_ws = mock_ws.join("crates").join("my_crate");
+        let gemini_dir = temp_dir.join(".gemini/antigravity-cli");
+        let convs_dir = gemini_dir.join("conversations");
+        std::fs::create_dir_all(&convs_dir).unwrap();
+        std::fs::create_dir_all(&sub_ws).unwrap();
+
+        let db_path = gemini_dir.join("conversation_summaries.db");
+        let history_path = gemini_dir.join("history.jsonl");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                agent_name TEXT,
+                workspace_uris TEXT,
+                last_modified_time TEXT,
+                step_count INTEGER,
+                preview TEXT
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO conversation_summaries VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                "sub-uuid-7777",
+                "coder",
+                "",
+                "2026-11-07T23:30:00Z",
+                12,
+                "Subdirectory turn"
+            ],
+        )
+        .unwrap();
+
+        // Prompt was run from sub_ws (inside the workspace root)
+        let hist_entry = serde_json::json!({
+            "conversationId": "sub-uuid-7777",
+            "workspace": sub_ws.display().to_string(),
+            "display": "Subdirectory prompt"
+        });
+        std::fs::write(&history_path, format!("{hist_entry}\n")).unwrap();
+
+        std::fs::write(convs_dir.join("sub-uuid-7777.db"), b"").unwrap();
+
+        // Querying from workspace root should successfully match the session
+        let res =
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "coder", &mock_ws);
+        assert!(res.is_some());
+        let session = res.unwrap();
+        assert_eq!(session.conversation_id, "sub-uuid-7777");
+        assert_eq!(session.step_count, 12);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
     }
 }
