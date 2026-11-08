@@ -54,14 +54,17 @@ while [[ $# -gt 0 ]]; do
             ;;
         --profile)
             PROFILE="$2"
+            BUILD_SOURCE=true
             shift 2
             ;;
         --perf)
             PROFILE="perf"
+            BUILD_SOURCE=true
             shift
             ;;
         --fast)
             PROFILE="fast"
+            BUILD_SOURCE=true
             shift
             ;;
         --version)

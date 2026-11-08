@@ -65,18 +65,18 @@ All autonomous agents and human contributors operating within this repository or
 
 Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-Privilege Model**, with boundaries and pre-launch checks unified directly in each agent's Markdown frontmatter:
 
-| Agent | Responsibility | Permitted Directory Scope (Agent Frontmatter) | Mandatory Pre-Invocation Gates | Available Tooling Scope |
-| :--- | :--- | :--- | :--- | :--- |
-| **`coder`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | `vcs_conflicts` | Fast compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, `cargo_check`, `cargo_test`, `cargo_clippy`. |
-| **`doc-author`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, module structure, `cargo doc --no-deps`. |
-| **`test-author`** | Design Verification (DV) & Formal Tests | `allowed_dirs = ["tests", "benches"]`<br>`disallowed_dirs = ["src", "docs"]` | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), compiler explanations, differential inspection (`llvm-objdump`). |
-| **`planner`** | Architecture & Verification Strategy | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]` | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. Pre-injected with workspace crate topology. |
-| **`copilot`** | Interactive Chief of Staff & Orchestrator | **Strictly read-only** (`disallowed_dirs = ["*"]`) | None | High-level fleet orchestration across 4-phase lifecycle, subagent delegation, handoff inspection (zero direct code mutation). Pre-injected with active VCS status. |
-| **`finisher`** | Deterministic release gatekeeper | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff & changelog preview, binary size audit (`cargo_size`), supply-chain audit (`cargo_deny`), mutation scoring, mandated proof checks. |
-| **`spec-checker`** | Spec-vs-code & ISA compliance | **Strictly read-only** (`disallowed_dirs = ["*"]`) | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, active diff inspection (`inspect_workspace_diff`), clippy, cargo-deny, semver-checks. |
-| **`perf-analyst`** | Hardware profiling & benchmarks | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]` | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat, section size & symbol mapping (`cargo-size`, `cargo-nm`). |
-| **`mini`** | Symbolic math & calculation | **Strictly air-gapped** (`disallowed_dirs = ["*"]`) | None | `eval_symbolic_math` (SymPy) inside isolated container only. |
-| **`sysadmin`** | Arch Linux / CachyOS admin | `allowed_dirs = ["*"]` | None | Host troubleshooting, systemd, pacman inspection (all mutating ops prompt `[y/n]`). |
+| Agent Profile | Role & Responsibility | Permitted Directory & File Scope | Path & Content Policies | Mandatory Pre-Invocation Gates | Available Tooling & Operational Scope |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`coder.md`** | Production systems implementation (high-level Rust to bare-metal RISC-V & asm) | `allowed_dirs = ["src", "crates", "boards", "layout", "targets"]`<br>`disallowed_dirs = ["tests", "benches", "docs"]` | Masked manifests; asks operator for `Cargo.toml` dependency edits (`manifest_guard`) | `vcs_conflicts` | Full code mutation in source trees; compiler diagnostics, `mpatch_edit`, `write_file`, `search_codebase`, `read_project_file`, `cargo_check`, `cargo_test`, `cargo_clippy`. |
+| **`copilot.md`** | Chief of Staff & Workflow Orchestrator | Strictly read-only code inspection (`disallowed_dirs = ["*"]`) | Read-only code inspection; workspace Jujutsu merge/rebase permitted | None | High-level fleet coordination across 4-phase lifecycle, subagent delegation, handoff inspection, Jujutsu workspace rebase/merge (zero direct code mutation). |
+| **`doc-author.md`** | Technical docs & specification author | `allowed_dirs = ["docs", "specs", "src"]`<br>`allowed_files = ["README.md", "ARCHITECTURE.md"]`<br>`disallowed_dirs = ["tests", "benches"]` | `comments_only` path policy in `src/` (in-place `///` rustdoc without modifying code logic) | `vcs_conflicts` | API reference docs, pedagogical rustdoc (`///`, `//!`), register bitfield layouts, ASCII diagrams, RFCs, module structure, `cargo doc --no-deps`. |
+| **`test-author.md`** | Design Verification (DV) & Formal Test Engineer | `allowed_dirs = ["tests", "benches", "src"]`<br>`disallowed_dirs = ["docs"]` | `tests_only` in `src/` (`mod tests` syntactic filter); asks operator for test deps | `vcs_conflicts` | Test runners (`nextest`, `mutants`, `insta`, `fuzz`), formal verification (`kani`), concurrency permutation (`loom`), memory safety (`miri`), compiler explanations, differential inspection (`llvm-objdump`). |
+| **`planner.md`** | Architecture & Verification Strategy Rubber-Duck | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]`<br>`disallowed_dirs = ["src", "tests", "benches"]` | Authoritative design documents & mandatory upfront verification plans | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. Pre-injected with workspace crate topology. |
+| **`finisher.md`** | Adversarial release gatekeeper | Strictly read-only across workspace (`disallowed_dirs = ["*"]`) | Zero mutation; pre-release gauntlet scorecard enforcement | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff & changelog preview, binary size audit (`cargo_size`), supply-chain audit (`cargo_deny`), mutation scoring, mandated proof checks. |
+| **`spec-checker.md`** | Spec-vs-code & ISA compliance auditor | Strictly read-only across workspace (`disallowed_dirs = ["*"]`) | Zero mutation; cross-references implementation against specs & ISA contracts | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, active diff inspection (`inspect_workspace_diff`), clippy, cargo-deny, semver-checks. |
+| **`perf-analyst.md`** | Microarchitectural profiler & benchmark engineer | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]`<br>`disallowed_dirs = ["src", "tests"]` | Microbenchmarking, execution traces, latency distributions | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat, section size & symbol mapping (`cargo-size`, `cargo-nm`). |
+| **`mini.md`** | Narrow symbolic math & calculation specialist | Strictly air-gapped (`disallowed_dirs = ["*"]`) | Ephemeral scratchpad only; zero disk mutations | None | `eval_symbolic_math` (Python/SymPy) inside isolated container only. |
+| **`sysadmin.md`** | High-reasoning Arch Linux system administrator | `allowed_dirs = ["*"]` (full system access) | Supervised shell; interactive operator confirmation (`ASK` / `[y/n]`) on all state-altering tools | None | Host troubleshooting, systemd, pacman inspection, `run_command`, `ask_question`. |
 
 ### Workspace Isolation
 - Each agent operates in its own sparse Jujutsu workspace at `.agy/workspaces/<agent>/`.
@@ -201,7 +201,7 @@ agy-suite/
         ├── hooks.toml  # Lifecycle interception pipeline and circuit breaker rules
         ├── tools.toml  # Declarative MCP tool catalog and agent perimeters
         ├── README.md   # Plugin documentation and customization cookbook
-        ├── bin/        # Bundled native binaries (graphtrail, perfetto-mcp-rs, agy-*)
+        ├── bin/        # Native binaries and acceleration helpers (cargo-fast, agy-*)
         └── agents/     # Fleet specifications (coder, copilot, doc-author, finisher, etc.)
 ```
 
@@ -227,12 +227,11 @@ agy-suite/
 
 ### 8.2 Bubblewrap Container-Grade Sandboxing
 - Untrusted execution (such as SymPy mathematical evaluation in `eval_symbolic_math`) is precision-jailed inside Bubblewrap (`bwrap --unshare-all`).
-- Runs with completely private PID, IPC, and network namespaces (`CLONE_NEWNET`, no loopback or gateway, zero outbound sockets).
+- Runs with completely private PID, IPC, and network namespaces (`CLONE_NEWNET`, private loopback only, zero external sockets).
 - Filesystem mounted as read-only with a synthetic in-memory `tmpfs` root, eliminating host filesystem leakage or data exfiltration.
 
-### 8.3 Self-Contained Plugin Code Intelligence
-- **`graphtrail` (Tree-sitter AST Code Graph):** Bundled standalone Rust binary (`plugins/agy-suite/bin/graphtrail`) exposing cross-file caller/callee indexing, dead code discovery, and blast-radius impact analysis via `query_code_graph` and `sync_code_graph`.
-- **`perfetto-mcp-rs` (Systems Trace Analysis):** Bundled standalone MCP server (`plugins/agy-suite/bin/perfetto-mcp-rs`) giving `perf-analyst` deep PerfettoSQL introspection into Linux kernel ftrace, thread scheduler switches, and lock contention without browser clutter.
+### 8.3 External Tool Integrations
+- Optional external tools (such as Tree-sitter AST code graph engines or systems trace visualizers) can be discovered via `$PATH` when installed on the host system.
 
 ### 8.4 Native MCP Access Points & Execution Guarantees
 The `agy-mcp` daemon replaces ambient shell access with 10 hardened native action handlers:
@@ -290,25 +289,17 @@ Google Antigravity natively supports markdown-based skills (`SKILL.md`) and unco
 
 ---
 
-## 11. The 10-Agent Fleet Perimeters & Operational Matrix
+## 11. Operational Protocols & Fleet Governance
 
-Every agent in `agy-suite` operates under declarative frontmatter rules specifying allowed directories, forbidden paths, tool allowlists, and operator confirmation gates:
-
-| Agent Profile | Role & Specialty | Allowed Directories | File / Content Policies | Mutating Access |
-| :--- | :--- | :--- | :--- | :--- |
-| **`coder.md`** | Autonomous Systems Implementer (Rust, RISC-V asm, linker scripts) | `src/`, `crates/`, `boards/`, `layout/`, `targets/` | Masked manifests; asks operator for `Cargo.toml` dependency edits | Full code mutation |
-| **`copilot.md`** | Chief of Staff & Fleet Orchestrator | Full workspace | Orchestrates subagents, reviews diffs, merges Jujutsu workspaces | Workspace rebase/merge |
-| **`doc-author.md`** | Technical Specification & Rustdoc Author | `docs/`, `specs/`, `README.md`, `ARCHITECTURE.md` | `comments_only` path policy in `src/` (in-place `///` rustdoc) | Docs + doc-comments |
-| **`finisher.md`** | Adversarial Release Gatekeeper | Read-only across repository | Pre-release gauntlet (fmt, clippy, test suite, VCS conflicts) | Read-only |
-| **`mini.md`** | Pure Symbolic Math Engine | Ephemeral sandbox | Network-less Bubblewrap container using Python SymPy | Scratchpad only |
-| **`perf-analyst.md`** | Microarchitectural Profiler & Benchmark Engineer | `benches/`, `profiles/`, `traces/` | Systems trace introspection via `perfetto-mcp-rs` & `agy-tools` | Benchmarks & traces |
-| **`planner.md`** | Forward-Looking Systems Architect | `docs/`, `specs/`, `ARCHITECTURE.md` | Authoritative design documents & upfront verification plans | Architecture docs |
-| **`spec-checker.md`** | Read-Only Compliance Auditor | Read-only across repository | Cross-references source code against specifications & ISA contracts| Read-only |
-| **`sysadmin.md`** | Arch Linux System Administrator | System & development tools | Interactive operator confirmation (`ASK`) on all state-altering tools | Supervised shell |
-| **`test-author.md`** | Design Verification (DV) & Formal Test Engineer | `tests/`, `benches/` | `tests_only` in `src/` (`mod tests` syntactic filter); asks for test deps | Test suites & proofs |
+The operational boundaries defined in [Section 3: Agent Fleet Perimeters & Blast Boundaries](#3-agent-fleet-perimeters--blast-boundaries) are enforced through declarative runtime protocols:
 
 ### 11.1 The Dependency Request Protocol
 When an implementing agent (`coder` or `test-author`) requires a third-party dependency:
 1. Direct editing of `Cargo.toml`, `Cargo.lock`, or `deny.toml` is intercepted and blocked by `manifest_guard`.
 2. The agent asks the human operator directly with the package name, requested version, features, and justification.
 3. Once the operator approves, the dependency can be added to the manifest.
+
+### 11.2 Jujutsu Workspace Isolation & Clean State Invariants
+- Each agent operates in its own sparse Jujutsu working copy at `.agy/workspaces/<agent>/`.
+- Agent modifications remain cleanly isolated from the operator's active `@` commit and open editor buffers.
+- Merging and rebasing workspace revisions is governed by `copilot` and the `SubagentAdmissionGate` without mutating active work-in-progress.

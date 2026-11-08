@@ -89,7 +89,7 @@ agy-suite/
         ├── hooks.toml              # Declarative lifecycle pipeline and custom check rules
         ├── tools.toml              # Declarative MCP tool catalog and agent perimeters
         ├── project.toml            # Declarative quality gates and cache mounts
-        ├── bin/                    # Bundled native binaries (graphtrail, perfetto-mcp-rs, agy-*)
+        ├── bin/                    # Native binaries and acceleration helpers (cargo-fast, agy-*)
         └── agents/                 # Specialized agent profiles (YAML frontmatter + system prompts)
             ├── coder.md
             ├── copilot.md

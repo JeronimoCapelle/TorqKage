@@ -6,7 +6,7 @@
 # Optional optimizations:
 #   - SCCACHE: Set `export RUSTC_WRAPPER=sccache` in your shell profile.
 #   - MOLD LINKER: Set `export RUSTFLAGS="-C link-arg=-fuse-ld=mold"`.
-#   - CRANELIFT + MOLD: Run `cargo cranelift-build` (or with `--config .cargo/config.fast.toml`).
+#   - CRANELIFT + MOLD: Run `cargo +nightly cranelift-build` (or `./plugins/agy-suite/bin/cargo-fast build`).
 # ==============================================================================
 
 [alias]
@@ -28,6 +28,7 @@ fb           = "build --profile fast"
 ft           = "test --profile fast"
 
 # Cranelift + Mold rapid iteration (requires Nightly + Cranelift + Mold)
+# Invoke with `+nightly` (e.g. `cargo +nightly cranelift-build`) or `./plugins/agy-suite/bin/cargo-fast build`
 cranelift-check = "check --config .cargo/config.fast.toml --profile fast"
 cranelift-build = "build --config .cargo/config.fast.toml --profile fast"
 cranelift-test  = "test --config .cargo/config.fast.toml --profile fast"

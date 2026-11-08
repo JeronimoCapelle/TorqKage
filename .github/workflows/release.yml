@@ -40,8 +40,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build tools (clang)
         run: sudo apt-get update && sudo apt-get install -y clang
-      - name: Install Rust toolchain (Nightly)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust toolchain (Stable)
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1

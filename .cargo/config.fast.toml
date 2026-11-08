@@ -8,10 +8,12 @@
 #   - Mold Linker:  `sudo apt install mold` (or distro package)
 #
 # Usage:
-#   cargo cranelift-build
-#   cargo cranelift-check
+#   cargo +nightly cranelift-build
+#   cargo +nightly cranelift-check
+# Or use the wrapper script which auto-detects nightly/cranelift/mold:
+#   ./plugins/agy-suite/bin/cargo-fast build
 # Or:
-#   cargo --config .cargo/config.fast.toml build --profile fast
+#   cargo +nightly --config .cargo/config.fast.toml build --profile fast
 # ==============================================================================
 
 [unstable]

@@ -6,8 +6,8 @@ on:
     tags: [ "v*" ]
     paths-ignore:
       - "docs/**"
-      - "**/*.md"
-      - "*.md"
+      - "README.md"
+      - "ARCHITECTURE.md"
       - "assets/**"
       - ".github/ISSUE_TEMPLATE/**"
       - "LICENSE"
@@ -15,8 +15,8 @@ on:
     branches: [ "main", "master" ]
     paths-ignore:
       - "docs/**"
-      - "**/*.md"
-      - "*.md"
+      - "README.md"
+      - "ARCHITECTURE.md"
       - "assets/**"
       - ".github/ISSUE_TEMPLATE/**"
       - "LICENSE"
@@ -77,14 +77,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build tools (clang, mold)
-        run: sudo apt-get update && sudo apt-get install -y clang mold
+      - name: Install system dependencies (bubblewrap)
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
       - name: Configure kernel parameters for sandbox tests
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
-
-      - name: Install sccache
-        uses: taiki-e/install-action@sccache
 
       - name: Install Rust toolchain (Stable)
         uses: dtolnay/rust-toolchain@stable

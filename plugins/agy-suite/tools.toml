@@ -701,9 +701,13 @@ timeout_seconds = 120
 
 [tools.cargo_fuzz]
 description = "Executes libFuzzer target to discover crashes, panics, and out-of-bounds byte accesses"
-action = "static_command"
+action = "parameterized_command"
 category = "testing"
-command = ["cargo", "fuzz", "run", "--", "-max_total_time=60"]
+command = ["cargo", "fuzz", "run"]
+args = [
+    { name = "target", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Fuzz target binary name to execute" },
+    { name = "max_time", required = false, default = "60", flag = "-max_total_time", regex = "^[0-9]+$", description = "Maximum fuzzing duration in seconds (defaults to 60)" }
+]
 output_capture = "stderr"
 truncate_lines = 100
 timeout_seconds = 90
@@ -815,19 +819,28 @@ timeout_seconds = 60
 
 [tools.hyperfine]
 description = "Executes black-box binary benchmarking via hyperfine with statistical timing and warmup"
-action = "static_command"
+action = "parameterized_command"
 category = "profiling"
 require_gates = ["tests"]
-command = ["hyperfine", "--warmup", "3"]
+command = ["hyperfine"]
+args = [
+    { name = "warmup", required = false, default = "3", flag = "--warmup", type = "integer", regex = "^[0-9]+$", description = "Number of warmup runs before statistical timing (defaults to 3)" },
+    { name = "command", required = true, flag = "--", description = "Command line string or executable to benchmark via hyperfine" }
+]
 output_capture = "stdout"
 truncate_lines = 40
 timeout_seconds = 120
 
 [tools.llvm_mca]
 description = "Pipes generated assembly into llvm-mca to simulate CPU instruction ports, latency, and register pressure"
-action = "static_command"
+action = "parameterized_command"
 category = "profiling"
-command = ["llvm-mca", "-march=x86-64", "-mcpu=native"]
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+command = ["llvm-mca", "-march=x86-64", "-mcpu=native", "--"]
+args = [
+    { name = "file", type = "path", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Assembly file (.s or .asm) relative to workspace to analyze with llvm-mca" }
+]
 output_capture = "stdout"
 truncate_lines = 150
 timeout_seconds = 30
