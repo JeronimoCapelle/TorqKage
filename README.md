@@ -7,8 +7,10 @@
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
 [![Ratatui](https://img.shields.io/badge/Ratatui-0.30-purple.svg)](https://ratatui.rs/)
 
-**The Declarative Governance Engine & Sandboxed MCP Server for Autonomous AI Fleets.**  
-*Compose, sandbox, and govern air-gapped multi-agent engineering teams using pure TOML and Markdown—or point your AI to the schemas to build them for you.*
+### Stop writing MCP servers. agy-suite is the last MCP runtime you'll ever need.
+**Turn any CLI binary, script, or compiler into an air-gapped, schema-validated MCP tool in 6 lines of TOML—and compose governed autonomous agent fleets in seconds.**
+
+*Zero Node.js bloat. Zero token-burning bash wrappers. 100% Safe Rust (`#![forbid(unsafe_code)]`) with Bubblewrap container sandboxing, sub-millisecond lifecycle hooks (<1ms, <500KB RSS), and an interactive Ratatui 0.30 flight deck.*
 
 <p align="center">
   <img src="assets/demo.gif" alt="agy-suite Interactive Terminal Control Deck Demo" width="100%" />
@@ -18,9 +20,11 @@
 
 ## 🎯 What is agy-suite?
 
-Autonomous AI coding agents are extraordinarily capable, but unleashing them with raw terminal access in production repositories creates critical risks: non-deterministic execution, destructive shell accidents, massive token bills, and dirty git trees.
+Building tool environments for autonomous coding agents today forces developers into an awful tradeoff:
+1. **The MCP Sprawl:** You write, debug, and run dozens of bespoke Node.js or Python MCP servers for every single linter, test runner, and CLI tool—bloating memory and fighting port collisions.
+2. **The Ambient Shell Trap:** You give agents unconstrained `bash` access—risking accidental `rm -rf`, prompt injections, credential leaks, and burning 2,000–5,000 tokens on *every single turn* re-injecting tool documentation.
 
-`agy-suite` is **the declarative container & governance engine** for [Google Antigravity (`agy`)](https://github.com/google/antigravity). Written in 100% Safe Rust (`#![forbid(unsafe_code)]`), it turns any CLI tool, compiler, or script into a sandboxed, capability-confined MCP server governed by declarative contracts:
+`agy-suite` eliminates this tradeoff entirely. It is a **Meta-MCP Server and Declarative Fleet Engine** built for [Google Antigravity (`agy`)](https://github.com/google/antigravity) in pure Safe Rust. Any CLI tool, compiler, or script declared in `tools.toml` instantly becomes an air-gapped, schema-validated MCP action governed by declarative contracts:
 
 | The Raw AI Coding Problem | How the `agy-suite` Engine Solves It |
 | :--- | :--- |
