@@ -165,6 +165,7 @@ RUST_BACKTRACE = "1"
 paths = [
     "docs",
     "ARCHITECTURE.md",
+    "README.md",
 ]
 
 # The name of the MCP tool recommended to agents for querying these documents.

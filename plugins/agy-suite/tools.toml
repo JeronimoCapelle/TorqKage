@@ -188,9 +188,11 @@ emit_truncation_notice = true
 description = "Lists files and directory contents with file permissions, byte sizes, and timestamps using ls"
 action = "parameterized_command"
 category = "filesystem"
-command = ["ls", "-la", "--group-directories-first"]
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+command = ["ls", "-la", "--group-directories-first", "--"]
 args = [
-    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory path to list (defaults to project root '.')" }
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory path to list (defaults to project root '.')" }
 ]
 output_capture = "stdout"
 truncate_lines = 150
@@ -200,10 +202,12 @@ timeout_seconds = 10
 description = "Visualizes recursive directory tree hierarchy up to a specified depth using eza"
 action = "parameterized_command"
 category = "filesystem"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
 command = ["eza", "--tree", "--icons=never", "--ignore-glob", ".git|.jj|.agy|target"]
 args = [
     { name = "level", required = false, default = "2", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
-    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to display tree from (defaults to '.')" }
+    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Root path to display tree from (defaults to '.')" }
 ]
 output_capture = "stdout"
 truncate_lines = 150
@@ -213,10 +217,12 @@ timeout_seconds = 10
 description = "Finds project files matching a name or regex pattern across the workspace using fd (skips VCS internals by default)"
 action = "parameterized_command"
 category = "filesystem"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
 command = ["fd", "--glob", "--hidden", "--exclude", ".git", "--exclude", ".jj", "--exclude", ".agy", "--exclude", "target"]
 args = [
-    { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
-    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to search from (defaults to '.')" }
+    { name = "pattern", required = true, flag = "--", regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Root path to search from (defaults to '.')" }
 ]
 empty_fallback = "No files found matching pattern."
 output_capture = "stdout"
@@ -227,9 +233,11 @@ timeout_seconds = 15
 description = "Inspects file stat and metadata (exact byte size, permissions, inode, access/modify timestamps) without reading file content"
 action = "parameterized_command"
 category = "filesystem"
-command = ["stat"]
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+command = ["stat", "--"]
 args = [
-    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path relative to workspace" }
+    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file or directory path relative to workspace" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
@@ -239,9 +247,11 @@ timeout_seconds = 10
 description = "Determines the file MIME type, encoding, and format (e.g. text/plain, ELF binary, UTF-8) using file"
 action = "parameterized_command"
 category = "filesystem"
-command = ["file", "-b"]
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+command = ["file", "-b", "--"]
 args = [
-    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file path relative to workspace" }
+    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file path relative to workspace" }
 ]
 output_capture = "stdout"
 truncate_lines = 20
@@ -251,9 +261,11 @@ timeout_seconds = 10
 description = "Counts total lines in a file or directory using wc -l (recursively scanning directories while skipping hidden and build cache files)"
 action = "parameterized_command"
 category = "filesystem"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
 command = ["bash", "-c", "if [ -d \"$1\" ]; then find \"$1\" -type f -not -path '*/.*' -not -path '*/target/*' -exec wc -l {} +; else wc -l \"$1\"; fi", "--"]
 args = [
-    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path relative to workspace (e.g. 'src/lib.rs', 'src')" }
+    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file or directory path relative to workspace (e.g. 'src/lib.rs', 'src')" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
@@ -269,18 +281,18 @@ truncate_lines = 150
 timeout_seconds = 10
 args = [
     { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regular expression to search across documentation" },
-    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" },
+    { name = "path", required = false, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" },
     { name = "is_regex", required = false, description = "Whether to evaluate pattern as a regular expression (defaults to true if pattern is valid regex)" },
     { name = "case_sensitive", required = false, description = "Whether search is case-sensitive (defaults to false)" }
 ]
 
 [tools.list_project_docs]
-description = "Lists all documentation files, specifications, and architecture blueprints in the project (docs/, specs/, ARCHITECTURE.md)"
+description = "Lists all documentation files, specifications, and architecture blueprints in the project (docs/, specs/, ARCHITECTURE.md, README.md)"
 action = "parameterized_command"
-category = "documentation"
-command = ["fd", "--extension", "md", "--extension", "markdown"]
+category = "filesystem"
+command = ["fd", "--extension", "md", "--extension", "markdown", "--"]
 args = [
-    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory to list docs from (defaults to project root '.')" }
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory to list docs from (defaults to project root '.')" }
 ]
 empty_fallback = "No documentation files found."
 output_capture = "stdout"
@@ -296,8 +308,8 @@ ban_dangerous_files = true
 command = ["rg", "--max-count", "30", "--max-columns", "200"]
 args = [
     { name = "fixed_strings", required = false, flag = "-F", switch = true, description = "Treat the query as a literal string rather than a regular expression" },
-    { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" },
-    { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory or file to search (defaults to project root)" }
+    { name = "query", required = true, flag = "-e", regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" },
+    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory or file to search (defaults to project root)" }
 ]
 empty_fallback = "No occurrences found in codebase for the specified search query."
 success_exit_codes = [0, 1]
@@ -330,7 +342,7 @@ description = "Creates a new file strictly within the canonical workspace bounds
 description = "Runs cargo fast check with zero token noise (exit code only) for maximum incremental iteration speed"
 action = "static_command"
 category = "compilation"
-tracks_circuit_breaker = true
+tracks_circuit_breaker = false
 command = ["cargo", "fast", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
@@ -402,10 +414,10 @@ timeout_seconds = 60
 description = "Visualizes crate module tree and visibility boundaries (pub/crate). Defaults to clean module tree; can focus on specific modules or packages."
 action = "parameterized_command"
 category = "diagnostics"
-command = ["cargo", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
+command = ["cargo", "--color=never", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
 args = [
-    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
     { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus tree on a specific path, e.g. 'actions' or 'server'" },
     { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
@@ -418,10 +430,10 @@ timeout_seconds = 30
 description = "Visualizes crate internal module dependency graph and coupling. Defaults to module-level dependency graph; can focus on specific modules or packages."
 action = "parameterized_command"
 category = "diagnostics"
-command = ["cargo", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
+command = ["cargo", "--color=never", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
 args = [
-    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
     { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus dependency graph on a specific module path" },
     { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
