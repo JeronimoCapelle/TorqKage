@@ -24,6 +24,7 @@
 - [The Verification Sandwich](fleet/verification-sandwich.md)
 
 # Configuration Contracts
+- [Agent Manifests (AGENT.md)](configuration/agent-manifest.md)
 - [Tools Configuration (tools.toml)](configuration/tools-toml.md)
 - [Project Configuration (project.toml)](configuration/project-toml.md)
 - [Hooks Configuration (hooks.toml)](configuration/hooks-toml.md)
