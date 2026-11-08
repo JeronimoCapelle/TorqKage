@@ -17,5 +17,5 @@
 When launching an agent from `agy-ctrl`, the pre-launch gatekeeper validates:
 1. **Unsaved UI Changes:** Warns if tool permissions were modified in the TUI without saving (<kbd>F2</kbd>).
 2. **VCS Conflicts:** Evaluates `jj` or `git` conflict status.
-3. **Compiler Checks:** Evaluates `quality.check_command` from `project.toml`.
+3. **Compiler & Quality Checks:** Evaluates configured quality gates (e.g. `[gates.compilation]`, `[gates.tests]`) from `project.toml` based on the agent's declared `pre_launch_checks`.
 If any check fails, an interactive modal displays the compiler diagnostics and allows aborting or force-launching.

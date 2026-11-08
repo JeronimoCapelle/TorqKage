@@ -4,12 +4,14 @@
 
 ## Intercepted Events
 
-1. **`detect-wip` (Turn 1 Wake Injection):**  
-   Pre-injects working copy status (e.g. `jj status` or `git status`) and uncommitted diffs directly into the initial model prompt without burning an explicit tool call.
-2. **`check-plan` (Pre-Tool Use Interceptor):**  
-   Validates agent arguments against declarative path policies (`tests_only`, `comments_only`, `restricted_paths`) before the tool executes.
-3. **`record-handoff` (Post-Invocation Interceptor):**  
-   Records agent activity, updates circuit breaker status, and logs telemetry to `.agy/state/`.
+1. **`inject-wake` (`SessionStart` Turn 1 Wake Injection):**  
+   Pre-injects prior session handoff summaries, active Jujutsu/Git status, uncommitted diffs, and project documentation paths directly into the initial model prompt without burning an explicit tool call.
+2. **`detect-wip` (`PreInvocation` Change Detection):**  
+   Emits ephemeral turn-by-turn notification of working tree modifications; burns zero tokens when clean.
+3. **`pre-tool-use` (`PreToolUse` Guard Pipeline):**  
+   Executes the 6-stage pipeline (`circuit_breaker`, `manifest_guard`, `path_policies`, `subagent_admission`, `vcs_conflicts`, `tool_policy`) to return `allow`, `deny`, or `ask` before any tool runs.
+4. **`record-handoff` (`Stop` Session Termination):**  
+   Captures session metadata, modified files, and circuit breaker status to `.agy/state/handoff.json` and `.agy/state/last_handoff.md` upon session exit.
 
 ## 2-Strike Compiler Circuit Breaker
 

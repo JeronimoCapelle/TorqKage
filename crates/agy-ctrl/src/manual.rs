@@ -105,8 +105,8 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
             "Atomic Save & Validate: snapshot VCS, validate plugin, and install",
         ),
         key(
-            "F4",
-            "Rollback unsaved modifications to original disk/VCS state",
+            "u / U / F4",
+            "Atomic Rollback: revert unsaved modifications to original disk/VCS state",
         ),
         empty(),
         h2("Scrolling & Viewport"),

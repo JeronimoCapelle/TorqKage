@@ -177,6 +177,15 @@ r            = "run"
 c            = "check"
 t            = "nextest run"
 
+# Rapid Cranelift+Mold iteration profile aliases
+fast-check   = "check --profile fast"
+fast-build   = "build --profile fast"
+fast-test    = "test --profile fast"
+fast-clippy  = "clippy --profile fast"
+fc           = "check --profile fast"
+fb           = "build --profile fast"
+ft           = "test --profile fast"
+
 # ==============================================================================
 # 2. TESTING, SANITIZERS & VERIFICATION
 # ==============================================================================

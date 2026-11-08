@@ -29,6 +29,8 @@
 #    - `cli_manual`: Renders man-page style help text for available commands.
 #    - `project_state`: Synthesizes VCS revision, status, branch, and quality gate health.
 #    - `workspace_ensure`: Provisions or validates an isolated Jujutsu sparse workspace.
+#    - `workspace_inspect`: Inspects the active state and commit ID of an isolated workspace.
+#    - `workspace_merge`: Merges changes from an agent's isolated workspace back into trunk.
 #
 # 3. SAFETY & POLICY FLAGS:
 #    - `category`: Logical tool category (e.g. "filesystem", "compilation", "diagnostics",
@@ -152,6 +154,19 @@ category = "filesystem"
 mutating = true
 enforce_workspace_bounds = true
 ban_dangerous_files = true
+
+[base_tools.cargo_base]
+description = "Base execution template for cargo commands with compiler circuit breaker tracking"
+action = "static_command"
+category = "compilation"
+tracks_circuit_breaker = true
+timeout_seconds = 60
+
+[base_tools.perf_tool]
+description = "Base execution template for performance profiling and microbenchmarks"
+action = "static_command"
+category = "profiling"
+timeout_seconds = 60
 
 # ==============================================================================
 # CONCRETE TOOLS (Declarative, Scoped, Inheriting from Base Templates)

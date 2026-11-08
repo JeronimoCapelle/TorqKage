@@ -13,7 +13,7 @@ All autonomous agents and human contributors operating within this repository or
 1. **Manifest Integrity (Strict Prohibition):**
    - **NEVER** autonomously edit `Cargo.toml`, `Cargo.lock`, or `deny.toml`.
    - Modifying dependencies or build configurations without human review is prohibited to prevent dependency bloat, accidental malicious package injection, and proc-macro execution vectors.
-   - If a new dependency is required, emit a structured request to `.agy/state/dependency_requests.json` and notify the operator.
+   - If a new dependency is required, the agent must ask the operator for permission with the package name, requested version, and justification before modifying manifests.
 2. **Compiler & Linter Cleanliness:**
    - The codebase compiles under `#![deny(clippy::all)]` and `#![deny(clippy::pedantic)]`.
    - **Zero compiler warnings and zero clippy warnings** are tolerated across all workspace targets (`--all-targets`).
@@ -310,5 +310,5 @@ Every agent in `agy-suite` operates under declarative frontmatter rules specifyi
 ### 11.1 The Dependency Request Protocol
 When an implementing agent (`coder` or `test-author`) requires a third-party dependency:
 1. Direct editing of `Cargo.toml`, `Cargo.lock`, or `deny.toml` is intercepted and blocked by `manifest_guard`.
-2. The agent writes a structured JSON payload to `.agy/state/dependency_requests.json` specifying the package name, requested version, features, and justification.
-3. The agent explicitly requests the human operator's permission before any modification occurs.
+2. The agent asks the human operator directly with the package name, requested version, features, and justification.
+3. Once the operator approves, the dependency can be added to the manifest.

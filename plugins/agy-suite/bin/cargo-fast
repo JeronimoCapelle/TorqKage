@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+[ "$1" = "fast" ] && shift
+
+ACTION="build"
+case "$1" in
+    build|b|run|r|check|c|test|t|clippy)
+        ACTION="$1"
+        shift
+        ;;
+esac
+
+echo "==> [cargo-fast] Max compilation speed (Cranelift + O0 Deps + Mold)..."
+exec cargo "$ACTION" \
+    --profile fast \
+    "$@"

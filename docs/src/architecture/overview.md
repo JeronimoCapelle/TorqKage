@@ -17,7 +17,7 @@ The suite replaces hardcoded assumptions with three declarative TOML contracts:
 1. **`tools.toml` (MCP Perimeter):**  
    Declares all MCP tools, template inheritance, argument bounds, and default permission gates (`require_permission_gate`).
 2. **`project.toml` (Project Perimeter):**  
-   Declares language-specific quality gates (`quality.check_command`), test harnesses, documentation directories, and custom build environments.
+   Declares language-specific quality gates (`[gates.<name>]`), test harnesses, documentation directories, and custom build environments.
 3. **`hooks.toml` (Lifecycle Perimeter):**  
    Defines automated event triggers (e.g. Turn-1 wake context injection, pre-invocation checks, automated circuit breaker tripping).
 

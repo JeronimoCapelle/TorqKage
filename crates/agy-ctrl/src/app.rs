@@ -540,7 +540,7 @@ impl App {
                 self.validation_modal = Some((
                     false,
                     format!(
-                        "🛑 Validation Failed!\n\n{err_report}\n\nPress F4 or 'r' to rollback changes."
+                        "🛑 Validation Failed!\n\n{err_report}\n\nPress u, F4, or 'r' to rollback changes."
                     ),
                 ));
                 self.status_message = Some((
@@ -551,7 +551,7 @@ impl App {
         }
     }
 
-    /// Reverts modified agent configurations to disk or VCS state (F4 / r).
+    /// Reverts modified agent configurations to disk or VCS state (u / F4 / r).
     pub(crate) fn rollback(&mut self) {
         let mut restored: usize = 0;
         for agent in &mut self.agents {

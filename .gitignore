@@ -39,7 +39,8 @@ mutants.out/
 /.agy/
 
 # Plugin Binary Bundles
-plugins/agy-suite/bin/
+plugins/agy-suite/bin/*
+!plugins/agy-suite/bin/cargo-fast
 
 # mdBook Build Output
 docs/book/

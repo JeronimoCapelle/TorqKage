@@ -6,7 +6,7 @@
 
 ## 1. Lifecycle Interceptor Latency (`agy-hooks`)
 
-Lifecycle hooks run synchronously on model events (`detect-wip`, `check-plan`, `record-handoff`). They must not delay agent generation.
+Lifecycle hooks run synchronously on model events (`pre-tool-use`, `detect-wip`, `inject-wake`, `record-handoff`). They must not delay agent generation.
 
 | Metric | `agy-hooks` (Pure Safe Rust) | Typical Node.js / Python Hooks | Speedup |
 | :--- | :--- | :--- | :--- |

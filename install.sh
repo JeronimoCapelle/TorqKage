@@ -149,10 +149,15 @@ install_bundle_to_system() {
     fi
 
     # Copy executables (unlink first to prevent ETXTBSY if active daemons/TUI are running)
-    rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs"
+    rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" "${TARGET_PLUGIN_DIR}/bin/cargo-fast"
     cp "${bin_source_dir}/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"
     cp "${bin_source_dir}/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/"
     cp "${bin_source_dir}/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/"
+    if [[ -f "${bin_source_dir}/cargo-fast" ]]; then
+        cp "${bin_source_dir}/cargo-fast" "${TARGET_PLUGIN_DIR}/bin/"
+    elif [[ -f "${plugin_manifest_dir}/bin/cargo-fast" ]]; then
+        cp "${plugin_manifest_dir}/bin/cargo-fast" "${TARGET_PLUGIN_DIR}/bin/"
+    fi
     if [[ -f "${bin_source_dir}/graphtrail" ]]; then
         cp "${bin_source_dir}/graphtrail" "${TARGET_PLUGIN_DIR}/bin/"
     elif [[ -f "${plugin_manifest_dir}/bin/graphtrail" ]]; then
@@ -177,6 +182,9 @@ install_bundle_to_system() {
         fi
         if [[ -f "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" ]]; then
             ln -sf "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" "${LOCAL_BIN_DIR}/perfetto-mcp-rs"
+        fi
+        if [[ -f "${TARGET_PLUGIN_DIR}/bin/cargo-fast" ]]; then
+            ln -sf "${TARGET_PLUGIN_DIR}/bin/cargo-fast" "${LOCAL_BIN_DIR}/cargo-fast"
         fi
     fi
 
