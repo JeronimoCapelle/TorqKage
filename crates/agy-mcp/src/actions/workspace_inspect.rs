@@ -15,12 +15,14 @@ pub(crate) fn execute(
             "Missing required parameter 'agent' for inspect_agent_workspace".to_owned()
         })?;
 
-    if !agent
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+    if agent.is_empty()
+        || agent.starts_with('-')
+        || !agent
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     {
         return Err(format!(
-            "Invalid agent name '{agent}': must contain only alphanumeric, dash, or underscore characters"
+            "Invalid agent name '{agent}': must start with an alphanumeric or underscore character and contain only alphanumeric, dash, or underscore characters"
         ));
     }
 
@@ -48,5 +50,11 @@ mod tests {
     fn test_workspace_inspect_invalid_agent_name() {
         let args = serde_json::json!({"agent": "../malicious/path"});
         assert!(execute(Path::new("."), &args).is_err());
+
+        let args_dash = serde_json::json!({"agent": "--help"});
+        assert!(
+            execute(Path::new("."), &args_dash)
+                .is_err_and(|e| e.contains("must start with an alphanumeric"))
+        );
     }
 }

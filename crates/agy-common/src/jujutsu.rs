@@ -246,6 +246,17 @@ impl JujutsuWorkspace {
     }
 
     pub fn ensure_agent_workspace(workspace_root: &Path, agent: &str) -> Result<PathBuf> {
+        if agent.is_empty()
+            || agent.starts_with('-')
+            || !agent
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(AgyError::Workspace(format!(
+                "Invalid agent workspace name '{agent}': must start with an alphanumeric or underscore character"
+            )));
+        }
+
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 
@@ -306,6 +317,17 @@ impl JujutsuWorkspace {
     /// # Errors
     /// Returns `AgyError` if Jujutsu is not available or the workspace does not exist.
     pub fn inspect_agent_workspace(workspace_root: &Path, agent: &str) -> Result<String> {
+        if agent.is_empty()
+            || agent.starts_with('-')
+            || !agent
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(AgyError::Workspace(format!(
+                "Invalid agent workspace name '{agent}': must start with an alphanumeric or underscore character"
+            )));
+        }
+
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 
@@ -411,6 +433,17 @@ impl JujutsuWorkspace {
         agent: &str,
         strategy: Option<&str>,
     ) -> Result<String> {
+        if agent.is_empty()
+            || agent.starts_with('-')
+            || !agent
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(AgyError::Workspace(format!(
+                "Invalid agent workspace name '{agent}': must start with an alphanumeric or underscore character"
+            )));
+        }
+
         let repo_root = crate::resolver::WorkspaceResolver::find_root(Some(workspace_root))
             .unwrap_or_else(|_| workspace_root.to_path_buf());
 

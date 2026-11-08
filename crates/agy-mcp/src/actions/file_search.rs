@@ -125,7 +125,8 @@ pub(crate) fn execute(
         .map(str::trim)
         .filter(|s| !s.is_empty());
 
-    let (targets, is_docs_query) = resolve_search_targets(tool, workspace_root, &project, path_arg);
+    let (targets, is_docs_query) =
+        resolve_search_targets(tool, workspace_root, &project, path_arg)?;
 
     let mut searched_targets = Vec::new();
     for target in &targets {
@@ -203,12 +204,27 @@ fn resolve_search_targets(
     workspace_root: &Path,
     project: &ProjectConfig,
     path_arg: Option<&str>,
-) -> (Vec<std::path::PathBuf>, bool) {
+) -> Result<(Vec<std::path::PathBuf>, bool), String> {
     let is_docs_tool = tool.category.as_deref() == Some("documentation")
         || project.docs.tool_name.as_deref() == Some(&tool.name);
 
     if let Some(custom) = path_arg {
-        return (vec![workspace_root.join(custom)], is_docs_tool);
+        let safe_target = if tool.enforce_workspace_bounds() {
+            crate::guards::resolve_safe_path(
+                workspace_root,
+                custom,
+                &tool.allowed_directories,
+                true,
+            )?
+        } else {
+            let input_path = Path::new(custom);
+            if input_path.is_absolute() {
+                input_path.to_path_buf()
+            } else {
+                workspace_root.join(input_path)
+            }
+        };
+        return Ok((vec![safe_target], is_docs_tool));
     }
 
     if is_docs_tool {
@@ -226,14 +242,14 @@ fn resolve_search_targets(
             .map(|p| workspace_root.join(p))
             .filter(|p| p.exists())
             .collect();
-        return (targets, true);
+        return Ok((targets, true));
     }
 
     if let Some(ref sub) = tool.enforce_dir {
-        return (vec![workspace_root.join(sub)], false);
+        return Ok((vec![workspace_root.join(sub)], false));
     }
 
-    (vec![workspace_root.to_path_buf()], false)
+    Ok((vec![workspace_root.to_path_buf()], false))
 }
 
 fn search_single_file(
@@ -610,6 +626,42 @@ mod tests {
         // Since there are no doc paths, it must NOT find it in src/main.rs!
         assert!(!result.contains("src/main.rs"));
         assert!(result.contains("No documentation or specification paths found on disk"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_query_project_spec_traversal_and_absolute_blocked() {
+        let temp = create_test_dir("traversal-blocked");
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            category: Some("documentation".to_owned()),
+            sandbox: agy_common::tools::ToolSandboxPolicy {
+                enforce_workspace_bounds: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // 1. Directory traversal rejected
+        let args_traversal = json!({
+            "pattern": "root",
+            "path": "../../../../../../etc/passwd"
+        });
+        assert!(
+            execute(&tool, &temp, &args_traversal)
+                .is_err_and(|e| e.contains("Security policy violation"))
+        );
+
+        // 2. Absolute path escaping workspace rejected
+        let args_abs = json!({
+            "pattern": "root",
+            "path": "/etc/passwd"
+        });
+        assert!(
+            execute(&tool, &temp, &args_abs)
+                .is_err_and(|e| e.contains("Security policy violation"))
+        );
 
         drop(std::fs::remove_dir_all(&temp));
     }
