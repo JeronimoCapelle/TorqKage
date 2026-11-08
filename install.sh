@@ -117,7 +117,8 @@ detect_target() {
 }
 
 install_bundle_to_system() {
-    local bundle_dir="$1"
+    local plugin_manifest_dir="$1"
+    local bin_source_dir="$2"
 
     echo "--> Synchronizing bundle to Gemini plugin root: ${TARGET_PLUGIN_DIR}..."
     if [[ -L "${TARGET_PLUGIN_DIR}" ]]; then
@@ -129,27 +130,39 @@ install_bundle_to_system() {
     mkdir -p "${TARGET_PLUGIN_DIR}/assets"
 
     # Copy declarative files and manifests
-    cp "${bundle_dir}/plugin.json" "${TARGET_PLUGIN_DIR}/"
-    cp "${bundle_dir}/tools.toml" "${TARGET_PLUGIN_DIR}/"
-    cp "${bundle_dir}/hooks.toml" "${TARGET_PLUGIN_DIR}/"
-    cp "${bundle_dir}/hooks.json" "${TARGET_PLUGIN_DIR}/"
+    cp "${plugin_manifest_dir}/plugin.json" "${TARGET_PLUGIN_DIR}/"
+    cp "${plugin_manifest_dir}/tools.toml" "${TARGET_PLUGIN_DIR}/"
+    cp "${plugin_manifest_dir}/hooks.toml" "${TARGET_PLUGIN_DIR}/"
+    cp "${plugin_manifest_dir}/hooks.json" "${TARGET_PLUGIN_DIR}/"
     rm -f "${TARGET_PLUGIN_DIR}/mcp_config.json"
-    if [[ -f "${bundle_dir}/project.toml" ]]; then
-        cp "${bundle_dir}/project.toml" "${TARGET_PLUGIN_DIR}/"
+    if [[ -f "${plugin_manifest_dir}/project.toml" ]]; then
+        cp "${plugin_manifest_dir}/project.toml" "${TARGET_PLUGIN_DIR}/"
     fi
-    if [[ -f "${bundle_dir}/README.md" ]]; then
-        cp "${bundle_dir}/README.md" "${TARGET_PLUGIN_DIR}/"
+    if [[ -f "${plugin_manifest_dir}/README.md" ]]; then
+        cp "${plugin_manifest_dir}/README.md" "${TARGET_PLUGIN_DIR}/"
     fi
-    if [[ -d "${bundle_dir}/agents" ]]; then
-        cp -r "${bundle_dir}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
+    if [[ -d "${plugin_manifest_dir}/agents" ]]; then
+        cp -r "${plugin_manifest_dir}/agents/"* "${TARGET_PLUGIN_DIR}/agents/"
     fi
-    if [[ -d "${bundle_dir}/assets" ]]; then
-        cp -r "${bundle_dir}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
+    if [[ -d "${plugin_manifest_dir}/assets" ]]; then
+        cp -r "${plugin_manifest_dir}/assets/"* "${TARGET_PLUGIN_DIR}/assets/"
     fi
 
     # Copy executables (unlink first to prevent ETXTBSY if active daemons/TUI are running)
     rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs"
-    cp -r "${bundle_dir}/bin/"* "${TARGET_PLUGIN_DIR}/bin/"
+    cp "${bin_source_dir}/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"
+    cp "${bin_source_dir}/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/"
+    cp "${bin_source_dir}/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/"
+    if [[ -f "${bin_source_dir}/graphtrail" ]]; then
+        cp "${bin_source_dir}/graphtrail" "${TARGET_PLUGIN_DIR}/bin/"
+    elif [[ -f "${plugin_manifest_dir}/bin/graphtrail" ]]; then
+        cp "${plugin_manifest_dir}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/"
+    fi
+    if [[ -f "${bin_source_dir}/perfetto-mcp-rs" ]]; then
+        cp "${bin_source_dir}/perfetto-mcp-rs" "${TARGET_PLUGIN_DIR}/bin/"
+    elif [[ -f "${plugin_manifest_dir}/bin/perfetto-mcp-rs" ]]; then
+        cp "${plugin_manifest_dir}/bin/perfetto-mcp-rs" "${TARGET_PLUGIN_DIR}/bin/"
+    fi
     chmod +x "${TARGET_PLUGIN_DIR}/bin"/*
 
     # Create convenient user symlinks in ~/.local/bin
@@ -179,7 +192,7 @@ install_bundle_to_system() {
     echo "                   AGY-SUITE INSTALLATION COMPLETE                              "
     echo "================================================================================"
     echo "Plugin Bundle Location: ${TARGET_PLUGIN_DIR}"
-    echo "Binaries Installed:     agy-mcp, agy-hooks, agy-ctrl"
+    echo "Binaries Installed:     agy-mcp, agy-hooks, agy-ctrl (Precompiled / High-Perf)"
     if [[ "${SKIP_SYMLINKS}" = false ]]; then
     echo "User CLI Symlinks:     ${LOCAL_BIN_DIR}/agy-ctrl -> ${TARGET_PLUGIN_DIR}/bin/agy-ctrl"
     echo "                       ${LOCAL_BIN_DIR}/agy-mcp -> ${TARGET_PLUGIN_DIR}/bin/agy-mcp"
@@ -215,14 +228,32 @@ try_precompiled_install() {
     echo "--> Unpacking precompiled release archive..."
     tar -xzf "${tar_path}" -C "${tmp_dir}"
 
-    local extracted_bundle
+    local bin_dir="${tmp_dir}"
     if [[ -d "${tmp_dir}/agy-suite-${target}" ]]; then
-        extracted_bundle="${tmp_dir}/agy-suite-${target}"
-    else
-        extracted_bundle="${tmp_dir}"
+        bin_dir="${tmp_dir}/agy-suite-${target}"
+    fi
+    if [[ -d "${bin_dir}/bin" ]]; then
+        bin_dir="${bin_dir}/bin"
     fi
 
-    install_bundle_to_system "${extracted_bundle}"
+    # Verify binaries exist in extracted archive
+    for b in agy-ctrl agy-mcp agy-hooks; do
+        if [[ ! -f "${bin_dir}/${b}" ]]; then
+            echo "--> Notice: Archive did not contain expected binary '${b}'."
+            return 1
+        fi
+    done
+
+    # Determine plugin manifest location
+    local plugin_manifest_dir="${SCRIPT_DIR}/plugins/agy-suite"
+    if [[ ! -f "${plugin_manifest_dir}/plugin.json" ]]; then
+        echo "--> Downloading plugin manifests and agent profiles from repository..."
+        mkdir -p "${tmp_dir}/repo"
+        curl -sSLf "https://github.com/${GITHUB_REPO}/archive/refs/heads/main.tar.gz" | tar -xz -C "${tmp_dir}/repo" --strip-components=1
+        plugin_manifest_dir="${tmp_dir}/repo/plugins/agy-suite"
+    fi
+
+    install_bundle_to_system "${plugin_manifest_dir}" "${bin_dir}"
     return 0
 }
 
@@ -313,7 +344,7 @@ build_from_source_install() {
         return 0
     fi
 
-    install_bundle_to_system "${plugin_dir}"
+    install_bundle_to_system "${plugin_dir}" "${bin_source_dir}"
 }
 
 # Execution Entry Point
