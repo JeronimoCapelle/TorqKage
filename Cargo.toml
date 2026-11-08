@@ -10,7 +10,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["infinite"]
@@ -22,7 +22,7 @@ categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 # Internal workspace crates
-agy-common = { path = "crates/agy-common", version = "0.1.1" }
+agy-common = { path = "crates/agy-common", version = "0.1.2" }
 
 # Serialization & Configuration
 serde = { version = "1.0", features = ["derive"] }
