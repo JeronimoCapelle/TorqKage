@@ -53,6 +53,13 @@ fn resolve_tool_help(
     query_opt: Option<&str>,
     available_tools: &[ToolDefinition],
 ) -> String {
+    // 0. Reject option/flag injection attempts
+    if name.starts_with('-') {
+        return format!(
+            "Invalid tool name '{name}': tool names must start with an alphanumeric or underscore character."
+        );
+    }
+
     // 1. Check if `name` matches an internal agy-suite MCP tool
     if let Some(mcp_tool) = available_tools.iter().find(|t| t.name == name) {
         return format_mcp_tool_help(mcp_tool);
@@ -224,7 +231,7 @@ fn query_navi(name: &str, query: &str) -> Option<String> {
 
 fn query_tldr(name: &str) -> Option<String> {
     let mut cmd = Command::new("tldr");
-    cmd.arg(name);
+    cmd.args(["--", name]);
     let output =
         SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
@@ -257,7 +264,7 @@ fn query_cli_help(name: &str) -> Option<String> {
 fn query_man_synopsis(name: &str) -> Option<String> {
     let mut cmd = Command::new("man");
     cmd.env("MANPAGER", "cat");
-    cmd.arg(name);
+    cmd.args(["--", name]);
     let output =
         SubprocessSupervisor::run_supervised(cmd, DEFAULT_QUICK_COMMAND_TIMEOUT_SECS).ok()?;
 
@@ -379,5 +386,14 @@ mod tests {
         assert!(snippet.contains("NAME"));
         assert!(snippet.contains("SYNOPSIS"));
         assert!(!snippet.contains("-h, --help"));
+    }
+
+    #[test]
+    fn test_query_tool_help_dash_rejected() {
+        let tool = ToolDefinition::default();
+        let args = serde_json::json!({ "tool_name": "--help" });
+        let (out, is_err) = execute(&tool, &args, &[]);
+        assert!(!is_err);
+        assert!(out.contains("Invalid tool name '--help'"));
     }
 }

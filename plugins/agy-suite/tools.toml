@@ -550,6 +550,8 @@ args = [
     { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "File or directory to search (defaults to project root)" }
 ]
 output_capture = "stdout"
+empty_fallback = "No AST pattern matches found in the specified path."
+success_exit_codes = [0, 1]
 truncate_lines = 150
 timeout_seconds = 30
 
@@ -913,7 +915,7 @@ timeout_seconds = 15
 description = "Retrieves live documentation, usage examples, and schemas for host CLI binaries ($PATH) or agy-suite MCP tools"
 action = "cli_manual"
 category = "diagnostics"
-sanitize_input = "^[a-zA-Z0-9_-]+$"
+sanitize_input = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$"
 truncate_lines = 100
 timeout_seconds = 10
 
