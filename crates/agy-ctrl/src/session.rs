@@ -1,10 +1,18 @@
 //! Project-specific conversation session reader and discovery engine for Antigravity.
 //!
 //! # Architecture
-//! This module queries session metadata directly from `~/.gemini/antigravity-cli/conversation_summaries.db`
-//! using embedded `rusqlite` with prepared parameterized statements.
+//! This module discovers past conversation sessions for an agent within the active workspace.
+//! Metadata is resolved across multiple Antigravity storage layers:
+//! 1. Direct workspace URI matching in `~/.gemini/antigravity-cli/conversation_summaries.db`
+//! 2. Prompt execution history in `~/.gemini/antigravity-cli/history.jsonl` (CLI sessions)
+//! 3. Full-text search catalog in `conversations_fts` (FTS5 index)
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufRead, BufReader},
+    path::{Path, PathBuf},
+};
 
 use serde::Deserialize;
 
@@ -34,6 +42,89 @@ impl SessionSummary {
     }
 }
 
+#[derive(Deserialize)]
+struct HistoryEntry {
+    #[serde(rename = "conversationId")]
+    conversation_id: Option<String>,
+    workspace: Option<PathBuf>,
+}
+
+fn load_history_workspaces(history_path: &Path) -> HashMap<String, PathBuf> {
+    let mut map = HashMap::new();
+    let Ok(file) = File::open(history_path) else {
+        return map;
+    };
+    let reader = BufReader::new(file);
+    for line in reader.lines().map_while(Result::ok) {
+        if let Ok(entry) = serde_json::from_str::<HistoryEntry>(&line)
+            && let (Some(cid), Some(ws)) = (entry.conversation_id, entry.workspace)
+        {
+            map.insert(cid, ws);
+        }
+    }
+    map
+}
+
+fn workspace_matches(ws_a: &Path, ws_b: &Path) -> bool {
+    if ws_a == ws_b {
+        return true;
+    }
+    let canon_a = ws_a.canonicalize().unwrap_or_else(|_| ws_a.to_path_buf());
+    let canon_b = ws_b.canonicalize().unwrap_or_else(|_| ws_b.to_path_buf());
+    canon_a == canon_b || canon_a.starts_with(&canon_b) || canon_b.starts_with(&canon_a)
+}
+
+fn session_matches_workspace(
+    conn: &rusqlite::Connection,
+    row: &SessionSummary,
+    workspace_root: &Path,
+    ws_canonical: &Path,
+    history_map: &HashMap<String, PathBuf>,
+) -> bool {
+    // 1. Direct workspace_uris match (e.g. from IDE or multi-root workspace flag)
+    if !row.workspace_uris.is_empty() {
+        let ws_str = ws_canonical.to_string_lossy();
+        if row.workspace_uris.contains(&*ws_str) {
+            return true;
+        }
+        let root_str = workspace_root.to_string_lossy();
+        if row.workspace_uris.contains(&*root_str) {
+            return true;
+        }
+    }
+
+    // 2. CLI interaction history match (history.jsonl records working directory for each turn)
+    if let Some(hist_ws) = history_map.get(&row.conversation_id)
+        && workspace_matches(hist_ws, ws_canonical)
+    {
+        return true;
+    }
+
+    // 3. SQLite FTS workspace match fallback
+    if let Ok(mut fts_stmt) = conn.prepare_cached(
+        "SELECT workspace FROM conversations_fts WHERE conversation_id = ?1 LIMIT 1;",
+    ) {
+        let fts_ws: Option<String> = fts_stmt
+            .query_row(rusqlite::params![row.conversation_id], |r| r.get(0))
+            .ok();
+        if let Some(ws) = fts_ws
+            && !ws.is_empty()
+        {
+            let ws_path = Path::new(&ws);
+            if workspace_matches(ws_path, ws_canonical) {
+                return true;
+            }
+            if let Some(ws_name) = ws_canonical.file_name().and_then(|n| n.to_str())
+                && ws == ws_name
+            {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 /// Discovers the latest resumable session for a given agent in the given workspace.
 ///
 /// Returns `None` if the session database does not exist or cannot be opened.
@@ -46,13 +137,21 @@ pub(crate) fn find_agent_session_for_workspace(
     let home_path = PathBuf::from(&home);
     let db_path = home_path.join(".gemini/antigravity-cli/conversation_summaries.db");
     let convs_dir = home_path.join(".gemini/antigravity-cli/conversations");
+    let history_path = home_path.join(".gemini/antigravity-cli/history.jsonl");
 
-    query_session_from_db(&db_path, &convs_dir, agent_name, workspace_root)
+    query_session_from_sources(
+        &db_path,
+        &convs_dir,
+        &history_path,
+        agent_name,
+        workspace_root,
+    )
 }
 
-fn query_session_from_db(
+pub(crate) fn query_session_from_sources(
     db_path: &Path,
     convs_dir: &Path,
+    history_path: &Path,
     agent_name: &str,
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
@@ -63,8 +162,8 @@ fn query_session_from_db(
     let ws_canonical = workspace_root
         .canonicalize()
         .unwrap_or_else(|_| workspace_root.to_path_buf());
-    let ws_lossy = ws_canonical.to_string_lossy();
-    let ws_pattern = format!("%{ws_lossy}%");
+
+    let history_map = load_history_workspaces(history_path);
 
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
@@ -76,13 +175,13 @@ fn query_session_from_db(
         .prepare(
             "SELECT conversation_id, agent_name, workspace_uris, last_modified_time, step_count, preview \
              FROM conversation_summaries \
-             WHERE agent_name = ?1 AND workspace_uris LIKE ?2 AND step_count > 0 \
-             ORDER BY last_modified_time DESC LIMIT 5;",
+             WHERE LOWER(agent_name) = LOWER(?1) AND step_count > 0 \
+             ORDER BY last_modified_time DESC LIMIT 20;",
         )
         .ok()?;
 
     let rows = stmt
-        .query_map(rusqlite::params![agent_name, ws_pattern], |row| {
+        .query_map(rusqlite::params![agent_name], |row| {
             Ok(SessionSummary {
                 conversation_id: row.get(0)?,
                 agent_name: row.get(1)?,
@@ -96,7 +195,11 @@ fn query_session_from_db(
 
     for row in rows.flatten() {
         let conv_file = convs_dir.join(format!("{}.db", row.conversation_id));
-        if conv_file.is_file() {
+        if !conv_file.is_file() {
+            continue;
+        }
+
+        if session_matches_workspace(&conn, &row, workspace_root, &ws_canonical, &history_map) {
             return Some(row);
         }
     }
@@ -123,9 +226,9 @@ mod tests {
     }
 
     #[test]
-    fn test_rusqlite_session_discovery() {
+    fn test_rusqlite_session_discovery_via_workspace_uris() {
         let temp_dir = std::env::temp_dir().join(format!(
-            "agy-ctrl-test-session-{}",
+            "agy-ctrl-test-session-uris-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -136,6 +239,7 @@ mod tests {
         std::fs::create_dir_all(&convs_dir).unwrap();
 
         let db_path = gemini_dir.join("conversation_summaries.db");
+        let history_path = gemini_dir.join("history.jsonl");
         let conn = rusqlite::Connection::open(&db_path).unwrap();
         conn.execute(
             "CREATE TABLE conversation_summaries (
@@ -166,12 +270,97 @@ mod tests {
         std::fs::write(convs_dir.join("test-uuid-1234.db"), b"").unwrap();
 
         let ws = Path::new("/home/infinite/projects/rust/agy-suite");
-        let res = query_session_from_db(&db_path, &convs_dir, "mock_agent", ws);
+        let res = query_session_from_sources(&db_path, &convs_dir, &history_path, "mock_agent", ws);
         assert!(res.is_some());
         let session = res.unwrap();
         assert_eq!(session.conversation_id, "test-uuid-1234");
         assert_eq!(session.step_count, 5);
 
         drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_rusqlite_session_discovery_via_history_jsonl() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agy-ctrl-test-session-hist-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let gemini_dir = temp_dir.join(".gemini/antigravity-cli");
+        let convs_dir = gemini_dir.join("conversations");
+        std::fs::create_dir_all(&convs_dir).unwrap();
+
+        let db_path = gemini_dir.join("conversation_summaries.db");
+        let history_path = gemini_dir.join("history.jsonl");
+        let conn = rusqlite::Connection::open(&db_path).unwrap();
+        conn.execute(
+            "CREATE TABLE conversation_summaries (
+                conversation_id TEXT PRIMARY KEY,
+                agent_name TEXT,
+                workspace_uris TEXT,
+                last_modified_time TEXT,
+                step_count INTEGER,
+                preview TEXT
+            )",
+            [],
+        )
+        .unwrap();
+
+        // Empty workspace_uris, mimicking CLI interactive session behavior
+        conn.execute(
+            "INSERT INTO conversation_summaries VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                "cli-uuid-5678",
+                "copilot",
+                "",
+                "2026-11-07T23:00:00Z",
+                47,
+                "Setup Test And Capabilities"
+            ],
+        )
+        .unwrap();
+
+        // history.jsonl records the workspace path
+        let hist_entry = serde_json::json!({
+            "conversationId": "cli-uuid-5678",
+            "workspace": "/home/infinite/projects/rust/Pure-V",
+            "display": "Test prompt"
+        });
+        std::fs::write(&history_path, format!("{hist_entry}\n")).unwrap();
+
+        std::fs::write(convs_dir.join("cli-uuid-5678.db"), b"").unwrap();
+
+        let ws_match = Path::new("/home/infinite/projects/rust/Pure-V");
+        let res =
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", ws_match);
+        assert!(res.is_some());
+        let session = res.unwrap();
+        assert_eq!(session.conversation_id, "cli-uuid-5678");
+        assert_eq!(session.step_count, 47);
+
+        // Mismatched workspace should return None
+        let ws_mismatch = Path::new("/home/infinite/projects/rust/other-repo");
+        let res_none =
+            query_session_from_sources(&db_path, &convs_dir, &history_path, "copilot", ws_mismatch);
+        assert!(res_none.is_none());
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_live_session_discovery_pure_v() {
+        let ws = Path::new("/home/infinite/projects/rust/Pure-V");
+        if ws.is_dir() {
+            let session = find_agent_session_for_workspace("copilot", ws);
+            assert!(
+                session.is_some(),
+                "Expected copilot session f1bb6355 to be found for Pure-V workspace"
+            );
+            let s = session.unwrap();
+            assert_eq!(s.conversation_id, "f1bb6355-7b30-4670-970e-2a56fb49cae1");
+            assert!(s.step_count >= 47);
+        }
     }
 }
