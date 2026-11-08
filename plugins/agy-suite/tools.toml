@@ -136,13 +136,13 @@ timeout_seconds = 180
 
 [categories.vcs]
 category = "vcs"
-tracks_circuit_breaker = true
+tracks_circuit_breaker = false
 timeout_seconds = 30
 
 [categories.workspace]
 category = "workspace"
-tracks_circuit_breaker = true
-timeout_seconds = 30
+tracks_circuit_breaker = false
+timeout_seconds = 60
 
 [categories.management]
 category = "management"
@@ -305,7 +305,7 @@ args = [
 [tools.list_project_docs]
 description = "Lists all documentation files, specifications, and architecture blueprints in the project (docs/, specs/, ARCHITECTURE.md, README.md)"
 action = "parameterized_command"
-category = "filesystem"
+category = "documentation"
 command = ["fd", "--extension", "md", "--extension", "markdown", "--"]
 args = [
     { name = "path", required = false, default = ".", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Directory to list docs from (defaults to project root '.')" }
@@ -337,10 +337,14 @@ timeout_seconds = 15
 
 [tools.modify_code]
 inherit = "base_tools.code_modifier"
+action = "mpatch_edit"
+category = "filesystem"
 description = "Applies Aider search/replace blocks or diffs via context-aware fuzzy mpatch"
 
 [tools.write_file]
 inherit = "base_tools.file_creator"
+action = "file_write"
+category = "filesystem"
 description = "Creates a new file strictly within the canonical workspace bounds"
 
 # ==============================================================================
@@ -916,7 +920,7 @@ timeout_seconds = 30
 [tools.eval_symbolic_math]
 description = "Executes exact symbolic mathematics (ODEs, Jacobians, Taylor series, simplifications) via SymPy inside an isolated, network-less Bubblewrap jail"
 action = "parameterized_command"
-category = "other"
+category = "diagnostics"
 enforce_sandbox = true
 command = ["python3", "-c"]
 args = [
@@ -944,7 +948,7 @@ timeout_seconds = 10
 [tools.inspect_circuit_breaker]
 description = "Inspects the active circuit breaker ledger status, consecutive failure count, strike threshold, and last recorded error signature"
 action = "static_command"
-category = "diagnostics"
+category = "management"
 command = ["agy-ctrl", "inspect-breaker"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -962,7 +966,7 @@ timeout_seconds = 10
 [tools.inspect_workspace_diff]
 description = "Inspects the active working tree diff (jj diff) with optional file path scoping, summary mode, or revision targeting"
 action = "parameterized_command"
-category = "diagnostics"
+category = "vcs"
 command = ["jj", "diff", "--color=never"]
 args = [
     { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Specific file or directory path to focus the diff on (defaults to whole working tree)" },
@@ -977,7 +981,7 @@ timeout_seconds = 20
 [tools.inspect_parent_commit]
 description = "Inspects the parent commit (@-) metadata, commit message, and full diff in Jujutsu"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 command = ["jj", "show", "@-", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 250
@@ -986,7 +990,7 @@ timeout_seconds = 10
 [tools.inspect_revision_log]
 description = "Displays the recent Jujutsu revision history and change graph with change IDs and descriptions"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 command = ["jj", "log", "-n", "10", "--no-graph", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 100
@@ -995,7 +999,7 @@ timeout_seconds = 10
 [tools.inspect_workspace_conflicts]
 description = "Checks if any commits or files in the Jujutsu repository contain unresolved merge/rebase conflicts"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 command = ["jj", "log", "-r", "conflicts()", "--no-graph", "--color=never"]
 empty_fallback = "Clean (0 merge/rebase conflicts detected)"
 output_capture = "stdout"
@@ -1005,7 +1009,7 @@ timeout_seconds = 10
 [tools.inspect_bookmarks]
 description = "Lists Jujutsu bookmarks (git branches) and their remote tracking status"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 command = ["jj", "bookmark", "list", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 50
@@ -1048,7 +1052,7 @@ timeout_seconds = 15
 [tools.inspect_agent_workspace]
 description = "Inspects revisions and working-copy diffs within a subagent's isolated Jujutsu workspace (.agy/workspaces/<agent>)"
 action = "workspace_inspect"
-category = "diagnostics"
+category = "workspace"
 args = [
     { name = "agent", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Subagent name whose isolated workspace should be inspected" }
 ]
@@ -1058,7 +1062,7 @@ timeout_seconds = 15
 [tools.merge_agent_workspace]
 description = "Rebases or squashes an isolated subagent workspace (.agy/workspaces/<agent>) onto @, runs declarative quality gates on the merged tree, and forgets the workspace on success"
 action = "workspace_merge"
-category = "release"
+category = "workspace"
 skip_gates = ["workspace_clean", "linter", "tests"]
 mutating = true
 args = [
@@ -1071,7 +1075,7 @@ timeout_seconds = 120
 [tools.inspect_workspace_clean]
 description = "Inspects the current Jujutsu workspace (or a specified subagent workspace) for uncommitted changes, listing modified files or returning 'Clean (0 uncommitted changes)'"
 action = "parameterized_command"
-category = "diagnostics"
+category = "vcs"
 enforce_workspace_bounds = true
 command = ["jj", "diff", "--summary", "--color=never"]
 args = [
@@ -1085,7 +1089,7 @@ timeout_seconds = 10
 [tools.inspect_git_status]
 description = "Inspects Git working tree status (uncommitted, untracked, staged files) via git status --short"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 command = ["git", "status", "--short"]
 empty_fallback = "Clean (0 uncommitted Git changes)"
 output_capture = "stdout"
@@ -1095,7 +1099,7 @@ timeout_seconds = 10
 [tools.cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
 action = "parameterized_command"
-category = "release"
+category = "documentation"
 skip_gates = ["workspace_clean"]
 command = ["cargo", "doc", "--no-deps"]
 args = [

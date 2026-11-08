@@ -10,7 +10,7 @@ use crate::{
     models::{OutputCapture, ToolDefinition},
 };
 
-fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> bool {
+pub(crate) fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> bool {
     if arg.switch {
         match arguments.get(&arg.name) {
             Some(serde_json::Value::Bool(b)) => *b,
@@ -297,7 +297,7 @@ where
     Ok((truncated, is_error))
 }
 
-fn matches_pattern(val: &str, pattern: &str) -> bool {
+pub(crate) fn matches_pattern(val: &str, pattern: &str) -> bool {
     if val.is_empty() {
         return false;
     }

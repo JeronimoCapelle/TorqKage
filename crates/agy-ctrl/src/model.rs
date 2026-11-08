@@ -27,8 +27,16 @@ pub(crate) enum ToolCategory {
     Filesystem,
     /// Supply-chain, licensing, `SemVer` & changelog auditing (`licenses`, `semver`)
     Release,
-    /// Repository state, Git/JJ inspection, specs & manuals (`diff`, `conflicts`, `tldr`)
+    /// Repository state, static analysis, specs & manuals (`ast_grep`, `graphtrail`, `tldr`)
     Diagnostics,
+    /// Documentation generation, markdown and spec queries (`cargo_doc`, `git_cliff`)
+    Documentation,
+    /// Version control operations (`jj diff`, `jj absorb`, `git status`)
+    Vcs,
+    /// Isolated subagent workspaces (`ensure_agent_workspace`, `merge_agent_workspace`)
+    Workspace,
+    /// System health, supervisor and circuit breaker controls (`inspect_breaker`, `reset_breaker`)
+    Management,
     /// Uncategorized / custom
     Other,
 }
@@ -44,6 +52,10 @@ impl ToolCategory {
             Self::Filesystem => "Filesystem & Edit",
             Self::Release => "Release & SemVer",
             Self::Diagnostics => "State & Diagnostics",
+            Self::Documentation => "Documentation & Specs",
+            Self::Vcs => "Version Control (JJ/Git)",
+            Self::Workspace => "Subagent Workspaces",
+            Self::Management => "Supervisor & Circuit Breaker",
             Self::Other => "General",
         }
     }
@@ -60,6 +72,10 @@ impl std::str::FromStr for ToolCategory {
             "filesystem" => Ok(Self::Filesystem),
             "release" => Ok(Self::Release),
             "diagnostics" => Ok(Self::Diagnostics),
+            "documentation" => Ok(Self::Documentation),
+            "vcs" => Ok(Self::Vcs),
+            "workspace" => Ok(Self::Workspace),
+            "management" => Ok(Self::Management),
             _ => Ok(Self::Other),
         }
     }
@@ -203,10 +219,26 @@ impl ToolItem {
             || n.contains("verification")
         {
             ToolCategory::Compilation
+        } else if n.contains("workspace") {
+            ToolCategory::Workspace
+        } else if n.contains("breaker") {
+            ToolCategory::Management
+        } else if n.contains("diff")
+            || n.contains("bookmark")
+            || n.contains("absorb")
+            || n.contains("describe")
+            || n.contains("vcs")
+        {
+            ToolCategory::Vcs
+        } else if n.contains("doc")
+            || n.contains("cliff")
+            || n.contains("_spec")
+            || n.starts_with("spec")
+        {
+            ToolCategory::Documentation
         } else if n.contains("release")
             || n.contains("deny")
             || n.contains("semver")
-            || n.contains("cliff")
             || n.contains("publish")
             || n.contains("machete")
             || n.contains("outdated")
@@ -227,11 +259,7 @@ impl ToolItem {
             || n.contains("status")
             || n.contains("math")
             || n.contains("grep")
-            || n.contains("diff")
             || n.contains("log")
-            || n.contains("bookmark")
-            || n.contains("absorb")
-            || n.contains("describe")
         {
             ToolCategory::Diagnostics
         } else {

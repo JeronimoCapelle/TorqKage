@@ -144,6 +144,10 @@ pub(crate) fn dispatch_action(
 ) -> Result<(String, bool), String> {
     evaluate_pre_flight_guards(tool, workspace_root)?;
 
+    if !tool.args.is_empty() {
+        validate_declared_arguments(tool, arguments)?;
+    }
+
     let execution_result = match tool.action {
         ToolAction::FileRead => {
             let content =
@@ -245,6 +249,10 @@ fn update_circuit_breaker(
             Ok((output, is_error))
         },
         Err(err) => {
+            if is_validation_or_client_error(&err) {
+                return Err(err);
+            }
+
             let error_sig = extract_compiler_error_signature(&err, custom_pattern);
             drop(ledger.record_failure(
                 workspace_root,
@@ -256,6 +264,85 @@ fn update_circuit_breaker(
             Err(err)
         },
     }
+}
+
+fn is_validation_or_client_error(err: &str) -> bool {
+    let lower = err.to_ascii_lowercase();
+    lower.contains("validation error")
+        || lower.contains("security validation error")
+        || lower.contains("parameter conflict")
+        || lower.contains("missing required")
+        || lower.contains("invalid argument")
+        || lower.contains("invalid format")
+        || lower.contains("invalid parameter")
+        || lower.contains("invalid strategy")
+        || lower.contains("invalid agent")
+        || lower.contains("invalid tool name")
+        || lower.contains("not one of allowed enum values")
+        || lower.contains("violates pattern")
+}
+
+fn validate_declared_arguments(
+    tool: &ToolDefinition,
+    arguments: &serde_json::Value,
+) -> Result<(), String> {
+    for arg in &tool.args {
+        // 1. Conflicts check
+        if !arg.conflicts_with.is_empty() && parameterized_cmd::is_arg_supplied(arg, arguments) {
+            for conflicting_name in &arg.conflicts_with {
+                if let Some(conflicting_arg) =
+                    tool.args.iter().find(|a| &a.name == conflicting_name)
+                    && parameterized_cmd::is_arg_supplied(conflicting_arg, arguments)
+                {
+                    return Err(format!(
+                        "Parameter conflict: Argument '{}' cannot be used together with '{conflicting_name}' for tool '{}'",
+                        arg.name, tool.name
+                    ));
+                }
+            }
+        }
+
+        // 2. Extract effective value
+        let val_opt = arguments.get(&arg.name).and_then(|v| match v {
+            serde_json::Value::String(s) => Some(s.trim().to_owned()),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            serde_json::Value::Bool(b) => Some(b.to_string()),
+            _ => None,
+        });
+
+        let effective_val = match val_opt {
+            Some(v) if !v.is_empty() => Some(v),
+            _ => arg.default.clone(),
+        };
+
+        if let Some(val) = effective_val {
+            // 3. Enum validation
+            if !arg.enum_values.is_empty() && !arg.enum_values.iter().any(|ev| ev == &val) {
+                return Err(format!(
+                    "Validation error: Argument '{}' with value '{val}' is not one of allowed enum values: {}",
+                    arg.name,
+                    arg.enum_values.join(", ")
+                ));
+            }
+
+            // 4. Regex validation
+            if let Some(pattern) = &arg.regex
+                && !parameterized_cmd::matches_pattern(&val, pattern)
+            {
+                return Err(format!(
+                    "Security validation error: Argument '{}' with value '{val}' violates pattern '{pattern}'",
+                    arg.name
+                ));
+            }
+        } else if arg.required {
+            return Err(format!(
+                "Missing required argument '{}' for tool '{}'",
+                arg.name, tool.name
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> Result<(), String> {
@@ -339,6 +426,51 @@ mod tests {
         )
         .unwrap();
         assert!(!res3.1);
+
+        let ledger = CircuitBreakerLedger::load(&temp_dir);
+        assert_eq!(ledger.consecutive_failures, 0);
+        assert!(!ledger.tripped);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_circuit_breaker_ignores_validation_errors() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_cb_val_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let tool = ToolDefinition {
+            name: "cargo_build".to_owned(),
+            safety: agy_common::tools::ToolSafetyPolicy {
+                tracks_circuit_breaker: true,
+                ..Default::default()
+            },
+            action: ToolAction::ParameterizedCommand,
+            ..Default::default()
+        };
+
+        // Repeated parameter validation errors should NOT increment circuit breaker strikes
+        let err1 = update_circuit_breaker(
+            &tool,
+            &temp_dir,
+            Some("worker_agent"),
+            Err("Validation error: Argument 'strategy' with value 'invalid_xyz' is not one of allowed enum values: rebase, squash".to_owned()),
+        );
+        assert!(err1.is_err_and(|e| e.contains("Validation error")));
+
+        let err2 = update_circuit_breaker(
+            &tool,
+            &temp_dir,
+            Some("worker_agent"),
+            Err("Missing required argument 'agent' for tool 'merge_agent_workspace'".to_owned()),
+        );
+        assert!(err2.is_err_and(|e| e.contains("Missing required argument")));
 
         let ledger = CircuitBreakerLedger::load(&temp_dir);
         assert_eq!(ledger.consecutive_failures, 0);
