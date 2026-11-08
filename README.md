@@ -18,13 +18,15 @@
 
 ## ⚡ Quickstart (One-Liner)
 
-Install the full suite and register the Antigravity plugin with a single command:
+Install the full suite and register the Antigravity plugin with a single command (no prior cloning required):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash -s -- --fast
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
 ```
 
-Or build and install locally from source using Cranelift and Mold (<6 seconds):
+*(Tip: For fast local development using Cranelift + Mold, append `-s -- --fast`).*
+
+Or clone and build manually from source:
 
 ```bash
 git clone https://github.com/JeronimoCapelle/agy-suite.git

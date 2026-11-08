@@ -11,11 +11,30 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd || pwd)"
 WORKSPACE_ROOT="${SCRIPT_DIR}"
 PLUGIN_DIR="${WORKSPACE_ROOT}/plugins/agy-suite"
 TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/agy-suite"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
+
+# ------------------------------------------------------------------------------
+# Bootstrap Detection: If executed standalone via 'curl ... | bash'
+# without the repository cloned, clone shallowly to an ephemeral temp dir.
+# ------------------------------------------------------------------------------
+if [[ ! -f "${WORKSPACE_ROOT}/Cargo.toml" || ! -d "${WORKSPACE_ROOT}/plugins/agy-suite" ]]; then
+    echo "==> [agy-suite] Installer running in remote bootstrap mode (no local clone detected)..."
+    if ! command -v git >/dev/null 2>&1; then
+        echo "Error: 'git' is required to bootstrap agy-suite from source." >&2
+        exit 1
+    fi
+    TMP_CLONE="$(mktemp -d)"
+    trap 'rm -rf "${TMP_CLONE}"' EXIT
+    echo "--> Shallow cloning agy-suite into ephemeral workspace: ${TMP_CLONE}/agy-suite..."
+    git clone --depth 1 https://github.com/JeronimoCapelle/agy-suite.git "${TMP_CLONE}/agy-suite"
+    echo "--> Invoking local installer..."
+    bash "${TMP_CLONE}/agy-suite/install.sh" "$@"
+    exit 0
+fi
 
 PROFILE="release"
 LOCAL_ONLY=false

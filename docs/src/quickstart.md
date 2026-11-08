@@ -13,9 +13,13 @@ Get started with `agy-suite` in under 60 seconds.
 
 ### Method 1: Automated Installer (One-Liner)
 
+Runs standalone without requiring you to clone the repository first:
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash -s -- --fast
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
 ```
+
+*(Tip: If you have Cranelift and Mold installed, pass `-s -- --fast` for near-instant compilation).*
 
 ### Method 2: From Source
 
