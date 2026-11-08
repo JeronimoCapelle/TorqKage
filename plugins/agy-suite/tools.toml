@@ -476,7 +476,7 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["cargo-public-api", "-s", "-s", "-v"]
 args = [
-    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Name of the package or dependency to inspect (e.g. 'ratatui', 'serde', 'agy-common', defaults to current root crate)" }
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Name of the package or dependency to inspect (e.g. 'ratatui', 'serde', 'agy-common', defaults to current root crate)" }
 ]
 output_capture = "both"
 truncate_lines = 150
