@@ -711,6 +711,18 @@ pub(crate) fn truncate_output(
     truncated_text
 }
 
+/// Strips raw ANSI terminal styling sequences (e.g. colors, bold, cursor codes).
+#[allow(
+    clippy::expect_used,
+    reason = "Static regex pattern is compile-time verified"
+)]
+pub(crate) fn strip_ansi(input: &str) -> String {
+    static ANSI_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\([a-zA-Z]").expect("valid ANSI regex")
+    });
+    ANSI_RE.replace_all(input, "").into_owned()
+}
+
 #[cfg(test)]
 #[allow(
     clippy::expect_used,
@@ -1327,5 +1339,11 @@ mod tests {
         );
 
         drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn test_strip_ansi() {
+        let raw = "\u{1b}[2m\u{1b}[0m\u{1b}[38;2;84;142;200mcrate\u{1b}[0m::\u{1b}[38;2;84;142;200mserver\u{1b}[0m";
+        assert_eq!(strip_ansi(raw), "crate::server");
     }
 }

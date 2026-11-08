@@ -53,6 +53,8 @@ pub struct ToolArg {
     pub default: Option<String>,
     #[serde(default)]
     pub switch: bool,
+    #[serde(default, rename = "type", alias = "arg_type")]
+    pub arg_type: Option<String>,
 }
 
 /// Security policies governing tool mutability and permission gates.

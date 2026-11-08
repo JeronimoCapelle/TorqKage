@@ -61,8 +61,25 @@ pub(crate) fn execute(
         ));
     }
 
-    let raw_content = std::fs::read_to_string(&safe_path)
+    let raw_bytes = std::fs::read(&safe_path)
         .map_err(|err| format!("Failed to read file '{}': {err}", safe_path.display()))?;
+
+    // Gracefully handle binary files instead of hard failure
+    let is_binary =
+        raw_bytes.iter().take(1024).any(|&b| b == 0) || std::str::from_utf8(&raw_bytes).is_err();
+    if is_binary {
+        return Ok(format!(
+            "Binary file detected ({} bytes). Cannot display binary contents as text. Use 'inspect_file_meta' or 'inspect_file_type' to examine metadata.",
+            raw_bytes.len()
+        ));
+    }
+
+    let raw_content = String::from_utf8(raw_bytes).map_err(|err| {
+        format!(
+            "Failed to decode file '{}' as UTF-8: {err}",
+            safe_path.display()
+        )
+    })?;
 
     let start_line = arguments
         .get("start_line")
@@ -211,6 +228,13 @@ mod tests {
         let dir_args = serde_json::json!({ "path": "sub_dir" });
         let dir_err = execute(&root_tool, &temp, &dir_args, None, &guards).unwrap_err();
         assert!(dir_err.contains("is a directory, not a regular file"));
+
+        // 5. Binary file handling returns informative notice instead of failing with UTF-8 error
+        let bin_path = temp.join("output.bin");
+        std::fs::write(&bin_path, [0x7f, b'E', b'L', b'F', 0x00, 0x02, 0x01, 0x00]).unwrap();
+        let bin_args = serde_json::json!({ "path": "output.bin" });
+        let bin_res = execute(&root_tool, &temp, &bin_args, None, &guards).expect("read binary");
+        assert!(bin_res.contains("Binary file detected (8 bytes)"));
 
         drop(std::fs::remove_dir_all(&temp));
     }

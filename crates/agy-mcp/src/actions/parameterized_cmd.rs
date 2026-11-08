@@ -4,12 +4,13 @@ use std::path::Path;
 
 use crate::{
     actions::execute_supervised_command_with_detector,
-    guards::truncate_output,
+    guards::{strip_ansi, truncate_output},
     models::{OutputCapture, ToolDefinition},
 };
 
 fn validate_and_build_args(
     tool: &ToolDefinition,
+    workspace_root: &Path,
     arguments: &serde_json::Value,
 ) -> Result<Vec<String>, String> {
     let mut dynamic_args = Vec::new();
@@ -54,6 +55,30 @@ fn validate_and_build_args(
                     "Security validation error: Argument '{}' with value '{val}' violates pattern '{pattern}'",
                     arg.name
                 ));
+            }
+
+            let is_path_arg = arg.name == "path"
+                || arg.name == "file"
+                || arg.name == "workspace_path"
+                || arg.name.ends_with("_path");
+
+            if is_path_arg {
+                if tool.enforce_workspace_bounds() {
+                    let _safe_path = crate::guards::resolve_safe_path(
+                        workspace_root,
+                        &val,
+                        &tool.allowed_directories,
+                        true,
+                    )?;
+                }
+
+                if tool.ban_dangerous_files() {
+                    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+                    crate::guards::check_dangerous_files_with_security(
+                        Path::new(&val),
+                        Some(&project.security),
+                    )?;
+                }
             }
 
             if let Some(flag) = &arg.flag {
@@ -157,7 +182,7 @@ where
         return Err(format!("Tool '{}' has no command configured", tool.name));
     }
 
-    let dynamic_args = validate_and_build_args(tool, arguments)?;
+    let dynamic_args = validate_and_build_args(tool, workspace_root, arguments)?;
 
     let binary = tool
         .command
@@ -202,8 +227,10 @@ where
         raw_text
     };
 
+    let clean_text = strip_ansi(&final_text);
+
     let truncated = truncate_output(
-        &final_text,
+        &clean_text,
         tool.truncate_lines,
         tool.truncate_bytes,
         tool.emit_truncation_notice(),
@@ -589,5 +616,71 @@ mod tests {
             "Expected network to be blocked in bwrap jail, got: {out}"
         );
         assert!(!out.contains("CONNECTED"));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_workspace_bounds_enforced() {
+        let temp = create_test_dir("bounds");
+        let tool = ToolDefinition {
+            name: "test_ls".to_owned(),
+            command: vec!["ls".to_owned()],
+            sandbox: agy_common::tools::ToolSandboxPolicy {
+                enforce_workspace_bounds: true,
+                ..Default::default()
+            },
+            args: vec![ToolArg {
+                name: "path".to_owned(),
+                required: false,
+                default: Some(".".to_owned()),
+                regex: Some("^[^\\x00]+$".to_owned()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        // 1. Valid workspace path "." passes
+        let args_ok = json!({ "path": "." });
+        let res_ok = execute(&tool, &temp, &args_ok);
+        assert!(res_ok.is_ok());
+
+        // 2. Traversal ".." is rejected
+        let args_bad = json!({ "path": ".." });
+        let res_bad = execute(&tool, &temp, &args_bad);
+        assert!(res_bad.is_err());
+        assert!(
+            res_bad
+                .unwrap_err()
+                .contains("Path traversal via '..' is forbidden")
+        );
+
+        // 3. Absolute path outside workspace is rejected
+        let args_escape = json!({ "path": "/etc" });
+        let res_escape = execute(&tool, &temp, &args_escape);
+        assert!(res_escape.is_err());
+        assert!(
+            res_escape
+                .unwrap_err()
+                .contains("escapes canonical workspace root")
+        );
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_strips_ansi() {
+        let temp = create_test_dir("ansi");
+        let tool = ToolDefinition {
+            name: "test_ansi".to_owned(),
+            command: vec!["printf".to_owned(), "\x1b[31mRED_ALERT\x1b[0m".to_owned()],
+            output_capture: OutputCapture::Stdout,
+            ..Default::default()
+        };
+
+        let args = json!({});
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert_eq!(out, "RED_ALERT");
+
+        drop(std::fs::remove_dir_all(&temp));
     }
 }

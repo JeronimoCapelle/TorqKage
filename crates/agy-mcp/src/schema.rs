@@ -142,6 +142,28 @@ fn build_parameterized_schema(args: &[crate::models::ToolArg]) -> serde_json::Va
                 let is_truthy = def == "true" || def == "1";
                 prop.insert("default".to_owned(), json!(is_truthy));
             }
+        } else if let Some(ref t) = arg.arg_type {
+            prop.insert("type".to_owned(), json!(t));
+            if let Some(ref def) = arg.default {
+                if t == "integer" {
+                    if let Ok(n) = def.parse::<i64>() {
+                        prop.insert("default".to_owned(), json!(n));
+                    } else {
+                        prop.insert("default".to_owned(), json!(def));
+                    }
+                } else if t == "number" {
+                    if let Ok(n) = def.parse::<f64>() {
+                        prop.insert("default".to_owned(), json!(n));
+                    } else {
+                        prop.insert("default".to_owned(), json!(def));
+                    }
+                } else if t == "boolean" {
+                    let is_truthy = def == "true" || def == "1";
+                    prop.insert("default".to_owned(), json!(is_truthy));
+                } else {
+                    prop.insert("default".to_owned(), json!(def));
+                }
+            }
         } else {
             prop.insert("type".to_owned(), json!("string"));
             if let Some(ref def) = arg.default {
@@ -216,6 +238,46 @@ mod tests {
         let mcp_tool = McpTool::from_definition(&def);
         assert_eq!(mcp_tool.input_schema["required"], json!(["item_path"]));
         assert!(mcp_tool.input_schema["properties"]["item_path"].is_object());
+    }
+
+    #[test]
+    fn test_parameterized_command_typed_schema() {
+        let def = ToolDefinition {
+            name: "inspect_module_structure".to_owned(),
+            description: "Structure".to_owned(),
+            action: ToolAction::ParameterizedCommand,
+            args: vec![
+                ToolArg {
+                    name: "max_depth".to_owned(),
+                    description: "Maximum depth".to_owned(),
+                    required: false,
+                    arg_type: Some("integer".to_owned()),
+                    default: Some("3".to_owned()),
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "lib".to_owned(),
+                    description: "Library switch".to_owned(),
+                    switch: true,
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let mcp_tool = McpTool::from_definition(&def);
+        assert_eq!(
+            mcp_tool.input_schema["properties"]["max_depth"]["type"],
+            json!("integer")
+        );
+        assert_eq!(
+            mcp_tool.input_schema["properties"]["max_depth"]["default"],
+            json!(3)
+        );
+        assert_eq!(
+            mcp_tool.input_schema["properties"]["lib"]["type"],
+            json!("boolean")
+        );
     }
 
     #[test]

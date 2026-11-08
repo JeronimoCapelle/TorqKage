@@ -38,15 +38,23 @@ pub(crate) fn execute(
         &tool.name,
     )?;
 
-    let is_error = !output.status.success();
+    let is_error = if let Some(code) = output.status.code() {
+        if tool.success_exit_codes.contains(&code) {
+            false
+        } else {
+            !output.status.success()
+        }
+    } else {
+        !output.status.success()
+    };
 
     let text_content = match tool.output_capture {
         OutputCapture::ExitCodeOnly => {
             let code = output.status.code().unwrap_or(-1);
-            if output.status.success() {
-                format!("Command '{program}' succeeded (exit code 0)")
-            } else {
+            if is_error {
                 format!("Command '{program}' failed (exit code {code})")
+            } else {
+                format!("Command '{program}' completed successfully (exit code {code})")
             }
         },
 
@@ -89,8 +97,10 @@ pub(crate) fn execute(
         text_content
     };
 
+    let clean_content = crate::guards::strip_ansi(&effective_content);
+
     let truncated = truncate_output(
-        &effective_content,
+        &clean_content,
         tool.truncate_lines,
         tool.truncate_bytes,
         tool.emit_truncation_notice(),
@@ -138,5 +148,22 @@ mod tests {
         let (output, is_error) = execute(&tool, &root).expect("command failed");
         assert!(!is_error);
         assert_eq!(output, "Clean (0 merge/rebase conflicts detected)");
+    }
+
+    #[test]
+    fn test_static_command_success_exit_codes() {
+        let root = std::env::temp_dir();
+        // sh -c "exit 101" simulates non-zero compiler check exit
+        let tool = ToolDefinition {
+            name: "test_exit_code".to_owned(),
+            command: vec!["sh".to_owned(), "-c".to_owned(), "exit 101".to_owned()],
+            output_capture: OutputCapture::ExitCodeOnly,
+            success_exit_codes: vec![0, 101],
+            ..Default::default()
+        };
+
+        let (output, is_error) = execute(&tool, &root).expect("command execution failed");
+        assert!(!is_error);
+        assert!(output.contains("exit code 101"));
     }
 }

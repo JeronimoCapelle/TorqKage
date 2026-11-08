@@ -206,7 +206,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["eza", "--tree", "--icons=never", "--ignore-glob", ".git|.jj|.agy|target"]
 args = [
-    { name = "level", required = false, default = "2", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
+    { name = "level", required = false, default = "2", type = "integer", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
     { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Root path to display tree from (defaults to '.')" }
 ]
 output_capture = "stdout"
@@ -346,6 +346,7 @@ tracks_circuit_breaker = false
 command = ["cargo", "fast", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
+success_exit_codes = [0, 101]
 
 [tools.cargo_check]
 description = "Runs cargo fast check and returns concise compiler diagnostics"
@@ -420,7 +421,7 @@ args = [
     { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
     { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus tree on a specific path, e.g. 'actions' or 'server'" },
-    { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
+    { name = "max_depth", required = false, type = "integer", flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
 ]
 output_capture = "both"
 truncate_lines = 150
@@ -436,7 +437,7 @@ args = [
     { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
     { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus dependency graph on a specific module path" },
-    { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
+    { name = "max_depth", required = false, type = "integer", flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
 ]
 output_capture = "both"
 truncate_lines = 200
