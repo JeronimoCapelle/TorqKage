@@ -1100,4 +1100,39 @@ docs = ["specs", "ARCHITECTURE.md"]
 
         drop(std::fs::remove_dir_all(&temp));
     }
+
+    #[test]
+    fn test_parse_example_templates() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let templates_dir = manifest_dir.join("../../examples/templates");
+        let template_files = [
+            ("rust-project.toml", "rust"),
+            ("typescript-project.toml", "typescript"),
+            ("python-project.toml", "python"),
+            ("zig-project.toml", "zig"),
+            ("go-project.toml", "go"),
+            ("c-cpp-project.toml", "cpp"),
+        ];
+
+        for (filename, expected_lang) in template_files {
+            let path = templates_dir.join(filename);
+            let content = std::fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
+            let parsed = parse_project_toml(&content)
+                .unwrap_or_else(|e| panic!("Failed to parse {filename}: {e}"));
+            assert_eq!(
+                parsed.project.language.as_deref(),
+                Some(expected_lang),
+                "Language mismatch in {filename}"
+            );
+            assert!(
+                !parsed.gates.is_empty(),
+                "Template {filename} should have gates configured"
+            );
+            assert!(
+                !parsed.workspace.ignored_paths.is_empty(),
+                "Template {filename} should have ignored_paths configured"
+            );
+        }
+    }
 }

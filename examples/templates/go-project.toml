@@ -1,0 +1,54 @@
+# ==============================================================================
+# project.toml — Go Ecosystem Configuration Template
+# ==============================================================================
+
+[project]
+name = "my-go-project"
+language = "go"
+version = "0.1.0"
+
+[workspace]
+containers = ["cmd", "internal", "pkg"]
+ignored_paths = [
+    ".cache/go-build",
+    ".agy/state",
+    ".agy/workspaces",
+]
+
+[sandbox]
+bind_mounts = [
+    ".cache/go-build",
+]
+
+[gates.compilation]
+command = ["go", "build", "./..."]
+timeout_seconds = 30
+failure_message = "Go build failed (`go build ./...`). Fix compilation errors before proceeding."
+
+[gates.tests]
+command = ["go", "test", "./..."]
+timeout_seconds = 45
+failure_message = "Go test suite execution failed (`go test ./...`)."
+
+[gates.linter]
+command = ["golangci-lint", "run"]
+timeout_seconds = 45
+failure_message = "Linter check failed (`golangci-lint run`)."
+
+[gates.fmt]
+command = ["gofmt", "-l", "."]
+timeout_seconds = 15
+failure_message = "Go formatting check failed (`gofmt -l .`)."
+
+[environment]
+CGO_ENABLED = "0"
+
+[docs]
+paths = ["docs", "README.md"]
+tool_name = "query_project_spec"
+
+[policies.syntax]
+line_comments = ["//"]
+block_comments = [{ start = "/*", end = "*/" }]
+test_attributes = ["//go:build test"]
+test_prefixes = ["Test", "Benchmark", "Fuzz"]

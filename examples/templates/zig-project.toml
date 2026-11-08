@@ -1,16 +1,50 @@
-# Example project.toml for Zig Workspaces
+# ==============================================================================
+# project.toml — Zig Ecosystem Configuration Template
+# ==============================================================================
+
 [project]
 name = "my-zig-project"
-ecosystem = "zig"
-root_marker = "build.zig"
+language = "zig"
+version = "0.1.0"
 
-[quality]
-check_command = "zig build check"
-test_command = "zig build test"
-lint_command = "zig fmt --check src/"
+[workspace]
+containers = ["packages", "libs"]
+ignored_paths = [
+    ".zig-cache",
+    "zig-out",
+    ".agy/state",
+    ".agy/workspaces",
+]
 
-[documentation]
-paths = ["docs"]
+[sandbox]
+bind_mounts = [
+    ".zig-cache",
+    "zig-out",
+]
+
+[gates.compilation]
+command = ["zig", "build", "check"]
+timeout_seconds = 30
+failure_message = "Zig compilation check failed (`zig build check`)."
+
+[gates.tests]
+command = ["zig", "build", "test"]
+timeout_seconds = 45
+failure_message = "Zig test suite failed (`zig build test`)."
+
+[gates.fmt]
+command = ["zig", "fmt", "--check", "src/"]
+timeout_seconds = 15
+failure_message = "Zig format check failed (`zig fmt --check src/`)."
 
 [environment]
-ZIG_LOCAL_CACHE_DIR = ".cache/zig"
+ZIG_LOCAL_CACHE_DIR = ".zig-cache"
+
+[docs]
+paths = ["docs", "ARCHITECTURE.md"]
+tool_name = "query_project_spec"
+
+[policies.syntax]
+line_comments = ["//"]
+test_attributes = ["test "]
+test_prefixes = ["test_"]

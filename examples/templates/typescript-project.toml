@@ -1,0 +1,59 @@
+# ==============================================================================
+# project.toml — TypeScript / JavaScript Ecosystem Configuration Template
+# ==============================================================================
+
+[project]
+name = "my-typescript-project"
+language = "typescript"
+version = "0.1.0"
+
+[workspace]
+containers = ["packages", "apps", "libs"]
+ignored_paths = [
+    "node_modules",
+    "dist",
+    ".turbo",
+    ".next",
+    ".agy/state",
+    ".agy/workspaces",
+]
+
+[sandbox]
+bind_mounts = [
+    "node_modules",
+    ".turbo",
+]
+
+[gates.compilation]
+command = ["pnpm", "tsc", "--noEmit"]
+timeout_seconds = 30
+failure_message = "TypeScript type check failed (`tsc --noEmit`). Fix type errors before proceeding."
+error_regex = "error TS"
+
+[gates.tests]
+command = ["pnpm", "vitest", "run"]
+timeout_seconds = 45
+failure_message = "Test suite execution failed (`vitest run`)."
+
+[gates.linter]
+command = ["pnpm", "eslint", ".", "--max-warnings=0"]
+timeout_seconds = 30
+failure_message = "Linter check failed (`eslint .`). Fix lint errors before proceeding."
+
+[gates.fmt]
+command = ["pnpm", "prettier", "--check", "."]
+timeout_seconds = 15
+failure_message = "Code formatting check failed (`prettier --check`)."
+
+[environment]
+NODE_ENV = "test"
+
+[docs]
+paths = ["docs", "README.md", "SPEC.md"]
+tool_name = "query_project_spec"
+
+[policies.syntax]
+line_comments = ["//"]
+block_comments = [{ start = "/*", end = "*/" }]
+test_attributes = ["describe(", "it(", "test(", "suite("]
+test_prefixes = ["test", "spec"]

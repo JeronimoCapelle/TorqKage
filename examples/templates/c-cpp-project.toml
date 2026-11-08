@@ -1,17 +1,56 @@
-# Example project.toml for C/C++ (CMake / Meson / Make) Workspaces
+# ==============================================================================
+# project.toml — C / C++ (CMake / Clang) Ecosystem Configuration Template
+# ==============================================================================
+
 [project]
 name = "my-cpp-project"
-ecosystem = "cpp"
-root_marker = "CMakeLists.txt"
+language = "cpp"
+version = "0.1.0"
 
-[quality]
-check_command = "cmake --build build --target check"
-test_command = "ctest --test-dir build --output-on-failure"
-lint_command = "clang-tidy -p build src/*.cpp"
+[workspace]
+containers = ["src", "include", "libs"]
+ignored_paths = [
+    "build",
+    ".cache",
+    ".agy/state",
+    ".agy/workspaces",
+]
 
-[documentation]
-paths = ["docs", "include"]
+[sandbox]
+bind_mounts = [
+    "build",
+]
+
+[gates.compilation]
+command = ["cmake", "--build", "build"]
+timeout_seconds = 60
+failure_message = "CMake build failed. Resolve compiler errors before proceeding."
+
+[gates.tests]
+command = ["ctest", "--test-dir", "build", "--output-on-failure"]
+timeout_seconds = 45
+failure_message = "CTest test suite failed."
+
+[gates.linter]
+command = ["clang-tidy", "-p", "build"]
+timeout_seconds = 45
+failure_message = "Clang-Tidy static analysis check failed."
+
+[gates.fmt]
+command = ["clang-format", "--dry-run", "-Werror", "src/*.cpp"]
+timeout_seconds = 15
+failure_message = "Clang-Format styling check failed."
 
 [environment]
 CC = "clang"
 CXX = "clang++"
+
+[docs]
+paths = ["docs", "include", "ARCHITECTURE.md"]
+tool_name = "query_project_spec"
+
+[policies.syntax]
+line_comments = ["//"]
+block_comments = [{ start = "/*", end = "*/" }]
+test_attributes = ["TEST(", "TEST_F(", "@Test"]
+test_prefixes = ["test_", "Test"]

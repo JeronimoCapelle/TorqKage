@@ -1,16 +1,63 @@
-# Example project.toml for Python (uv / pytest / ruff) Workspaces
+# ==============================================================================
+# project.toml — Python (uv / pytest / ruff / mypy) Configuration Template
+# ==============================================================================
+
 [project]
 name = "my-python-project"
-ecosystem = "python"
-root_marker = "pyproject.toml"
+language = "python"
+version = "0.1.0"
 
-[quality]
-check_command = "uv run ruff check ."
-test_command = "uv run pytest"
-lint_command = "uv run mypy src/"
+[workspace]
+containers = ["packages", "services", "apps"]
+ignored_paths = [
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "__pycache__",
+    ".venv",
+    "dist",
+    ".agy/state",
+    ".agy/workspaces",
+]
 
-[documentation]
-paths = ["docs"]
+[sandbox]
+bind_mounts = [
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+]
+
+[gates.compilation]
+command = ["uv", "run", "mypy", "."]
+timeout_seconds = 30
+failure_message = "Static type check failed (`mypy .`). Fix type annotations before proceeding."
+
+[gates.tests]
+command = ["uv", "run", "pytest", "-q"]
+timeout_seconds = 45
+failure_message = "Unit test suite failed (`pytest`)."
+
+[gates.linter]
+command = ["uv", "run", "ruff", "check", "."]
+timeout_seconds = 30
+failure_message = "Linter check failed (`ruff check .`)."
+
+[gates.fmt]
+command = ["uv", "run", "ruff", "format", "--check", "."]
+timeout_seconds = 15
+failure_message = "Code format check failed (`ruff format --check .`)."
 
 [environment]
 PYTHONUNBUFFERED = "1"
+PYTHONDONTWRITEBYTECODE = "1"
+
+[docs]
+paths = ["docs", "ARCHITECTURE.md"]
+tool_name = "query_project_spec"
+
+[policies.syntax]
+line_comments = ["#"]
+block_comments = [{ start = "\"\"\"", end = "\"\"\"" }]
+test_attributes = ["@pytest.mark", "def test_"]
+test_prefixes = ["test_"]
