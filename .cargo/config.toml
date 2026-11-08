@@ -1,7 +1,3 @@
-[build]
-rustc-wrapper = "sccache"
-rustc-workspace-wrapper = "clippy-driver"
-
 [unstable]
 profile-rustflags = true
 codegen-backend = true
@@ -120,12 +116,6 @@ codegen-backend = "llvm"
 rustflags = [
 	"-D", 
 	"warnings",
-    "-C",
-    "target-cpu=native",
-    "-C",
-    "linker-plugin-lto",
-    "-C",
-    "link-arg=-fuse-ld=lld",
     "-C",
     "force-frame-pointers=no",
     "-Z",
