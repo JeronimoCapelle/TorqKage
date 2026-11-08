@@ -259,20 +259,26 @@ Quality gates in `agy-suite` are **100% declarative**. You do not need to modify
 ### 4. How to Build, Test, and Install
 
 ```bash
-# 1. Run all workspace tests (155 unit tests + 5 e2e integration tests)
-cargo fast test --workspace
-cargo fast test -p agy-hooks --test hook_e2e_tests
+# 1. Run all workspace tests (Standard vanilla stable Rust)
+cargo test --workspace
 
 # 2. Run strict clippy verification (zero warnings allowed under pedantic rules)
 cargo clippy --workspace --all-targets -- -D warnings
 
 # 3. Build, bundle, and synchronize plugin to ~/.gemini/config/plugins/agy-suite
-./install.sh --fast       # Fast iteration profile (Cranelift + Mold)
-# or: ./install.sh        # Production release profile (LTO + opt-level=3)
+./install.sh --build-from-source         # Production perf profile (fat LTO, stripped)
+# or fast profile:
+./install.sh --build-from-source --fast  # Fast profile (O0, codegen-units=256)
 
 # 4. Validate installed plugin
 agy plugin validate
 ```
+
+### ⚡ Performance & Build Acceleration
+
+* **Default Build:** `cargo build` / `cargo test` runs on 100% standard vanilla stable Rust with zero external tool dependencies.
+* **Fast Profile:** `cargo fast-build` (or `cargo fb`) leverages the custom `[profile.fast]` defined in `Cargo.toml`.
+* **Turbo Accelerator:** Run `./plugins/agy-suite/bin/cargo-fast build` to automatically leverage Cranelift, Mold, and `sccache` if available on host.
 
 ---
 

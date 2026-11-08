@@ -306,11 +306,14 @@ build_from_source_install() {
             bin_source_dir="${workspace_root}/target/release"
             ;;
         fast)
-            if command -v cargo-fast >/dev/null 2>&1; then
-                echo "--> Building fast profile with cargo-fast (Cranelift + Mold)..."
-                cargo fast build -p agy-mcp -p agy-hooks -p agy-ctrl
+            if [[ -x "${workspace_root}/plugins/agy-suite/bin/cargo-fast" ]]; then
+                echo "--> Building fast profile with local cargo-fast..."
+                "${workspace_root}/plugins/agy-suite/bin/cargo-fast" build -p agy-mcp -p agy-hooks -p agy-ctrl
+            elif command -v cargo-fast >/dev/null 2>&1; then
+                echo "--> Building fast profile with cargo-fast..."
+                cargo-fast build -p agy-mcp -p agy-hooks -p agy-ctrl
             else
-                echo "--> Notice: cargo-fast not found in PATH; falling back to cargo build --profile fast..."
+                echo "--> Notice: cargo-fast not found; building with 'cargo build --profile fast'..."
                 cargo build --profile fast -p agy-mcp -p agy-hooks -p agy-ctrl
             fi
             bin_source_dir="${workspace_root}/target/fast"
