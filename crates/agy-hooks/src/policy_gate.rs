@@ -48,15 +48,15 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
         && tools_cfg.is_tool_attribute(tool_name, "mutating")
     {
         return PreToolResponse::ask(format!(
-            "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive compilation failures):\n\
-             Last Error: {}\n\
+            "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive gate/verification failures):\n\
+             Last Error/Failure: {}\n\
              Autonomous loop halted to prevent token burn and code regression.\n\
              Confirm manual override to allow tool '{tool_name}'?",
             ledger.consecutive_failures,
             ledger
                 .last_error_signature
                 .as_deref()
-                .unwrap_or("Compilation error")
+                .unwrap_or("Verification error")
         ));
     }
 

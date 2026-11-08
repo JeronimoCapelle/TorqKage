@@ -245,7 +245,7 @@ impl ProjectConfig {
                 paths.push(p.clone());
             }
         }
-        let default_ignored = [".agy", ".git", ".jj", "target"];
+        let default_ignored = [".agy", ".git", ".jj"];
         for def in default_ignored {
             let s = (*def).to_owned();
             if !paths.contains(&s) {
@@ -310,11 +310,15 @@ impl ProjectConfig {
     /// with auto-detected documentation paths.
     #[must_use]
     pub fn detect_or_load(workspace_root: &Path) -> Self {
-        let candidates = [
+        let mut candidates = vec![
             workspace_root.join(".agy/project.toml"),
             workspace_root.join("project.toml"),
             workspace_root.join("plugins/agy-suite/project.toml"),
         ];
+        if let Ok(home) = std::env::var("HOME") {
+            candidates
+                .push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/project.toml"));
+        }
 
         for path in &candidates {
             if let Ok(content) = std::fs::read_to_string(path)

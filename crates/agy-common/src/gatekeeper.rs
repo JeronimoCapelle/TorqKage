@@ -83,6 +83,11 @@ impl GateCheck for ProjectGateCheck {
                 self.name
             ));
         }
+
+        // If the gate check invokes cargo but the workspace has no Cargo.toml, pass gracefully
+        if binary == "cargo" && !workspace_root.join("Cargo.toml").is_file() {
+            return GateCheckStatus::Passed;
+        }
         let args = self.command.get(1..).unwrap_or(&[]);
 
         let mut cmd = Command::new(binary);

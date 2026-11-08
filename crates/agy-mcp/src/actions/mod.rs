@@ -218,16 +218,16 @@ fn update_circuit_breaker(
                     workspace_root,
                     agent_name,
                     Some(&tool.name),
-                    error_sig.as_deref().or(Some("Compiler error")),
+                    error_sig.as_deref().or(Some("Quality gate failure")),
                     Some(&output),
                 ));
                 if ledger.tripped {
                     let banner = format!(
                         "\n\n🛑 [CIRCUIT BREAKER TRIPPED - {}/{} FAILURES]:\n\
-                         Consecutive compilation failures reached threshold ({}).\n\
-                         Last compiler error: {}\n\
+                         Consecutive verification/gate failures reached threshold ({}).\n\
+                         Last failure signature: {}\n\
                          Further autonomous code modifications are now GATED by policy hook.\n\
-                         Operator intervention or manual code repair is required.",
+                         Operator intervention or manual repair is required.",
                         ledger.consecutive_failures,
                         ledger.max_strikes,
                         ledger.max_strikes,

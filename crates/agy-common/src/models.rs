@@ -621,7 +621,8 @@ impl CircuitBreakerLedger {
     }
 }
 
-/// Extracts a compiler error signature from output, guided by optional custom prefix or pattern.
+/// Extracts a failure or error signature from tool output, guided by optional custom prefix,
+/// falling back to bracketed codes or lines beginning with error/fail.
 #[must_use]
 pub fn extract_compiler_error_signature(
     output: &str,
@@ -644,7 +645,20 @@ pub fn extract_compiler_error_signature(
         }
     }
 
-    extract_bracketed_error_code(output)
+    if let Some(bracketed) = extract_bracketed_error_code(output) {
+        return Some(bracketed);
+    }
+
+    for line in output.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_ascii_lowercase();
+        if lower.starts_with("error") || lower.starts_with("fail") {
+            let token: String = trimmed.chars().take(80).collect();
+            return Some(token);
+        }
+    }
+
+    None
 }
 
 /// Extracts the first bracketed compiler error code (e.g., "[E0502]", "[syntax-error]") from compiler output.
@@ -856,5 +870,30 @@ mod tests {
 
         let clean_output = "Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.42s";
         assert_eq!(extract_bracketed_error_code(clean_output), None);
+    }
+
+    #[test]
+    fn test_extract_compiler_error_signature_agnostic() {
+        // 1. Custom prefix (e.g. TypeScript error TS2322)
+        let ts_output =
+            "src/app.ts:12:5 - error TS2322: Type 'string' is not assignable to type 'number'.";
+        assert_eq!(
+            extract_compiler_error_signature(ts_output, Some("error TS")),
+            Some("2322".to_owned())
+        );
+
+        // 2. Bracketed Rust code without prefix
+        let rust_output = "error[E0308]: mismatched types";
+        assert_eq!(
+            extract_compiler_error_signature(rust_output, None),
+            Some("E0308".to_owned())
+        );
+
+        // 3. Generic failure line fallback without prefix or brackets (e.g. Vitest / Jest)
+        let vitest_output = "FAIL  src/tests/auth.test.ts\n  ✕ should validate login tokens";
+        assert_eq!(
+            extract_compiler_error_signature(vitest_output, None),
+            Some("FAIL  src/tests/auth.test.ts".to_owned())
+        );
     }
 }
