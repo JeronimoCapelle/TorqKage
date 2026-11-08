@@ -58,6 +58,7 @@ pub(crate) struct LaunchConfig {
 #[derive(Debug)]
 pub(crate) struct App {
     pub(crate) workspace_root: PathBuf,
+    pub(crate) runner_config: agy_common::ProjectRunnerConfig,
     pub(crate) agents: Vec<AgentManifest>,
     pub(crate) tools: Vec<ToolItem>,
     pub(crate) active_tab: ActiveTab,
@@ -79,6 +80,11 @@ pub(crate) struct App {
 }
 
 impl App {
+    #[must_use]
+    pub(crate) fn runner_harness(&self) -> &str {
+        &self.runner_config.harness
+    }
+
     #[must_use]
     pub(crate) const fn sandbox_enabled(&self) -> bool {
         self.launch_config.sandbox_enabled
@@ -123,11 +129,14 @@ impl App {
         };
 
         let agents = discover_agents(&workspace_root);
+        let project_cfg = agy_common::project::ProjectConfig::detect_or_load(&workspace_root);
+        let runner_config = project_cfg.resolved_runner();
 
         let circuit_breaker_status = Some(agy_common::CircuitBreakerLedger::load(&workspace_root));
 
         let mut app = Self {
             workspace_root,
+            runner_config,
             agents,
             tools,
             active_tab: ActiveTab::FleetOverview,
@@ -189,8 +198,11 @@ impl App {
     /// Discovers the latest resumable session for the selected agent in this workspace.
     pub(crate) fn refresh_selected_agent_session(&mut self) {
         if let Some(agent) = self.selected_agent() {
-            self.active_agent_session =
-                crate::session::find_agent_session_for_workspace(&agent.name, &self.workspace_root);
+            self.active_agent_session = crate::session::find_agent_session_with_runner(
+                &agent.name,
+                &self.workspace_root,
+                &self.runner_config,
+            );
         } else {
             self.active_agent_session = None;
         }

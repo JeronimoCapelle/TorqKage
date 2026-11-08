@@ -198,6 +198,173 @@ pub struct ProjectPolicyConfig {
     pub path_policies: Vec<crate::content_filter::PathPolicy>,
 }
 
+/// Supported agent execution harness platforms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum HarnessKind {
+    #[default]
+    Agy,
+    OpenCode,
+    Claude,
+    Custom,
+}
+
+impl HarnessKind {
+    /// Parses a harness kind from a string identifier (case-insensitive).
+    #[must_use]
+    pub fn parse(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "agy" | "antigravity" => Self::Agy,
+            "opencode" => Self::OpenCode,
+            "claude" | "claude-code" => Self::Claude,
+            _ => Self::Custom,
+        }
+    }
+
+    /// Returns the canonical lowercase string identifier of the harness.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Agy => "agy",
+            Self::OpenCode => "opencode",
+            Self::Claude => "claude",
+            Self::Custom => "custom",
+        }
+    }
+
+    /// Default binary name for this harness kind.
+    #[must_use]
+    pub const fn default_binary(&self) -> &'static str {
+        match self {
+            Self::Agy => "agy",
+            Self::OpenCode => "opencode",
+            Self::Claude => "claude",
+            Self::Custom => "custom",
+        }
+    }
+
+    /// Default CLI flag for selecting an agent persona.
+    #[must_use]
+    pub const fn default_agent_flag(&self) -> Option<&'static str> {
+        match self {
+            Self::Agy | Self::OpenCode | Self::Claude | Self::Custom => Some("--agent"),
+        }
+    }
+
+    /// Default CLI flag for enabling sandboxing.
+    #[must_use]
+    pub const fn default_sandbox_flag(&self) -> Option<&'static str> {
+        match self {
+            Self::Agy => Some("--sandbox"),
+            Self::OpenCode | Self::Claude | Self::Custom => None,
+        }
+    }
+
+    /// Default CLI flag for resuming prior sessions.
+    #[must_use]
+    pub const fn default_resume_flag(&self) -> Option<&'static str> {
+        match self {
+            Self::Agy => Some("--conversation"),
+            Self::OpenCode => Some("--session"),
+            Self::Claude | Self::Custom => Some("--resume"),
+        }
+    }
+}
+
+/// Declarative execution harness / agent system runner configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectRunnerConfig {
+    /// Harness identifier: "agy" (default), "opencode", "claude", "custom", etc.
+    #[serde(default = "default_harness", alias = "name")]
+    pub harness: String,
+
+    /// Optional explicit command or binary to invoke.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
+
+    /// Custom flag used to specify the agent persona (e.g. `"--agent"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_flag: Option<String>,
+
+    /// Custom flag used to enable sandboxing (e.g. `"--sandbox"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox_flag: Option<String>,
+
+    /// Custom flag used to resume conversations (e.g. `"--conversation"` or `"--session"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_flag: Option<String>,
+
+    /// Additional fixed arguments to append to the command invocation.
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+}
+
+fn default_harness() -> String {
+    "agy".to_owned()
+}
+
+impl Default for ProjectRunnerConfig {
+    fn default() -> Self {
+        Self {
+            harness: default_harness(),
+            command: None,
+            agent_flag: None,
+            sandbox_flag: None,
+            resume_flag: None,
+            extra_args: Vec::new(),
+        }
+    }
+}
+
+impl ProjectRunnerConfig {
+    /// Resolves the classified harness kind.
+    #[must_use]
+    pub fn harness_kind(&self) -> HarnessKind {
+        HarnessKind::parse(&self.harness)
+    }
+
+    /// Resolves the executable binary name.
+    #[must_use]
+    pub fn resolved_binary(&self) -> String {
+        if let Some(cmd) = &self.command
+            && let Some(first) = cmd.first()
+            && !first.trim().is_empty()
+        {
+            return first.clone();
+        }
+        self.harness_kind().default_binary().to_owned()
+    }
+
+    /// Resolves the agent selection flag.
+    #[must_use]
+    pub fn resolved_agent_flag(&self) -> Option<String> {
+        self.agent_flag.clone().or_else(|| {
+            self.harness_kind()
+                .default_agent_flag()
+                .map(ToOwned::to_owned)
+        })
+    }
+
+    /// Resolves the sandbox flag.
+    #[must_use]
+    pub fn resolved_sandbox_flag(&self) -> Option<String> {
+        self.sandbox_flag.clone().or_else(|| {
+            self.harness_kind()
+                .default_sandbox_flag()
+                .map(ToOwned::to_owned)
+        })
+    }
+
+    /// Resolves the conversation resumption flag.
+    #[must_use]
+    pub fn resolved_resume_flag(&self) -> Option<String> {
+        self.resume_flag.clone().or_else(|| {
+            self.harness_kind()
+                .default_resume_flag()
+                .map(ToOwned::to_owned)
+        })
+    }
+}
+
 /// Root project descriptor parsed from `project.toml` or dynamically synthesized.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ProjectConfig {
@@ -221,9 +388,20 @@ pub struct ProjectConfig {
     pub policies: ProjectPolicyConfig,
     #[serde(default)]
     pub path_policies: Vec<crate::content_filter::PathPolicy>,
+    #[serde(default)]
+    pub runner: ProjectRunnerConfig,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<ProjectRunnerConfig>,
 }
 
 impl ProjectConfig {
+    /// Resolves the effective runner configuration, checking `harness` section first then `runner`.
+    #[must_use]
+    pub fn resolved_runner(&self) -> ProjectRunnerConfig {
+        self.harness
+            .as_ref()
+            .map_or_else(|| self.runner.clone(), Clone::clone)
+    }
     /// Returns all declared path policies, combining `path_policies` and `policies.path_policies`.
     #[must_use]
     pub fn all_path_policies(&self) -> Vec<crate::content_filter::PathPolicy> {
@@ -681,11 +859,56 @@ pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
             "docs" | "docs_paths" => parse_docs_section(&mut config, val),
             "policies" => parse_policies_section(&mut config, val),
             "path_policies" => parse_path_policies_section(&mut config, val),
+            "runner" => parse_runner_section(&mut config, val),
+            "harness" => {
+                parse_runner_section(&mut config, val);
+                config.harness = Some(config.runner.clone());
+            },
             _ => {},
         }
     }
 
     Ok(config)
+}
+
+fn parse_runner_section(config: &mut ProjectConfig, val: &toml::Value) {
+    match val {
+        toml::Value::Table(tbl) => {
+            for (k, v) in tbl {
+                match (k.as_str(), v) {
+                    ("harness" | "name" | "type", toml::Value::String(s)) => {
+                        config.runner.harness.clone_from(s);
+                    },
+                    ("command" | "cmd", toml::Value::Array(arr)) => {
+                        config.runner.command = Some(extract_string_array(arr));
+                    },
+                    ("command" | "cmd", toml::Value::String(s)) => {
+                        config.runner.command = Some(vec![s.clone()]);
+                    },
+                    ("agent_flag" | "agentFlag", toml::Value::String(s)) => {
+                        config.runner.agent_flag = Some(s.clone());
+                    },
+                    ("sandbox_flag" | "sandboxFlag", toml::Value::String(s)) => {
+                        config.runner.sandbox_flag = Some(s.clone());
+                    },
+                    (
+                        "resume_flag" | "resumeFlag" | "session_flag" | "sessionFlag",
+                        toml::Value::String(s),
+                    ) => {
+                        config.runner.resume_flag = Some(s.clone());
+                    },
+                    ("extra_args" | "extraArgs" | "args", toml::Value::Array(arr)) => {
+                        config.runner.extra_args = extract_string_array(arr);
+                    },
+                    _ => {},
+                }
+            }
+        },
+        toml::Value::String(s) => {
+            config.runner.harness.clone_from(s);
+        },
+        _ => {},
+    }
 }
 
 fn extract_string_array(arr: &[toml::Value]) -> Vec<String> {
@@ -1300,5 +1523,63 @@ ABS_DIR = "/opt/target"
         );
         assert_eq!(&envs["CUSTOM_WS"], "/workspace/myproject/custom");
         assert_eq!(&envs["ABS_DIR"], "/opt/target");
+    }
+
+    #[test]
+    fn test_parse_runner_defaults() {
+        let sample = r#"
+[project]
+name = "default-app"
+"#;
+        let parsed = parse_project_toml(sample).unwrap();
+        let runner = parsed.resolved_runner();
+        assert_eq!(runner.harness, "agy");
+        assert_eq!(runner.harness_kind(), HarnessKind::Agy);
+        assert_eq!(runner.resolved_binary(), "agy");
+        assert_eq!(runner.resolved_agent_flag().as_deref(), Some("--agent"));
+        assert_eq!(runner.resolved_sandbox_flag().as_deref(), Some("--sandbox"));
+        assert_eq!(
+            runner.resolved_resume_flag().as_deref(),
+            Some("--conversation")
+        );
+    }
+
+    #[test]
+    fn test_parse_runner_opencode() {
+        let sample = r#"
+[project]
+name = "opencode-app"
+
+[runner]
+harness = "opencode"
+extra_args = ["--verbose"]
+"#;
+        let parsed = parse_project_toml(sample).unwrap();
+        let runner = parsed.resolved_runner();
+        assert_eq!(runner.harness, "opencode");
+        assert_eq!(runner.harness_kind(), HarnessKind::OpenCode);
+        assert_eq!(runner.resolved_binary(), "opencode");
+        assert_eq!(runner.resolved_agent_flag().as_deref(), Some("--agent"));
+        assert_eq!(runner.resolved_sandbox_flag(), None);
+        assert_eq!(runner.resolved_resume_flag().as_deref(), Some("--session"));
+        assert_eq!(runner.extra_args, vec!["--verbose"]);
+    }
+
+    #[test]
+    fn test_parse_harness_custom_command() {
+        let sample = r#"
+[harness]
+name = "custom"
+command = ["my-cli", "exec", "--agent", "{agent}"]
+agent_flag = "-a"
+resume_flag = "-r"
+"#;
+        let parsed = parse_project_toml(sample).unwrap();
+        let runner = parsed.resolved_runner();
+        assert_eq!(runner.harness, "custom");
+        assert_eq!(runner.harness_kind(), HarnessKind::Custom);
+        assert_eq!(runner.resolved_binary(), "my-cli");
+        assert_eq!(runner.resolved_agent_flag().as_deref(), Some("-a"));
+        assert_eq!(runner.resolved_resume_flag().as_deref(), Some("-r"));
     }
 }

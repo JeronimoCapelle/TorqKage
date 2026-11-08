@@ -125,27 +125,260 @@ fn session_matches_workspace(
     false
 }
 
+/// Abstract session provider contract for discovering prior agent conversations.
+pub(crate) trait SessionProvider: Send + Sync {
+    /// Discovers the latest resumable session for a given agent in the given workspace.
+    fn find_agent_session(&self, agent_name: &str, workspace_root: &Path)
+    -> Option<SessionSummary>;
+}
+
+/// Native Antigravity SQLite session provider.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct AntigravitySessionProvider;
+
+impl SessionProvider for AntigravitySessionProvider {
+    fn find_agent_session(
+        &self,
+        agent_name: &str,
+        workspace_root: &Path,
+    ) -> Option<SessionSummary> {
+        let home = std::env::var("HOME").ok()?;
+        let home_path = PathBuf::from(&home);
+        let db_path = home_path.join(".gemini/antigravity-cli/conversation_summaries.db");
+        let convs_dir = home_path.join(".gemini/antigravity-cli/conversations");
+        let history_path = home_path.join(".gemini/antigravity-cli/history.jsonl");
+
+        query_session_from_sources(
+            &db_path,
+            &convs_dir,
+            &history_path,
+            agent_name,
+            workspace_root,
+        )
+    }
+}
+
+/// `OpenCode` session provider discovering `.opencode/sessions` and user directory traces.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct OpenCodeSessionProvider;
+
+impl SessionProvider for OpenCodeSessionProvider {
+    fn find_agent_session(
+        &self,
+        agent_name: &str,
+        workspace_root: &Path,
+    ) -> Option<SessionSummary> {
+        discover_opencode_session(agent_name, workspace_root)
+    }
+}
+
+/// Generic state session provider reading `.agy/state/sessions`.
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct GenericSessionProvider;
+
+impl SessionProvider for GenericSessionProvider {
+    fn find_agent_session(
+        &self,
+        agent_name: &str,
+        workspace_root: &Path,
+    ) -> Option<SessionSummary> {
+        discover_generic_state_session(agent_name, workspace_root)
+    }
+}
+
+/// Factory creating a `SessionProvider` dynamically matching the configured execution harness.
+#[must_use]
+pub(crate) fn create_session_provider(
+    runner_cfg: &agy_common::ProjectRunnerConfig,
+) -> Box<dyn SessionProvider> {
+    match runner_cfg.harness_kind() {
+        agy_common::HarnessKind::Agy => Box::new(AntigravitySessionProvider),
+        agy_common::HarnessKind::OpenCode => Box::new(OpenCodeSessionProvider),
+        agy_common::HarnessKind::Claude | agy_common::HarnessKind::Custom => {
+            Box::new(GenericSessionProvider)
+        },
+    }
+}
+
+/// Discovers the latest resumable session for a given agent in the given workspace using explicit runner settings.
+#[must_use]
+pub(crate) fn find_agent_session_with_runner(
+    agent_name: &str,
+    workspace_root: &Path,
+    runner_cfg: &agy_common::ProjectRunnerConfig,
+) -> Option<SessionSummary> {
+    let provider = create_session_provider(runner_cfg);
+    provider.find_agent_session(agent_name, workspace_root)
+}
+
 /// Discovers the latest resumable session for a given agent in the given workspace.
 ///
-/// Returns `None` if the session database does not exist or cannot be opened.
+/// Automatically inspects `project.toml` to select the appropriate session backend.
 #[must_use]
 pub(crate) fn find_agent_session_for_workspace(
     agent_name: &str,
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
-    let home = std::env::var("HOME").ok()?;
-    let home_path = PathBuf::from(&home);
-    let db_path = home_path.join(".gemini/antigravity-cli/conversation_summaries.db");
-    let convs_dir = home_path.join(".gemini/antigravity-cli/conversations");
-    let history_path = home_path.join(".gemini/antigravity-cli/history.jsonl");
+    let project_cfg = agy_common::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    find_agent_session_with_runner(agent_name, workspace_root, &runner)
+}
 
-    query_session_from_sources(
-        &db_path,
-        &convs_dir,
-        &history_path,
-        agent_name,
-        workspace_root,
-    )
+fn discover_opencode_session(agent_name: &str, workspace_root: &Path) -> Option<SessionSummary> {
+    let mut candidate_dirs = Vec::new();
+    candidate_dirs.push(workspace_root.join(".opencode").join("sessions"));
+    candidate_dirs.push(workspace_root.join(".opencode"));
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = PathBuf::from(&home);
+        candidate_dirs.push(home_path.join(".local/share/opencode/sessions"));
+        candidate_dirs.push(home_path.join(".opencode/sessions"));
+    }
+
+    let mut sessions = Vec::new();
+    for dir in candidate_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "json")
+                && let Ok(content) = std::fs::read_to_string(&path)
+                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+                && let Some(sess) = parse_json_session(&val, &path, agent_name)
+            {
+                sessions.push(sess);
+            }
+        }
+    }
+
+    sessions.sort_by(|a, b| b.last_modified_time.cmp(&a.last_modified_time));
+    sessions.into_iter().next()
+}
+
+fn discover_generic_state_session(
+    agent_name: &str,
+    workspace_root: &Path,
+) -> Option<SessionSummary> {
+    let state_dir = workspace_root.join(".agy/state/sessions");
+    if !state_dir.is_dir() {
+        return None;
+    }
+    let Ok(entries) = std::fs::read_dir(state_dir) else {
+        return None;
+    };
+    let mut sessions = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "json")
+            && let Ok(content) = std::fs::read_to_string(&path)
+            && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+            && let Some(sess) = parse_json_session(&val, &path, agent_name)
+        {
+            sessions.push(sess);
+        }
+    }
+
+    sessions.sort_by(|a, b| b.last_modified_time.cmp(&a.last_modified_time));
+    sessions.into_iter().next()
+}
+
+fn parse_json_session(
+    val: &serde_json::Value,
+    path: &Path,
+    agent_name: &str,
+) -> Option<SessionSummary> {
+    let declared_agent = val
+        .get("agent")
+        .or_else(|| val.get("agent_name"))
+        .or_else(|| val.get("agentName"))
+        .and_then(serde_json::Value::as_str);
+
+    if let Some(da) = declared_agent
+        && !da.trim().is_empty()
+        && !da.eq_ignore_ascii_case(agent_name)
+    {
+        return None;
+    }
+
+    let conversation_id = val
+        .get("id")
+        .or_else(|| val.get("session_id"))
+        .or_else(|| val.get("sessionId"))
+        .or_else(|| val.get("conversation_id"))
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(
+            || {
+                path.file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+                    .to_owned()
+            },
+            ToOwned::to_owned,
+        );
+
+    let last_modified_time = val
+        .get("updated_at")
+        .or_else(|| val.get("updatedAt"))
+        .or_else(|| val.get("last_modified_time"))
+        .or_else(|| val.get("timestamp"))
+        .and_then(serde_json::Value::as_str)
+        .map_or_else(
+            || {
+                path.metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .map_or_else(
+                        || "1970-01-01T00:00:00Z".to_owned(),
+                        |t| {
+                            let dur = t
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs();
+                            dur.to_string()
+                        },
+                    )
+            },
+            ToOwned::to_owned,
+        );
+
+    let step_count = val
+        .get("step_count")
+        .or_else(|| val.get("stepCount"))
+        .and_then(serde_json::Value::as_u64)
+        .or_else(|| {
+            let arr = val
+                .get("messages")
+                .or_else(|| val.get("turns"))
+                .or_else(|| val.get("steps"))
+                .and_then(serde_json::Value::as_array)?;
+            u64::try_from(arr.len()).ok()
+        })
+        .unwrap_or(1);
+
+    if step_count == 0 {
+        return None;
+    }
+
+    let preview = val
+        .get("preview")
+        .or_else(|| val.get("title"))
+        .or_else(|| val.get("summary"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_owned();
+
+    Some(SessionSummary {
+        conversation_id,
+        agent_name: agent_name.to_owned(),
+        workspace_uris: String::new(),
+        last_modified_time,
+        step_count,
+        preview,
+    })
 }
 
 pub(crate) fn query_session_from_sources(
@@ -471,6 +704,90 @@ mod tests {
         let session = res.unwrap();
         assert_eq!(session.conversation_id, "sub-uuid-7777");
         assert_eq!(session.step_count, 12);
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_opencode_session_discovery() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agy-ctrl-test-opencode-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mock_ws = temp_dir.join("opencode_workspace");
+        let opencode_sessions = mock_ws.join(".opencode").join("sessions");
+        std::fs::create_dir_all(&opencode_sessions).unwrap();
+
+        let session_data = serde_json::json!({
+            "id": "opencode-ses-1234",
+            "agent": "coder",
+            "updatedAt": "2026-11-08T18:00:00Z",
+            "title": "Fix buffer overflow in parser",
+            "messages": [
+                {"role": "user", "content": "hello"},
+                {"role": "assistant", "content": "hi"}
+            ]
+        });
+
+        std::fs::write(
+            opencode_sessions.join("ses_1234.json"),
+            session_data.to_string(),
+        )
+        .unwrap();
+
+        let provider = OpenCodeSessionProvider;
+        let res = provider.find_agent_session("coder", &mock_ws);
+        assert!(res.is_some());
+        let sess = res.unwrap();
+        assert_eq!(sess.conversation_id, "opencode-ses-1234");
+        assert_eq!(sess.agent_name, "coder");
+        assert_eq!(sess.step_count, 2);
+        assert_eq!(sess.preview, "Fix buffer overflow in parser");
+
+        // Different agent should not match
+        let diff_res = provider.find_agent_session("reviewer", &mock_ws);
+        assert!(diff_res.is_none());
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_generic_state_session_discovery() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "agy-ctrl-test-generic-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let mock_ws = temp_dir.join("generic_workspace");
+        let state_sessions = mock_ws.join(".agy").join("state").join("sessions");
+        std::fs::create_dir_all(&state_sessions).unwrap();
+
+        let session_data = serde_json::json!({
+            "conversation_id": "gen-session-999",
+            "agent_name": "planner",
+            "last_modified_time": "2026-11-08T19:00:00Z",
+            "step_count": 5,
+            "preview": "Architecture roadmap review"
+        });
+
+        std::fs::write(
+            state_sessions.join("gen_999.json"),
+            session_data.to_string(),
+        )
+        .unwrap();
+
+        let provider = GenericSessionProvider;
+        let res = provider.find_agent_session("planner", &mock_ws);
+        assert!(res.is_some());
+        let sess = res.unwrap();
+        assert_eq!(sess.conversation_id, "gen-session-999");
+        assert_eq!(sess.step_count, 5);
+        assert_eq!(sess.preview, "Architecture roadmap review");
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

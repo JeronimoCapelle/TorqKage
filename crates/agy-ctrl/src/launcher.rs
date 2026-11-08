@@ -62,7 +62,7 @@ impl PreLaunchReport {
     }
 }
 
-/// Executes all mandatory and advisory pre-launch checks before booting an `agy` session.
+/// Executes all mandatory and advisory pre-launch checks before booting an agent session.
 ///
 /// This provides a modular, extensible hook for gating agent execution.
 pub(crate) fn run_pre_launch_checks(
@@ -70,12 +70,16 @@ pub(crate) fn run_pre_launch_checks(
     agent: &AgentManifest,
 ) -> PreLaunchReport {
     let mut report = PreLaunchReport::new(&agent.name);
+    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    let binary = runner.resolved_binary();
 
-    // Check 1: Verify agy executable is discoverable in system PATH
-    if which::which("agy").is_err() {
-        report.errors.push(
-            "The 'agy' CLI executable could not be found in system PATH. Ensure Antigravity is installed.".to_owned(),
-        );
+    // Check 1: Verify harness executable is discoverable in system PATH
+    if which::which(&binary).is_err() {
+        report.errors.push(format!(
+            "The '{}' CLI executable ('{binary}') could not be found in system PATH. Ensure it is installed.",
+            runner.harness
+        ));
     }
 
     // Check 2: Verify the agent's manifest file exists on disk
@@ -133,15 +137,63 @@ pub(crate) fn run_pre_launch_checks(
 
 /// Suspends Ratatui, runs pre-launch checks, and spawns an interactive `agy` CLI session.
 ///
-/// If `resume_conversation` is specified, resumes that specific session using `agy --conversation <id>`.
-/// Otherwise, boots a new session with `agy --agent <name>`.
-///
-/// Once the user exits the `agy` session, raw mode and alternate screen are re-established,
-/// returning the user seamlessly back to the `agy-ctrl` deck.
+/// Builds a configured `Command` ready to execute for the configured execution harness.
+#[must_use]
+pub(crate) fn build_harness_command(
+    workspace_root: &Path,
+    runner: &agy_common::ProjectRunnerConfig,
+    agent_name: &str,
+    sandbox: bool,
+    resume_conversation: Option<&str>,
+) -> Command {
+    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    let binary = runner.resolved_binary();
+    let mut cmd = Command::new(&binary);
+
+    for (k, v) in project_cfg.resolved_environment(workspace_root) {
+        cmd.env(k, v);
+    }
+
+    if let Some(custom_cmd) = &runner.command
+        && let Some(sub_args) = custom_cmd.get(1..)
+    {
+        for arg in sub_args {
+            if arg == "{agent}" {
+                cmd.arg(agent_name);
+            } else if (arg == "{conversation}" || arg == "{session}")
+                && let Some(cid) = resume_conversation
+            {
+                cmd.arg(cid);
+            } else {
+                cmd.arg(arg);
+            }
+        }
+    } else {
+        if sandbox && let Some(flag) = runner.resolved_sandbox_flag() {
+            cmd.arg(flag);
+        }
+        if let Some(conv_id) = resume_conversation {
+            if let Some(flag) = runner.resolved_resume_flag() {
+                cmd.arg(flag).arg(conv_id);
+            }
+        } else if let Some(flag) = runner.resolved_agent_flag() {
+            cmd.arg(flag).arg(agent_name);
+        }
+    }
+
+    for extra in &runner.extra_args {
+        cmd.arg(extra);
+    }
+
+    cmd
+}
+
+/// Interactive launcher: suspends Ratatui, runs pre-flight checks, spawns the agent session,
+/// and restores the terminal on exit.
 ///
 /// # Errors
-/// Returns an error string if pre-launch checks fail or if `agy` cannot be executed.
-pub(crate) fn launch_agy_interactive(
+/// Returns an error string if pre-launch checks fail or if the harness cannot be executed.
+pub(crate) fn launch_agent_interactive(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     workspace_root: &Path,
     agent: &AgentManifest,
@@ -149,6 +201,10 @@ pub(crate) fn launch_agy_interactive(
     isolated_workspace: bool,
     resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
+    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    let binary = runner.resolved_binary();
+
     // 1. Run pre-launch checks
     let report = run_pre_launch_checks(workspace_root, agent);
     if !report.is_ok() {
@@ -178,14 +234,14 @@ pub(crate) fn launch_agy_interactive(
     println!("\n================================================================================");
     if let Some(conv_id) = resume_conversation {
         println!(
-            "🚀 [agy-ctrl] RESUMING previous agy session for agent: {}",
-            agent.name
+            "🚀 [agy-ctrl] RESUMING previous {} session for agent: {}",
+            runner.harness, agent.name
         );
         println!("   Conversation ID: {conv_id}");
     } else {
         println!(
-            "🚀 [agy-ctrl] Launching fresh agy session with agent: {}",
-            agent.name
+            "🚀 [agy-ctrl] Launching fresh {} session with agent: {}",
+            runner.harness, agent.name
         );
     }
     println!(
@@ -209,23 +265,20 @@ pub(crate) fn launch_agy_interactive(
     } else {
         println!("   Workspace: {}", workspace_root.display());
     }
-    println!("   (Exiting the agy session will return you directly to agy-ctrl)");
+    println!(
+        "   (Exiting the {} session will return you directly to agy-ctrl)",
+        runner.harness
+    );
     println!("================================================================================\n");
 
-    // 3. Spawn agy with inherited stdio
-    let mut cmd = Command::new("agy");
-    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
-    for (k, v) in project_cfg.resolved_environment(workspace_root) {
-        cmd.env(k, v);
-    }
-    if sandbox {
-        cmd.arg("--sandbox");
-    }
-    if let Some(conv_id) = resume_conversation {
-        cmd.arg("--conversation").arg(conv_id);
-    } else {
-        cmd.arg("--agent").arg(&agent.name);
-    }
+    // 3. Spawn harness with inherited stdio
+    let mut cmd = build_harness_command(
+        workspace_root,
+        &runner,
+        &agent.name,
+        sandbox,
+        resume_conversation,
+    );
     cmd.current_dir(&effective_workspace);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
@@ -258,20 +311,47 @@ pub(crate) fn launch_agy_interactive(
     drop(terminal.clear());
     drop(terminal.hide_cursor());
 
-    status_res.map_err(|e| format!("Failed to execute 'agy': {e}"))
+    status_res.map_err(|e| format!("Failed to execute '{binary}': {e}"))
 }
 
-/// Headless launcher: runs pre-launch checks and spawns `agy` directly from CLI.
-///
-/// # Errors
-/// Returns an error string if pre-launch checks fail or if `agy` cannot be spawned.
-pub(crate) fn launch_agy_headless(
+/// Backward-compatible alias for `launch_agent_interactive`.
+#[allow(
+    dead_code,
+    reason = "Backward-compatible alias for launch_agent_interactive"
+)]
+pub(crate) fn launch_agy_interactive(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     workspace_root: &Path,
     agent: &AgentManifest,
     sandbox: bool,
     isolated_workspace: bool,
     resume_conversation: Option<&str>,
 ) -> Result<ExitStatus, String> {
+    launch_agent_interactive(
+        terminal,
+        workspace_root,
+        agent,
+        sandbox,
+        isolated_workspace,
+        resume_conversation,
+    )
+}
+
+/// Headless launcher: runs pre-launch checks and spawns the configured agent harness directly from CLI.
+///
+/// # Errors
+/// Returns an error string if pre-launch checks fail or if the harness cannot be spawned.
+pub(crate) fn launch_agent_headless(
+    workspace_root: &Path,
+    agent: &AgentManifest,
+    sandbox: bool,
+    isolated_workspace: bool,
+    resume_conversation: Option<&str>,
+) -> Result<ExitStatus, String> {
+    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    let binary = runner.resolved_binary();
+
     let report = run_pre_launch_checks(workspace_root, agent);
     if !report.is_ok() {
         return Err(report.format_diagnostics());
@@ -293,7 +373,8 @@ pub(crate) fn launch_agy_headless(
 
     if let Some(conv_id) = resume_conversation {
         println!(
-            "🚀 [agy-ctrl] Resuming agy session {conv_id} with agent: {} (Sandbox: {}, Isolated: {})",
+            "🚀 [agy-ctrl] Resuming {} session {conv_id} with agent: {} (Sandbox: {}, Isolated: {})",
+            runner.harness,
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
             if was_isolated {
@@ -304,7 +385,8 @@ pub(crate) fn launch_agy_headless(
         );
     } else {
         println!(
-            "🚀 [agy-ctrl] Launching agy session with agent: {} (Sandbox: {}, Isolated: {})",
+            "🚀 [agy-ctrl] Launching {} session with agent: {} (Sandbox: {}, Isolated: {})",
+            runner.harness,
             agent.name,
             if sandbox { "ENABLED" } else { "DISABLED" },
             if was_isolated {
@@ -315,19 +397,13 @@ pub(crate) fn launch_agy_headless(
         );
     }
 
-    let mut cmd = Command::new("agy");
-    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
-    for (k, v) in project_cfg.resolved_environment(workspace_root) {
-        cmd.env(k, v);
-    }
-    if sandbox {
-        cmd.arg("--sandbox");
-    }
-    if let Some(conv_id) = resume_conversation {
-        cmd.arg("--conversation").arg(conv_id);
-    } else {
-        cmd.arg("--agent").arg(&agent.name);
-    }
+    let mut cmd = build_harness_command(
+        workspace_root,
+        &runner,
+        &agent.name,
+        sandbox,
+        resume_conversation,
+    );
     cmd.current_dir(&effective_workspace);
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
@@ -335,7 +411,7 @@ pub(crate) fn launch_agy_headless(
 
     let res = cmd
         .status()
-        .map_err(|e| format!("Failed to spawn 'agy': {e}"));
+        .map_err(|e| format!("Failed to spawn '{binary}': {e}"));
 
     if was_isolated {
         println!(
@@ -346,6 +422,27 @@ pub(crate) fn launch_agy_headless(
     }
 
     res
+}
+
+/// Backward-compatible alias for `launch_agent_headless`.
+#[allow(
+    dead_code,
+    reason = "Backward-compatible alias for launch_agent_headless"
+)]
+pub(crate) fn launch_agy_headless(
+    workspace_root: &Path,
+    agent: &AgentManifest,
+    sandbox: bool,
+    isolated_workspace: bool,
+    resume_conversation: Option<&str>,
+) -> Result<ExitStatus, String> {
+    launch_agent_headless(
+        workspace_root,
+        agent,
+        sandbox,
+        isolated_workspace,
+        resume_conversation,
+    )
 }
 
 #[cfg(test)]
@@ -482,5 +579,52 @@ mod tests {
         let res = launch_agy_headless(Path::new("."), &manifest, false, true, None);
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("unsaved modifications"));
+    }
+
+    #[test]
+    fn test_build_harness_command_opencode() {
+        let runner = agy_common::ProjectRunnerConfig {
+            harness: "opencode".to_owned(),
+            command: None,
+            agent_flag: None,
+            sandbox_flag: None,
+            resume_flag: None,
+            extra_args: vec!["--debug".to_owned()],
+        };
+
+        let cmd = build_harness_command(Path::new("."), &runner, "coder", true, None);
+        let program = cmd.get_program().to_string_lossy().to_string();
+        assert_eq!(program, "opencode");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(args, vec!["--agent", "coder", "--debug"]);
+    }
+
+    #[test]
+    fn test_build_harness_command_custom_template() {
+        let runner = agy_common::ProjectRunnerConfig {
+            harness: "custom".to_owned(),
+            command: Some(vec![
+                "custom-harness".to_owned(),
+                "run".to_owned(),
+                "--agent".to_owned(),
+                "{agent}".to_owned(),
+            ]),
+            agent_flag: None,
+            sandbox_flag: None,
+            resume_flag: None,
+            extra_args: Vec::new(),
+        };
+
+        let cmd = build_harness_command(Path::new("."), &runner, "reviewer", false, None);
+        let program = cmd.get_program().to_string_lossy().to_string();
+        assert_eq!(program, "custom-harness");
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(args, vec!["run", "--agent", "reviewer"]);
     }
 }

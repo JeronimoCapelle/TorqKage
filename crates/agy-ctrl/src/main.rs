@@ -137,7 +137,7 @@ fn handle_cli_launch(
     let resume_conv = session::find_agent_session_for_workspace(&agent.name, workspace_root)
         .map(|s| s.conversation_id);
 
-    match launcher::launch_agy_headless(
+    match launcher::launch_agent_headless(
         workspace_root,
         &agent,
         sandbox,
@@ -300,7 +300,7 @@ fn event_loop(
         // Handle pending launch request if one was triggered
         if let Some((agent_name, resume_conv)) = app.pending_launch.take() {
             if let Some(agent) = app.agents.iter().find(|a| a.name == agent_name).cloned() {
-                match launcher::launch_agy_interactive(
+                match launcher::launch_agent_interactive(
                     terminal,
                     &app.workspace_root,
                     &agent,
@@ -313,9 +313,10 @@ fn event_loop(
                         app.agents = model::discover_agents(&app.workspace_root);
                         app.refresh_selected_agent_session();
                         app.refresh_circuit_breaker();
+                        let harness = app.runner_harness();
                         app.status_message = Some((
                             format!(
-                                "✔ Returned from agy session with agent '{agent_name}' ({status})"
+                                "✔ Returned from {harness} session with agent '{agent_name}' ({status})"
                             ),
                             false,
                         ));

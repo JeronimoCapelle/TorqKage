@@ -202,6 +202,31 @@ filter = "comments_only"
 
 ---
 
+### 9. Execution Harness & Agent System Runner (`[runner]` / `[harness]`)
+
+`agy-suite` is harness-agnostic. While it defaults to Google Antigravity (`agy`), you can configure any agent system or CLI runner (such as `opencode`, Claude Code, or a custom wrapper):
+
+```toml
+[runner]
+harness = "opencode"             # "agy" (default), "opencode", "claude", or "custom"
+command = ["opencode"]           # Optional command override or template
+agent_flag = "--agent"           # Flag used to dispatch to an agent persona
+sandbox_flag = "--sandbox"       # Optional sandbox flag passed to harness
+resume_flag = "--session"        # Flag used to resume prior conversation sessions
+extra_args = ["--verbose"]       # Additional CLI arguments passed on launch
+```
+
+| Field | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `harness` | String | `"agy"` | Execution platform: `"agy"`, `"opencode"`, `"claude"`, or `"custom"`. Determines the default binary name and session discovery backend. |
+| `command` | Array of strings or String | Auto-inferred | Optional explicit command. If array elements contain `{agent}` or `{session}`, they are replaced with the target agent and conversation ID. |
+| `agent_flag` | String | Auto-inferred (`"--agent"`) | CLI flag used to specify the agent persona. |
+| `sandbox_flag` | String | `"--sandbox"` (for `agy`), `None` (for others) | Optional CLI flag to pass when Bubblewrap sandboxing is toggled. |
+| `resume_flag` | String | `"--conversation"` (for `agy`), `"--session"` (for `opencode`), `"--resume"` (for others) | CLI flag passed when resuming an existing session. |
+| `extra_args` | Array of strings | `[]` | Additional flags or arguments appended to the harness command. |
+
+---
+
 ## Ecosystem Auto-Detection & Inference
 
 When `project.toml` is absent or specific fields are omitted, `agy-suite` automatically infers sane configuration defaults by inspecting manifest indicators on disk:

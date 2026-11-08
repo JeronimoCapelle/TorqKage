@@ -249,10 +249,11 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     let agent_pos = app.selected_agent_idx.saturating_add(1);
     let total_agents = app.agents.len();
+    let harness = app.runner_harness();
     let agents_list = List::new(agent_items).block(
         Block::default()
             .title(format!(
-                " [Active Agents: {agent_pos}/{total_agents} (Enter/r to Launch in agy)] "
+                " [Active Agents: {agent_pos}/{total_agents} (Enter/r to Launch in {harness})] "
             ))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -987,7 +988,7 @@ fn build_help_modal_text() -> Vec<Line<'static>> {
         ),
         modal_key_line(
             "b / F8",
-            "Toggle outer-loop Bubblewrap sandbox isolation for agy session",
+            "Toggle outer-loop Bubblewrap sandbox isolation for agent session",
             Color::Yellow,
         ),
         modal_key_line(

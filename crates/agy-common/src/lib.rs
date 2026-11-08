@@ -54,8 +54,9 @@ pub use models::{
     ToolCallPayload, extract_bracketed_error_code, extract_compiler_error_signature,
 };
 pub use project::{
-    GateDefinition, ProjectConfig, ProjectDocsConfig, ProjectMeta, ProjectSandboxConfig,
-    ProjectSecurityConfig, ProjectWorkspaceConfig, SecurityCategory,
+    GateDefinition, HarnessKind, ProjectConfig, ProjectDocsConfig, ProjectMeta,
+    ProjectRunnerConfig, ProjectSandboxConfig, ProjectSecurityConfig, ProjectWorkspaceConfig,
+    SecurityCategory,
 };
 pub use resolver::WorkspaceResolver;
 pub use rustc_hash::{
