@@ -107,14 +107,10 @@ fn validate_and_build_args(
                 ));
             }
 
-            let is_path_arg = arg.name == "path"
-                || arg.name == "file"
-                || arg.name == "dir"
-                || arg.name == "directory"
-                || arg.name == "workspace_path"
-                || arg.name.ends_with("_path")
-                || arg.name.ends_with("_file")
-                || arg.name.ends_with("_dir");
+            let is_path_arg = arg.arg_type.as_deref() == Some("path")
+                || arg.arg_type.as_deref() == Some("file")
+                || arg.arg_type.as_deref() == Some("directory")
+                || arg.name == "path";
 
             if is_path_arg {
                 if tool.enforce_workspace_bounds() {

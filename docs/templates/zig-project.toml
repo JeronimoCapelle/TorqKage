@@ -38,7 +38,7 @@ timeout_seconds = 15
 failure_message = "Zig format check failed (`zig fmt --check src/`)."
 
 [environment]
-ZIG_LOCAL_CACHE_DIR = ".zig-cache"
+ZIG_LOCAL_CACHE_DIR = "./.zig-cache"
 
 [docs]
 paths = ["docs", "ARCHITECTURE.md"]

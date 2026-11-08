@@ -841,7 +841,7 @@ ban_dangerous_files = true
 command = ["llvm-objdump", "-d"]
 args = [
     { name = "arch", required = false, flag = "--arch-name", enum = ["riscv64", "riscv32", "x86_64", "aarch64", "arm", "wasm32"], description = "Target architecture ('riscv64', 'riscv32', 'x86_64', 'aarch64', 'arm', 'wasm32')" },
-    { name = "file", required = true, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target binary, ELF, or object file relative to workspace to disassemble" }
+    { name = "file", type = "path", required = true, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target binary, ELF, or object file relative to workspace to disassemble" }
 ]
 output_capture = "stdout"
 truncate_lines = 200
@@ -889,7 +889,7 @@ ban_dangerous_files = true
 command = ["nasm", "-o", "/dev/null"]
 args = [
     { name = "format", required = false, default = "elf64", flag = "-f", enum = ["elf64", "elf32", "bin"], description = "Target output format ('elf64', 'elf32', or raw 'bin', defaults to 'elf64')" },
-    { name = "file", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Assembly source file (.asm or .s) relative to workspace to assemble and verify" }
+    { name = "file", type = "path", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Assembly source file (.asm or .s) relative to workspace to assemble and verify" }
 ]
 empty_fallback = "Assembly check passed (valid syntax and instruction encoding)"
 output_capture = "both"

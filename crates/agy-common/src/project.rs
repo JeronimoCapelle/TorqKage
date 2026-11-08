@@ -272,20 +272,10 @@ impl ProjectConfig {
         false
     }
 
-    /// Returns the resolved monorepo containers, using explicit configuration from `project.toml`
-    /// or detecting existing directory indicators on disk (`crates`, `packages`).
+    /// Returns the resolved monorepo containers, strictly as declared in `project.toml`.
     #[must_use]
-    pub fn resolved_containers(&self, workspace_root: &Path) -> Vec<String> {
-        if !self.workspace.containers.is_empty() {
-            return self.workspace.containers.clone();
-        }
-        let mut detected = Vec::new();
-        for dir in ["crates", "packages", "apps", "libs", "services", "modules"] {
-            if workspace_root.join(dir).is_dir() {
-                detected.push(dir.to_owned());
-            }
-        }
-        detected
+    pub fn resolved_containers(&self, _workspace_root: &Path) -> Vec<String> {
+        self.workspace.containers.clone()
     }
 
     /// Auto-detects standard documentation directories and architecture files in the workspace.
@@ -385,6 +375,22 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: vec![crate::content_filter::BlockCommentDelimiters::new(
+                        "/*", "*/",
+                    )],
+                    test_attributes: vec![
+                        "test".into(),
+                        "cfg(test".into(),
+                        "tokio::test".into(),
+                        "rstest".into(),
+                    ],
+                    test_prefixes: vec!["test_".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -408,6 +414,15 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: Vec::new(),
+                    test_attributes: vec!["test \"".into()],
+                    test_prefixes: vec!["test_".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -431,6 +446,17 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: vec![crate::content_filter::BlockCommentDelimiters::new(
+                        "/*", "*/",
+                    )],
+                    test_attributes: vec!["//go:build test".into()],
+                    test_prefixes: vec!["Test".into(), "Benchmark".into(), "Fuzz".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -454,6 +480,22 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: vec![crate::content_filter::BlockCommentDelimiters::new(
+                        "/*", "*/",
+                    )],
+                    test_attributes: vec![
+                        "describe(".into(),
+                        "it(".into(),
+                        "test(".into(),
+                        "suite(".into(),
+                    ],
+                    test_prefixes: vec!["test".into(), "spec".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -481,6 +523,18 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["#".into()],
+                    block_comments: vec![
+                        crate::content_filter::BlockCommentDelimiters::new("\"\"\"", "\"\"\""),
+                        crate::content_filter::BlockCommentDelimiters::new("'''", "'''"),
+                    ],
+                    test_attributes: vec!["@pytest".into(), "@unittest".into()],
+                    test_prefixes: vec!["test_".into(), "Test".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -504,6 +558,17 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: vec![crate::content_filter::BlockCommentDelimiters::new(
+                        "/*", "*/",
+                    )],
+                    test_attributes: vec!["TEST(".into(), "TEST_F(".into()],
+                    test_prefixes: vec!["test_".into(), "Test".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -527,6 +592,17 @@ impl ProjectConfig {
             security: ProjectSecurityConfig::default(),
             extra_banned_files: Vec::new(),
             docs: ProjectDocsConfig::default(),
+            policies: ProjectPolicyConfig {
+                syntax: Some(crate::content_filter::SyntaxConfig {
+                    line_comments: vec!["//".into()],
+                    block_comments: vec![crate::content_filter::BlockCommentDelimiters::new(
+                        "/*", "*/",
+                    )],
+                    test_attributes: vec!["TEST(".into(), "TEST_F(".into()],
+                    test_prefixes: vec!["test_".into(), "Test".into()],
+                }),
+                path_policies: Vec::new(),
+            },
             ..Default::default()
         }
     }
@@ -569,16 +645,6 @@ impl ProjectConfig {
                     workspace_root.join(stripped).to_string_lossy().into_owned()
                 } else if v.starts_with("../") {
                     workspace_root.join(v).to_string_lossy().into_owned()
-                } else if k.ends_with("_TARGET_DIR")
-                    || k.ends_with("_CACHE_DIR")
-                    || k.ends_with("_DIR")
-                {
-                    let p = Path::new(v);
-                    if p.is_absolute() {
-                        v.clone()
-                    } else {
-                        workspace_root.join(v).to_string_lossy().into_owned()
-                    }
                 } else {
                     v.clone()
                 };
@@ -805,6 +871,22 @@ fn parse_docs_section(config: &mut ProjectConfig, val: &toml::Value) {
     }
 }
 
+fn parse_block_comments_array(
+    arr: &[toml::Value],
+) -> Vec<crate::content_filter::BlockCommentDelimiters> {
+    let mut blocks = Vec::new();
+    for item in arr {
+        if let toml::Value::Table(b_tbl) = item {
+            let start = b_tbl.get("start").and_then(toml::Value::as_str);
+            let end = b_tbl.get("end").and_then(toml::Value::as_str);
+            if let (Some(s), Some(e)) = (start, end) {
+                blocks.push(crate::content_filter::BlockCommentDelimiters::new(s, e));
+            }
+        }
+    }
+    blocks
+}
+
 fn parse_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
     if let toml::Value::Table(tbl) = val
         && let Some(toml::Value::Table(syntax_tbl)) = tbl.get("syntax")
@@ -817,6 +899,9 @@ fn parse_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
                     "line_comments" => syntax.line_comments = strings,
                     "test_attributes" => syntax.test_attributes = strings,
                     "test_prefixes" => syntax.test_prefixes = strings,
+                    "block_comments" => {
+                        syntax.block_comments = parse_block_comments_array(arr);
+                    },
                     _ => {},
                 }
             } else if let toml::Value::String(s) = sv {
@@ -889,6 +974,9 @@ fn parse_path_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
                         ("line_comments", toml::Value::Array(p_arr)) => {
                             policy.line_comments = extract_string_array(p_arr);
                         },
+                        ("block_comments", toml::Value::Array(p_arr)) => {
+                            policy.block_comments = parse_block_comments_array(p_arr);
+                        },
                         ("test_attributes", toml::Value::Array(p_arr)) => {
                             policy.test_attributes = extract_string_array(p_arr);
                         },
@@ -936,7 +1024,7 @@ timeout_seconds = 50
 bind_mounts = ["target", "build/out"]
 
 [environment]
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = "./target"
 RISCV_TESTS_DIR = "fixtures/tests"
 
 extra_banned_files = ["firmware_key.pem", ".secret_payload"]
@@ -964,7 +1052,7 @@ extra_banned_files = ["firmware_key.pem", ".secret_payload"]
                 .environment
                 .get("CARGO_TARGET_DIR")
                 .map(String::as_str),
-            Some("target")
+            Some("./target")
         );
         assert_eq!(
             parsed.extra_banned_files,
@@ -1177,6 +1265,10 @@ docs = ["specs", "ARCHITECTURE.md"]
                 !parsed.workspace.ignored_paths.is_empty(),
                 "Template {filename} should have ignored_paths configured"
             );
+            assert!(
+                parsed.policies.syntax.is_some(),
+                "Template {filename} should have syntax policies configured"
+            );
         }
     }
 
@@ -1185,7 +1277,7 @@ docs = ["specs", "ARCHITECTURE.md"]
         let ws = Path::new("/workspace/myproject");
         let sample = r#"
 [environment]
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = "./target"
 CARGO_TERM_COLOR = "always"
 RUST_BACKTRACE = "1"
 CC = "clang"

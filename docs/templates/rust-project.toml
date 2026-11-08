@@ -46,7 +46,7 @@ timeout_seconds = 15
 failure_message = "Declarative formatter check failed (`cargo fmt`)."
 
 [environment]
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = "./target"
 CARGO_TERM_COLOR = "never"
 RUST_BACKTRACE = "1"
 

@@ -184,17 +184,8 @@ pub(crate) fn check_dangerous_files_with_security(
     Ok(())
 }
 
-/// Helper verifying if a relative path is scoped within a directory name at root or crate level.
-fn matches_directory_scope(rel_path: &str, target_dir: &str) -> bool {
-    matches_directory_scope_with_containers(rel_path, target_dir, &[])
-}
-
 /// Helper verifying if a relative path is scoped within a directory name at root or declared container package level.
-fn matches_directory_scope_with_containers(
-    rel_path: &str,
-    target_dir: &str,
-    containers: &[String],
-) -> bool {
+fn matches_directory_scope(rel_path: &str, target_dir: &str, containers: &[String]) -> bool {
     let clean = target_dir.trim_matches(['/', '\\']).replace('\\', "/");
     if clean.is_empty() {
         return false;
@@ -210,12 +201,11 @@ fn matches_directory_scope_with_containers(
         return true;
     }
 
-    // 2. Monorepo container-level match: e.g. "<container>/<package>/<target_dir>/..."
+    // 2. Monorepo container-level match: strictly against declared containers
     let parts: Vec<&str> = normalized.split('/').collect();
     if let (Some(&container), Some(&sub_dir)) = (parts.first(), parts.get(2))
         && sub_dir == clean
-        && (containers.iter().any(|c| c == container)
-            || ["crates", "packages", "apps", "libs", "services", "modules"].contains(&container))
+        && containers.iter().any(|c| c == container)
     {
         return true;
     }
@@ -306,9 +296,11 @@ pub(crate) fn resolve_safe_path(
         let relative = candidate.strip_prefix(workspace_root).unwrap_or(input_path);
 
         let rel_lossy = relative.to_string_lossy();
+        let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+        let containers = project.resolved_containers(workspace_root);
         let allowed = allowed_directories
             .iter()
-            .any(|dir| matches_directory_scope(&rel_lossy, dir));
+            .any(|dir| matches_directory_scope(&rel_lossy, dir, &containers));
 
         if !allowed {
             return Err(format!(
@@ -348,12 +340,14 @@ pub(crate) fn check_enforce_boundaries(
     }
 
     // 2. Enforce single-directory confinement
-    if let Some(dir) = enforce_dir
-        && !matches_directory_scope(&rel_lossy, dir)
-    {
-        return Err(format!(
-            "Security policy violation: Path '{rel_lossy}' is outside enforced directory '{dir}'"
-        ));
+    if let Some(dir) = enforce_dir {
+        let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+        let containers = project.resolved_containers(workspace_root);
+        if !matches_directory_scope(&rel_lossy, dir, &containers) {
+            return Err(format!(
+                "Security policy violation: Path '{rel_lossy}' is outside enforced directory '{dir}'"
+            ));
+        }
     }
 
     Ok(())
@@ -601,9 +595,12 @@ pub(crate) fn resolve_scoped_path_str(
 
     let scope_refs: Vec<&str> = scopes.iter().map(String::as_str).collect();
 
+    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
+    let containers = project.resolved_containers(workspace_root);
+
     // 3. If the path ALREADY matches any candidate scope, don't double-prefix it!
     for scope in &scope_refs {
-        if matches_directory_scope(clean, scope) {
+        if matches_directory_scope(clean, scope, &containers) {
             return clean.to_owned();
         }
     }
@@ -615,7 +612,7 @@ pub(crate) fn resolve_scoped_path_str(
         && guard
             .disallowed_dirs
             .iter()
-            .any(|d| matches_directory_scope(clean, d))
+            .any(|d| matches_directory_scope(clean, d, &containers))
     {
         return clean.to_owned();
     }
@@ -634,8 +631,6 @@ pub(crate) fn resolve_scoped_path_str(
     }
 
     // 7. Check workspace multi-crate structure using declared containers
-    let project = agy_common::ProjectConfig::detect_or_load(workspace_root);
-    let containers = project.resolved_containers(workspace_root);
     if let Some(resolved) = resolve_in_subcrates(workspace_root, clean, &scope_refs, &containers) {
         return resolved;
     }
@@ -770,7 +765,19 @@ mod tests {
 
     #[test]
     fn test_allowed_directories_enforced() {
-        let root = std::env::temp_dir();
+        let root = std::env::temp_dir().join(format!(
+            "agy_allowed_dir_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        drop(std::fs::create_dir_all(&root));
+        drop(std::fs::write(
+            root.join("project.toml"),
+            "[workspace]\ncontainers = [\"crates\"]\n",
+        ));
+
         let allowed = vec!["tests".to_owned(), "benches".to_owned()];
 
         assert!(resolve_safe_path(&root, "tests/unit_test.rs", &allowed, false).is_ok());
@@ -779,6 +786,8 @@ mod tests {
         assert!(
             resolve_safe_path(&root, "docs/fixtures/tests/sample.rs", &allowed, false).is_err()
         );
+
+        drop(std::fs::remove_dir_all(&root));
     }
 
     #[test]
@@ -908,7 +917,10 @@ mod tests {
         guards.insert(
             "tests_guarded_agent".to_owned(),
             AgentGuard {
-                path_policies: vec![agy_common::PathPolicy::tests_only("src")],
+                path_policies: vec![agy_common::PathPolicy {
+                    test_attributes: vec!["test".to_owned(), "cfg(test".to_owned()],
+                    ..agy_common::PathPolicy::tests_only("src")
+                }],
                 ..Default::default()
             },
         );
@@ -1013,6 +1025,11 @@ mod tests {
         // Declarative project.toml custom path policy for Python
         let mut proj = agy_common::ProjectConfig::default();
         proj.project.language = Some("python".to_owned());
+        proj.policies.syntax = Some(agy_common::SyntaxConfig {
+            line_comments: vec!["#".to_owned()],
+            block_comments: vec![agy_common::BlockCommentDelimiters::new("\"\"\"", "\"\"\"")],
+            ..Default::default()
+        });
         proj.path_policies.push(agy_common::PathPolicy {
             path: "app".to_owned(),
             filter: agy_common::ContentFilterKind::CommentsOnly,
@@ -1275,6 +1292,11 @@ mod tests {
         drop(std::fs::remove_dir_all(&root));
         std::fs::create_dir_all(root.join("crates/core/src")).expect("create crates/core/src");
         std::fs::create_dir_all(root.join("crates/api/src")).expect("create crates/api/src");
+        std::fs::write(
+            root.join("project.toml"),
+            "[workspace]\ncontainers = [\"crates\"]\n",
+        )
+        .expect("write project.toml");
 
         std::fs::write(root.join("crates/core/src/hasher.rs"), "// hasher")
             .expect("write hasher.rs");

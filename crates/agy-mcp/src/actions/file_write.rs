@@ -359,15 +359,19 @@ mod tests {
         };
 
         // Declarative project.toml defining a workspace path policy
-        let project_toml = r#"
+        let project_toml = r##"
 [project]
 name = "py-app"
 language = "python"
 
+[policies.syntax]
+line_comments = ["#"]
+block_comments = [{ start = '"""', end = '"""' }]
+
 [[path_policies]]
 path = "app"
 filter = "comments_only"
-"#;
+"##;
         std::fs::write(temp.join("project.toml"), project_toml).unwrap();
 
         // Agent has no frontmatter path policies, only allowed_dirs

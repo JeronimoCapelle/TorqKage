@@ -331,6 +331,15 @@ mod tests {
     #[test]
     fn test_mpatch_path_policy_enforcement() {
         let temp = create_test_dir("mpatch-policy");
+        let project_toml = r#"
+[project]
+name = "mpatch-test"
+
+[policies.syntax]
+test_attributes = ["test", "cfg(test"]
+"#;
+        std::fs::write(temp.join("project.toml"), project_toml).unwrap();
+
         let src_dir = temp.join("src");
         std::fs::create_dir_all(&src_dir).unwrap();
         let file_path = src_dir.join("lib.rs");

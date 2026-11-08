@@ -63,124 +63,16 @@ pub struct SyntaxConfig {
 }
 
 impl SyntaxConfig {
-    /// Infers default syntax rules based on file extension or language name.
+    /// Generic default syntax providing standard comment syntax (`//`, `/* */`).
+    /// Language-specific test attributes and syntax rules are loaded deterministically
+    /// from `[policies.syntax]` in `project.toml` or agent frontmatter.
     #[must_use]
-    pub fn infer_for_path_or_lang(path: &Path, language: Option<&str>) -> Self {
-        if let Some(lang) = language {
-            match lang.to_lowercase().as_str() {
-                "python" | "py" => return Self::python(),
-                "go" | "golang" => return Self::go(),
-                "zig" => return Self::zig(),
-                "c" | "cpp" | "c++" | "cxx" | "javascript" | "typescript" | "js" | "ts" => {
-                    return Self::c_family();
-                },
-                "shell" | "bash" | "sh" => return Self::shell(),
-                "lua" | "sql" => return Self::lua(),
-                "rust" | "rs" => return Self::rust(),
-                _ => {},
-            }
-        }
-
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-        match ext.to_lowercase().as_str() {
-            "rs" => Self::rust(),
-            "py" | "pyi" => Self::python(),
-            "go" => Self::go(),
-            "zig" => Self::zig(),
-            "sh" | "bash" | "zsh" => Self::shell(),
-            "lua" | "sql" => Self::lua(),
-            _ => Self::c_family(),
-        }
-    }
-
-    /// Default syntax for Rust.
-    #[must_use]
-    pub fn rust() -> Self {
+    pub fn generic() -> Self {
         Self {
             line_comments: vec!["//".to_owned()],
             block_comments: vec![BlockCommentDelimiters::new("/*", "*/")],
-            test_attributes: vec![
-                "test".to_owned(),
-                "cfg(test".to_owned(),
-                "tokio::test".to_owned(),
-                "test_case".to_owned(),
-                "rstest".to_owned(),
-            ],
-            test_prefixes: Vec::new(),
-        }
-    }
-
-    /// Default syntax for Python.
-    #[must_use]
-    pub fn python() -> Self {
-        Self {
-            line_comments: vec!["#".to_owned()],
-            block_comments: vec![
-                BlockCommentDelimiters::new("\"\"\"", "\"\"\""),
-                BlockCommentDelimiters::new("'''", "'''"),
-            ],
-            test_attributes: vec!["@pytest".to_owned(), "@unittest".to_owned()],
-            test_prefixes: vec!["test_".to_owned(), "Test".to_owned()],
-        }
-    }
-
-    /// Default syntax for C/C++/Java/TypeScript.
-    #[must_use]
-    pub fn c_family() -> Self {
-        Self {
-            line_comments: vec!["//".to_owned()],
-            block_comments: vec![BlockCommentDelimiters::new("/*", "*/")],
-            test_attributes: vec![
-                "TEST(".to_owned(),
-                "TEST_F(".to_owned(),
-                "TEST_P(".to_owned(),
-                "@Test".to_owned(),
-            ],
-            test_prefixes: vec!["test_".to_owned(), "Test".to_owned()],
-        }
-    }
-
-    /// Default syntax for Go.
-    #[must_use]
-    pub fn go() -> Self {
-        Self {
-            line_comments: vec!["//".to_owned()],
-            block_comments: vec![BlockCommentDelimiters::new("/*", "*/")],
-            test_attributes: vec!["//go:build test".to_owned()],
-            test_prefixes: vec!["Test".to_owned(), "Benchmark".to_owned(), "Fuzz".to_owned()],
-        }
-    }
-
-    /// Default syntax for Zig.
-    #[must_use]
-    pub fn zig() -> Self {
-        Self {
-            line_comments: vec!["//".to_owned()],
-            block_comments: Vec::new(),
-            test_attributes: vec!["test \"".to_owned()],
-            test_prefixes: Vec::new(),
-        }
-    }
-
-    /// Default syntax for Shell scripts.
-    #[must_use]
-    pub fn shell() -> Self {
-        Self {
-            line_comments: vec!["#".to_owned()],
-            block_comments: Vec::new(),
             test_attributes: Vec::new(),
-            test_prefixes: vec!["test_".to_owned()],
-        }
-    }
-
-    /// Default syntax for Lua.
-    #[must_use]
-    pub fn lua() -> Self {
-        Self {
-            line_comments: vec!["--".to_owned()],
-            block_comments: vec![BlockCommentDelimiters::new("--[[", "]]")],
-            test_attributes: Vec::new(),
-            test_prefixes: vec!["test_".to_owned()],
+            test_prefixes: Vec::new(),
         }
     }
 }
@@ -268,14 +160,13 @@ impl PathPolicy {
     #[must_use]
     pub fn effective_syntax(
         &self,
-        candidate_path: &Path,
+        _candidate_path: &Path,
         project_syntax: Option<&SyntaxConfig>,
-        language: Option<&str>,
+        _language: Option<&str>,
     ) -> SyntaxConfig {
-        let mut base = project_syntax.map_or_else(
-            || SyntaxConfig::infer_for_path_or_lang(candidate_path, language),
-            Clone::clone,
-        );
+        let mut base = project_syntax
+            .cloned()
+            .unwrap_or_else(SyntaxConfig::generic);
 
         if !self.line_comments.is_empty() {
             base.line_comments.clone_from(&self.line_comments);
@@ -293,12 +184,12 @@ impl PathPolicy {
         base
     }
 
-    /// Verifies changes between `original` and `new_content` using default syntax inference.
+    /// Verifies changes between `original` and `new_content` using default syntax.
     ///
     /// # Errors
     /// Returns an error if changes violate the allowed modification domain.
     pub fn verify(&self, original: &str, new_content: &str) -> Result<(), String> {
-        let syntax = SyntaxConfig::infer_for_path_or_lang(Path::new(&self.path), None);
+        let syntax = self.effective_syntax(Path::new(&self.path), None, None);
         self.verify_with_syntax(Path::new(&self.path), original, new_content, &syntax)
     }
 
@@ -407,7 +298,7 @@ pub fn normalize_whitespace(s: &str) -> String {
 /// Strips all comments from source code using default Rust syntax and normalizes whitespace.
 #[must_use]
 pub fn strip_comments_and_normalize(input: &str) -> String {
-    let syntax = SyntaxConfig::rust();
+    let syntax = SyntaxConfig::generic();
     strip_comments_and_normalize_with_syntax(input, &syntax)
 }
 
@@ -612,7 +503,7 @@ pub fn strip_tests_and_normalize(
     start_marker: Option<&str>,
     end_marker: Option<&str>,
 ) -> String {
-    let syntax = SyntaxConfig::rust();
+    let syntax = SyntaxConfig::generic();
     strip_tests_and_normalize_with_syntax(input, &syntax, start_marker, end_marker)
 }
 
@@ -992,53 +883,41 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
     out
 }
 
-/// Helper checking if a relative path falls within a directory scope.
-///
-/// Recognizes root-level directories (`src/lib.rs` in `src`) and containerized
-/// monorepo layouts (`crates/core/src/lib.rs`, `packages/web/src/app.ts`, `apps/api/src/main.go`).
+/// Helper verifying if a relative path is scoped within a directory name at root or declared container package level.
 #[must_use]
-pub fn matches_directory_scope(rel_path: &str, scope: &str) -> bool {
+pub fn matches_directory_scope_with_containers(
+    rel_path: &str,
+    scope: &str,
+    containers: &[String],
+) -> bool {
     let clean = scope.trim_matches(['/', '\\']);
     if clean.is_empty() || clean == "*" {
         return true;
     }
 
+    let normalized = rel_path.trim_matches(['/', '\\']).replace('\\', "/");
+
     // 1. Root-level match: e.g. "src/lib.rs" matches "src"
-    if rel_path == clean
-        || rel_path.starts_with(&format!("{clean}/"))
-        || rel_path.starts_with(&format!("{clean}\\"))
+    if normalized == clean || normalized.starts_with(&format!("{clean}/")) {
+        return true;
+    }
+
+    // 2. Monorepo container match: strictly against declared containers
+    let parts: Vec<&str> = normalized.split('/').collect();
+    if let (Some(&container), Some(&sub_dir)) = (parts.first(), parts.get(2))
+        && sub_dir == clean
+        && containers.iter().any(|c| c == container)
     {
         return true;
     }
 
-    // 2. Monorepo container match: e.g. "crates/agy-mcp/src/main.rs" matches "src"
-    for prefix in &[
-        "crates/",
-        "packages/",
-        "plugins/",
-        "apps/",
-        "services/",
-        "libs/",
-        "modules/",
-        "crates\\",
-        "packages\\",
-        "plugins\\",
-        "apps\\",
-        "services\\",
-        "libs\\",
-        "modules\\",
-    ] {
-        if let Some(sub) = rel_path.strip_prefix(prefix)
-            && let Some((_container_item, item_rel)) = sub.split_once(['/', '\\'])
-            && (item_rel == clean
-                || item_rel.starts_with(&format!("{clean}/"))
-                || item_rel.starts_with(&format!("{clean}\\")))
-        {
-            return true;
-        }
-    }
-
     false
+}
+
+/// Helper verifying if a relative path is scoped within a root-level directory.
+#[must_use]
+pub fn matches_directory_scope(rel_path: &str, scope: &str) -> bool {
+    matches_directory_scope_with_containers(rel_path, scope, &[])
 }
 
 /// Helper checking if a path matches a wildcard pattern or glob expression.
@@ -1091,6 +970,9 @@ pub fn check_agent_guard_direct(
     let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
+    let project = crate::project::ProjectConfig::detect_or_load(workspace_root);
+    let containers = &project.workspace.containers;
+
     // 1. Check disallowed files
     for disallowed_file in &guard.disallowed_files {
         if rel_lossy == *disallowed_file {
@@ -1102,7 +984,7 @@ pub fn check_agent_guard_direct(
 
     // 2. Check disallowed directories
     for disallowed_dir in &guard.disallowed_dirs {
-        if matches_directory_scope(&rel_lossy, disallowed_dir) {
+        if matches_directory_scope_with_containers(&rel_lossy, disallowed_dir, containers) {
             return Err(format!(
                 "Security policy violation: Agent '{agent}' is prohibited from modifying files in '{disallowed_dir}/'."
             ));
@@ -1124,7 +1006,7 @@ pub fn check_agent_guard_direct(
         let is_allowed = guard
             .allowed_dirs
             .iter()
-            .any(|dir| matches_directory_scope(&rel_lossy, dir));
+            .any(|dir| matches_directory_scope_with_containers(&rel_lossy, dir, containers));
 
         if !is_allowed {
             return Err(format!(
@@ -1155,11 +1037,24 @@ pub fn check_agent_path_policies_direct(
     let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
+    let detected_project;
+    #[allow(
+        clippy::option_if_let_else,
+        reason = "Borrowing from conditionally loaded local project config"
+    )]
+    let effective_proj = if let Some(p) = project {
+        p
+    } else {
+        detected_project = crate::project::ProjectConfig::detect_or_load(workspace_root);
+        &detected_project
+    };
+    let containers = &effective_proj.workspace.containers;
+
     // 1. Collect candidate policies from agent frontmatter
     let mut applicable_policies: Vec<(Option<String>, PathPolicy)> = Vec::new();
     if let Some(g) = guard {
         for p in &g.path_policies {
-            if matches_directory_scope(&rel_lossy, &p.path)
+            if matches_directory_scope_with_containers(&rel_lossy, &p.path, containers)
                 || path_matches_pattern(&rel_lossy, &p.path)
             {
                 applicable_policies.push((agent_name.map(str::to_owned), p.clone()));
@@ -1168,13 +1063,11 @@ pub fn check_agent_path_policies_direct(
     }
 
     // 2. Collect candidate policies from project.toml (workspace-wide)
-    if let Some(proj) = project {
-        for p in proj.all_path_policies() {
-            if matches_directory_scope(&rel_lossy, &p.path)
-                || path_matches_pattern(&rel_lossy, &p.path)
-            {
-                applicable_policies.push((agent_name.map(str::to_owned), p));
-            }
+    for p in effective_proj.all_path_policies() {
+        if matches_directory_scope_with_containers(&rel_lossy, &p.path, containers)
+            || path_matches_pattern(&rel_lossy, &p.path)
+        {
+            applicable_policies.push((agent_name.map(str::to_owned), p));
         }
     }
 
@@ -1182,8 +1075,8 @@ pub fn check_agent_path_policies_direct(
         return Ok(());
     }
 
-    let project_syntax = project.and_then(|p| p.policies.syntax.as_ref());
-    let language = project.and_then(|p| p.project.language.as_deref());
+    let project_syntax = effective_proj.policies.syntax.as_ref();
+    let language = effective_proj.project.language.as_deref();
 
     for (effective_agent, policy) in &applicable_policies {
         let syntax = policy.effective_syntax(candidate, project_syntax, language);
@@ -1244,7 +1137,14 @@ pub fn add(a: i32, b: i32) -> i32 {
             filter: ContentFilterKind::CommentsOnly,
             ..Default::default()
         };
-        let syntax = SyntaxConfig::python();
+        let syntax = SyntaxConfig {
+            line_comments: vec!["#".to_owned()],
+            block_comments: vec![
+                BlockCommentDelimiters::new("\"\"\"", "\"\"\""),
+                BlockCommentDelimiters::new("'''", "'''"),
+            ],
+            ..Default::default()
+        };
 
         let original = "
 def add(a, b):
@@ -1283,7 +1183,12 @@ def add(a, b):
             filter: ContentFilterKind::TestsOnly,
             ..Default::default()
         };
-        let syntax = SyntaxConfig::python();
+        let syntax = SyntaxConfig {
+            line_comments: vec!["#".to_owned()],
+            block_comments: vec![BlockCommentDelimiters::new("\"\"\"", "\"\"\"")],
+            test_attributes: vec!["@pytest".to_owned()],
+            test_prefixes: vec!["test_".to_owned()],
+        };
 
         let original = "
 def calculate():
@@ -1338,7 +1243,11 @@ def subtract(a, b):
             filter: ContentFilterKind::TestsOnly,
             ..Default::default()
         };
-        let syntax = SyntaxConfig::zig();
+        let syntax = SyntaxConfig {
+            line_comments: vec!["//".to_owned()],
+            test_attributes: vec!["test \"".to_owned()],
+            ..Default::default()
+        };
 
         let original = "
 pub fn calculate() u32 {
@@ -1385,7 +1294,12 @@ test \"calculate returns 42\" {
             filter: ContentFilterKind::TestsOnly,
             ..Default::default()
         };
-        let syntax = SyntaxConfig::c_family();
+        let syntax = SyntaxConfig {
+            line_comments: vec!["//".to_owned()],
+            block_comments: vec![BlockCommentDelimiters::new("/*", "*/")],
+            test_attributes: vec!["TEST(".to_owned()],
+            test_prefixes: vec!["test_".to_owned()],
+        };
 
         let original = "
 int calculate() {

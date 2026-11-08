@@ -150,14 +150,25 @@ failure_message = "Declarative formatter execution failed."
 # commands run by agy-mcp, agy-hooks, and agent subshells spawned by agy-ctrl.
 [environment]
 # Enforce cargo target directory isolation if desired
-CARGO_TARGET_DIR = "target"
+CARGO_TARGET_DIR = "./target"
 # Prevent cargo from emitting ANSI terminal escape sequences in tool output
 CARGO_TERM_COLOR = "never"
 RUST_BACKTRACE = "1"
 
 
 # ------------------------------------------------------------------------------
-# 6. DOCUMENTATION & SPECIFICATIONS
+# 6. LANGUAGE SYNTAX & CONTENT POLICIES
+# ------------------------------------------------------------------------------
+# Declarative syntax rules for comments and test blocks used by mutation filters
+[policies.syntax]
+line_comments = ["//"]
+block_comments = [{ start = "/*", end = "*/" }]
+test_attributes = ["test", "cfg(test", "tokio::test", "rstest"]
+test_prefixes = ["test_"]
+
+
+# ------------------------------------------------------------------------------
+# 7. DOCUMENTATION & SPECIFICATIONS
 # ------------------------------------------------------------------------------
 # Configures the project documentation paths made available to agents for
 # specification lookups and architecture verification.
