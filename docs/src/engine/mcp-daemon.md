@@ -13,7 +13,6 @@ Instead of shelling out to generic scripts, `agy-mcp` compiles high-assurance na
 | `mpatch_edit` | Precision search-and-replace editor | Aider block rejection, scoped paths |
 | `static_command` | Pre-configured shell command with zero arguments | Bubblewrap container isolation |
 | `parameterized_command` | Command with strictly validated regex arguments | Shell metacharacter injection blocking |
-| `cargo_json_diagnostics` | Runs `cargo check` and parses compiler error spans | Workspace boundary |
 | `cli_manual` | Ground-truth dynamic tool parameter inspector | In-memory schema reflection |
 | `project_state` | Summarizes git/jj status and repository specs | Read-only |
 | `workspace_ensure` | Ensures isolated Jujutsu subagent workspace | Jujutsu repository boundary |

@@ -147,7 +147,6 @@ const fn action_name(action: &crate::models::ToolAction) -> &'static str {
         crate::models::ToolAction::FileSearch => "file_search",
         crate::models::ToolAction::StaticCommand => "static_command",
         crate::models::ToolAction::ParameterizedCommand => "parameterized_command",
-        crate::models::ToolAction::CargoJsonDiagnostics => "cargo_json_diagnostics",
         crate::models::ToolAction::CliManual => "cli_manual",
         crate::models::ToolAction::ProjectState => "project_state",
         crate::models::ToolAction::WorkspaceEnsure => "workspace_ensure",

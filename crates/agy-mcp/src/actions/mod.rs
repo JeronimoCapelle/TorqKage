@@ -1,6 +1,5 @@
 //! Bounded tool action execution engines.
 
-pub(crate) mod cargo_json;
 pub(crate) mod cli_manual;
 pub(crate) mod file_read;
 pub(crate) mod file_search;
@@ -168,8 +167,6 @@ pub(crate) fn dispatch_action(
             parameterized_cmd::execute(tool, workspace_root, arguments)
         },
 
-        ToolAction::CargoJsonDiagnostics => cargo_json::execute(tool, workspace_root),
-
         ToolAction::CliManual => Ok(cli_manual::execute(tool, arguments, available_tools)),
 
         ToolAction::ProjectState => Ok(project_state::execute(workspace_root)),
@@ -189,8 +186,8 @@ pub(crate) fn dispatch_action(
     update_circuit_breaker(tool, workspace_root, agent_name, execution_result)
 }
 
-fn is_compiler_verification_tool(tool: &ToolDefinition) -> bool {
-    tool.tracks_circuit_breaker() || tool.action == ToolAction::CargoJsonDiagnostics
+const fn is_compiler_verification_tool(tool: &ToolDefinition) -> bool {
+    tool.tracks_circuit_breaker()
 }
 
 fn update_circuit_breaker(

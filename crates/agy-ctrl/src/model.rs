@@ -102,7 +102,6 @@ impl ToolItem {
                 ToolAction::FileWrite => "file_write".to_owned(),
                 ToolAction::MpatchEdit => "mpatch_edit".to_owned(),
                 ToolAction::FileSearch => "file_search".to_owned(),
-                ToolAction::CargoJsonDiagnostics => "cargo_json_diagnostics".to_owned(),
                 ToolAction::CliManual => "cli_manual".to_owned(),
                 ToolAction::ProjectState => "project_state".to_owned(),
                 ToolAction::WorkspaceEnsure => "workspace_ensure".to_owned(),

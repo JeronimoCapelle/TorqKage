@@ -85,22 +85,6 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
                     ));
                 }
             },
-            ToolAction::CargoJsonDiagnostics => {
-                if let Some(binary) = tool.primary_binary() {
-                    if which::which(binary).is_ok() {
-                        report.verified_tools = report.verified_tools.saturating_add(1);
-                    } else {
-                        report
-                            .missing_binaries
-                            .push((tool.name.clone(), binary.to_owned()));
-                    }
-                } else {
-                    report.warnings.push(format!(
-                        "Tool '{}' has command action but empty command vector",
-                        tool.name
-                    ));
-                }
-            },
             ToolAction::FileRead
             | ToolAction::FileWrite
             | ToolAction::MpatchEdit

@@ -26,8 +26,6 @@
 #    - `file_search`: Scoped grep/ripgrep search across configured documentation paths.
 #    - `static_command`: Runs a fixed shell/CLI command without dynamic arguments.
 #    - `parameterized_command`: Runs CLI commands with validated, regex-checked parameters.
-#    - `cargo_json_diagnostics`: Executes cargo with `--message-format=json`, filters errors,
-#                               and returns clean diagnostic spans.
 #    - `cli_manual`: Renders man-page style help text for available commands.
 #    - `project_state`: Synthesizes VCS revision, status, branch, and quality gate health.
 #    - `workspace_ensure`: Provisions or validates an isolated Jujutsu sparse workspace.
@@ -323,21 +321,25 @@ output_capture = "exit_code_only"
 timeout_seconds = 60
 
 [tools.cargo_check]
-description = "Runs cargo fast check and returns filtered compiler diagnostics and error spans"
-action = "cargo_json_diagnostics"
+description = "Runs cargo fast check and returns concise compiler diagnostics"
+action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "check", "--message-format=json"]
-output_capture = "json_spans"
+command = ["cargo", "fast", "check", "--message-format=short", "--color=never"]
+output_capture = "both"
+empty_fallback = "Verification passed: 0 errors, 0 warnings."
+truncate_lines = 120
 timeout_seconds = 120
 
 [tools.cargo_clippy]
-description = "Runs cargo fast clippy across all targets with -D warnings, emitting filtered JSON diagnostics"
-action = "cargo_json_diagnostics"
+description = "Runs cargo fast clippy across all targets with -D warnings, emitting concise diagnostics"
+action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=json", "--", "-D", "warnings"]
-output_capture = "json_spans"
+command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=short", "--color=never", "--", "-D", "warnings"]
+output_capture = "both"
+empty_fallback = "Verification passed: 0 errors, 0 warnings."
+truncate_lines = 120
 timeout_seconds = 120
 
 [tools.cargo_clippy_fix]

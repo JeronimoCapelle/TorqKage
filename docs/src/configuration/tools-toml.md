@@ -64,7 +64,6 @@ The `action` field selects the underlying execution engine powering the tool. Th
 | `file_search` | Scoped grep/ripgrep pattern search across repository source files or configured project documentation paths. | `query` (String), `paths` (optional Array) |
 | `static_command` | Executes a fixed command-line invocation without dynamic user-supplied arguments. Safe against shell injection. | `command` (Array of Strings) |
 | `parameterized_command` | Dynamic CLI tool execution where user arguments are mapped to flags and validated against strict regular expressions. | `command` (Array of Strings), `args` (Array of `ToolArg`) |
-| `cargo_json_diagnostics` | Runs `cargo` with `--message-format=json`, parses the compiler diagnostic stream, filters out noise, and renders clean error spans. | `command` (Array of Strings) |
 | `cli_manual` | Formats and renders man-page style help text for CLI utilities and engine tools. | Built-in |
 | `project_state` | Synthesizes active VCS revision, dirty file status, Jujutsu working copy commit, and quality gate health into an executive summary. | Built-in |
 | `workspace_ensure` | Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.agy/workspaces/<agent>/`). | `agent` (String) |
@@ -200,16 +199,17 @@ regex = "^[a-zA-Z0-9_:]+$"
 flag = "--disassemble-symbols"
 ```
 
-### 3. Compiler Check with JSON Diagnostics (`cargo_json_diagnostics`)
+### 3. Compiler Check with Concise Diagnostics (`static_command`)
 
 ```toml
 [tools.cargo_check]
 inherit = "categories.compilation"
-action = "cargo_json_diagnostics"
-command = ["cargo", "check", "--workspace", "--all-targets", "--message-format=json"]
-description = "Runs cargo check across all crates and returns actionable compiler error spans"
+action = "static_command"
+command = ["cargo", "check", "--workspace", "--all-targets", "--message-format=short", "--color=never"]
+description = "Runs cargo check across all crates and returns actionable compiler diagnostics"
 tracks_circuit_breaker = true
-output_capture = "json_spans"
+output_capture = "both"
+empty_fallback = "Verification passed: 0 errors, 0 warnings."
 ```
 
 ---

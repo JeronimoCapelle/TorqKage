@@ -242,10 +242,9 @@ The `agy-mcp` daemon replaces ambient shell access with 10 hardened native actio
 4. **`file_search`:** In-process fast regex/substring pattern search across repository files and project doc trees without external dependencies.
 5. **`static_command`:** Parameterless invocation of fixed audit binaries (`cargo check`, `cargo test`, `git status`).
 6. **`parameterized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`).
-7. **`cargo_json_diagnostics`:** High-speed NDJSON diagnostic stream extractor parsing compiler diagnostics and errors into structured spans.
-8. **`cli_manual`:** In-process system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and `rustc --explain` references directly into the agent's context.
-9. **`project_state`:** In-process VCS status, branch detection, and uncommitted change inspector.
-10. **`workspace_ensure` / `workspace_inspect` / `workspace_merge`:** Jujutsu workspace lifecycle isolation handlers managing isolated branch revisions off `default@`.
+7. **`cli_manual`:** In-process system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and `rustc --explain` references directly into the agent's context.
+8. **`project_state`:** In-process VCS status, branch detection, and uncommitted change inspector.
+9. **`workspace_ensure` / `workspace_inspect` / `workspace_merge`:** Jujutsu workspace lifecycle isolation handlers managing isolated branch revisions off `default@`.
 
 ---
 

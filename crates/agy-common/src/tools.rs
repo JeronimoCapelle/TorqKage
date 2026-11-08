@@ -15,7 +15,6 @@ pub enum ToolAction {
     #[default]
     StaticCommand,
     ParameterizedCommand,
-    CargoJsonDiagnostics,
     CliManual,
     ProjectState,
     WorkspaceEnsure,
@@ -32,6 +31,7 @@ pub enum OutputCapture {
     #[default]
     Stdout,
     Stderr,
+    #[serde(alias = "merged")]
     Both,
     ExitCodeOnly,
     JsonSpans,
