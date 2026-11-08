@@ -1,0 +1,16 @@
+# Example project.toml for Rust Workspaces
+[project]
+name = "my-rust-project"
+ecosystem = "rust"
+root_marker = "Cargo.toml"
+
+[quality]
+check_command = "cargo check --workspace --all-targets"
+test_command = "cargo test --workspace --all-targets"
+lint_command = "cargo clippy --workspace --all-targets -- -D warnings"
+
+[documentation]
+paths = ["docs", "RFCs"]
+
+[environment]
+RUST_BACKTRACE = "1"

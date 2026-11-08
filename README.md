@@ -3,6 +3,7 @@
 [![CI](https://github.com/JeronimoCapelle/agy-suite/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JeronimoCapelle/agy-suite/actions/workflows/ci.yml)
 [![Rust Edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org/)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-manual-blue.svg)](https://jeronimocapelle.github.io/agy-suite/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
 [![Ratatui](https://img.shields.io/badge/Ratatui-0.30-purple.svg)](https://ratatui.rs/)
 
@@ -298,6 +299,20 @@ agy plugin validate
 | `agy-mcp` | Using in-tree plugin `tools.toml` | `[agy-mcp] Notice: Using in-tree plugin configuration: plugins/agy-suite/tools.toml` |
 | `agy-ctrl` | Using in-tree plugin `tools.toml` | `[agy-ctrl] Notice: Loaded tools configuration from in-tree plugin: plugins/agy-suite/tools.toml` |
 | `agy-common` | Agent manifest missing | `[agy-common] Advisory: Agent manifest for '<name>' not found across workspace or ~/.gemini/config.` |
+
+---
+
+## 📖 Documentation & Engine Manual
+
+Full architecture specifications, workflow guides, and configuration references are published on the **[agy-suite Engine Manual](https://jeronimocapelle.github.io/agy-suite/)**:
+
+* **[Quickstart & Installation](https://jeronimocapelle.github.io/agy-suite/quickstart.html)** – 60-second setup, keybindings, and prerequisites.
+* **[Real-World Examples & Workflows](https://jeronimocapelle.github.io/agy-suite/examples/overview.html)** – Chaining agents for a compiler refactor, writing custom MCP tools, and Jujutsu worktree isolation.
+* **[Bubblewrap Sandboxing & Security Jails](https://jeronimocapelle.github.io/agy-suite/architecture/security-and-sandboxing.html)** – Container isolation invariants, private loopback, and credential masking.
+* **[Multi-Source Session Resumption](https://jeronimocapelle.github.io/agy-suite/architecture/session-resumption.html)** – How `agy-ctrl` seamlessly correlates SQLite records with CLI history across terminal drops.
+* **[The 10-Agent Fleet](https://jeronimocapelle.github.io/agy-suite/fleet/personas.html)** – Operational personas, permission modes, and tool assignments.
+* **[The Verification Sandwich](https://jeronimocapelle.github.io/agy-suite/fleet/verification-sandwich.html)** – The 4-phase design verification and release methodology.
+* **[Performance & Latency Benchmarks](https://jeronimocapelle.github.io/agy-suite/benchmarks.html)** – Sub-millisecond interceptor latency (<1ms), RSS footprint (<500KB), and compiler profile benchmarks.
 
 ---
 

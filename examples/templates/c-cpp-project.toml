@@ -1,0 +1,17 @@
+# Example project.toml for C/C++ (CMake / Meson / Make) Workspaces
+[project]
+name = "my-cpp-project"
+ecosystem = "cpp"
+root_marker = "CMakeLists.txt"
+
+[quality]
+check_command = "cmake --build build --target check"
+test_command = "ctest --test-dir build --output-on-failure"
+lint_command = "clang-tidy -p build src/*.cpp"
+
+[documentation]
+paths = ["docs", "include"]
+
+[environment]
+CC = "clang"
+CXX = "clang++"

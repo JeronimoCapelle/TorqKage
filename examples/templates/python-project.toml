@@ -1,0 +1,16 @@
+# Example project.toml for Python (uv / pytest / ruff) Workspaces
+[project]
+name = "my-python-project"
+ecosystem = "python"
+root_marker = "pyproject.toml"
+
+[quality]
+check_command = "uv run ruff check ."
+test_command = "uv run pytest"
+lint_command = "uv run mypy src/"
+
+[documentation]
+paths = ["docs"]
+
+[environment]
+PYTHONUNBUFFERED = "1"

@@ -1,0 +1,16 @@
+# Example project.toml for Zig Workspaces
+[project]
+name = "my-zig-project"
+ecosystem = "zig"
+root_marker = "build.zig"
+
+[quality]
+check_command = "zig build check"
+test_command = "zig build test"
+lint_command = "zig fmt --check src/"
+
+[documentation]
+paths = ["docs"]
+
+[environment]
+ZIG_LOCAL_CACHE_DIR = ".cache/zig"
