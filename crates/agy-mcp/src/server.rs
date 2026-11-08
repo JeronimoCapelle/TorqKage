@@ -53,8 +53,7 @@ impl McpServer {
         let mut enriched_tools = tools;
         for t in &mut enriched_tools {
             let is_doc_tool = t.category.as_deref() == Some("documentation")
-                || project.docs.tool_name.as_deref() == Some(&t.name)
-                || t.name == "query_project_spec";
+                || project.docs.tool_name.as_deref() == Some(&t.name);
             if is_doc_tool && !project.docs.paths.is_empty() {
                 t.description = format!(
                     "Searches project documentation and specifications across [{}] for grep-ready specs, opcodes, and ABI definitions",

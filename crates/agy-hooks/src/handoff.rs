@@ -80,11 +80,10 @@ fn resolve_handoff_step(
 ) -> Option<InjectStep> {
     let json_handoff = paths.handoff_json_file();
     let md_handoff = paths.handoff_md_file();
-    let tool_name = project
-        .docs
-        .tool_name
-        .as_deref()
-        .unwrap_or("query_project_spec");
+    let tool_hint = project.docs.tool_name.as_deref().map_or_else(
+        || "Search documentation via configured documentation tools.".to_owned(),
+        |name| format!("Use '{name}' to search specifications."),
+    );
 
     if config.inject_wake_state
         && json_handoff.exists()
@@ -95,7 +94,7 @@ fn resolve_handoff_step(
         if config.inject_documentation && !project.docs.paths.is_empty() {
             _ = write!(
                 msg,
-                "\n\n[DOCUMENTATION]: Available in [{}]. Use '{tool_name}' to search specifications.",
+                "\n\n[DOCUMENTATION]: Available in [{}]. {tool_hint}",
                 project.docs.paths.join(", ")
             );
         }
@@ -120,7 +119,7 @@ fn resolve_handoff_step(
         if config.inject_documentation && !project.docs.paths.is_empty() {
             _ = write!(
                 msg,
-                " Documentation paths: [{}]. Use '{tool_name}' to search.",
+                " Documentation paths: [{}]. {tool_hint}",
                 project.docs.paths.join(", ")
             );
         }
@@ -129,7 +128,7 @@ fn resolve_handoff_step(
 
     if config.inject_documentation && !project.docs.paths.is_empty() {
         let msg = format!(
-            "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. Use '{tool_name}' to search them.",
+            "[PROJECT CONTEXT]: Documentation and specifications are located in: [{}]. {tool_hint}",
             project.docs.paths.join(", ")
         );
         return Some(InjectStep::system(msg));

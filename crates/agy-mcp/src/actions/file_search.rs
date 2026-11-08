@@ -204,8 +204,8 @@ fn resolve_search_targets(
     project: &ProjectConfig,
     path_arg: Option<&str>,
 ) -> (Vec<std::path::PathBuf>, bool) {
-    let is_docs_tool =
-        tool.name == "query_project_spec" || tool.category.as_deref() == Some("documentation");
+    let is_docs_tool = tool.category.as_deref() == Some("documentation")
+        || project.docs.tool_name.as_deref() == Some(&tool.name);
 
     if let Some(custom) = path_arg {
         return (vec![workspace_root.join(custom)], is_docs_tool);
@@ -393,6 +393,7 @@ mod tests {
 
         let tool = ToolDefinition {
             name: "query_project_spec".to_owned(),
+            category: Some("documentation".to_owned()),
             ..Default::default()
         };
 
@@ -482,6 +483,7 @@ mod tests {
         let temp = create_test_dir("regex-invalid");
         let tool = ToolDefinition {
             name: "query_project_spec".to_owned(),
+            category: Some("documentation".to_owned()),
             ..Default::default()
         };
 

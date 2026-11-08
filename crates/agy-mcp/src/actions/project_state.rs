@@ -17,7 +17,12 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
     if !project.docs.paths.is_empty() {
         out.push_str("- Documentation & Specs: ");
         out.push_str(&project.docs.paths.join(", "));
-        out.push_str(" (grep via 'query_project_spec')\n");
+        if let Some(tool) = &project.docs.tool_name {
+            out.push_str(" (search via '");
+            out.push_str(tool);
+            out.push_str("')");
+        }
+        out.push('\n');
     }
     if let Some(h) = handoff {
         out.push_str("- Last Handoff: ");
@@ -150,14 +155,14 @@ mod tests {
         std::fs::create_dir_all(&temp).expect("create temp dir");
         std::fs::write(
             temp.join("project.toml"),
-            "[project]\nname = \"test\"\n\n[docs]\npaths = [\"docs\", \"specs/rv32.md\"]\n",
+            "[project]\nname = \"test\"\n\n[docs]\npaths = [\"docs\", \"specs/rv32.md\"]\ntool_name = \"search_spec_docs\"\n",
         )
         .expect("write project.toml");
 
         let (output, is_error) = execute(&temp);
         assert!(!is_error);
         assert!(output.contains(
-            "- Documentation & Specs: docs, specs/rv32.md (grep via 'query_project_spec')"
+            "- Documentation & Specs: docs, specs/rv32.md (search via 'search_spec_docs')"
         ));
 
         drop(std::fs::remove_dir_all(&temp));
