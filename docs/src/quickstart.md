@@ -13,22 +13,20 @@ Get started with `agy-suite` in under 60 seconds.
 
 ### Method 1: Automated Installer (One-Liner)
 
-Runs standalone without requiring you to clone the repository first:
+Runs standalone without requiring you to clone the repository or install the Rust toolchain (fetches precompiled native binaries for your target architecture):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
 ```
 
-*(Tip: If you have Cranelift and Mold installed, pass `-s -- --fast` for near-instant compilation).*
-
 ### Method 2: From Source
 
-Clone the repository and compile using the fast Cranelift/Mold development profile:
+Clone the repository and compile using the high-performance `perf` profile (or `--fast` with Cranelift and Mold for development):
 
 ```bash
 git clone https://github.com/JeronimoCapelle/agy-suite.git
 cd agy-suite
-./install.sh --fast
+./install.sh --perf
 ```
 
 The installer will:

@@ -7,6 +7,12 @@ on:
   push:
     tags:
       - "v[0-9]+.*"
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag name (e.g. v0.1.0)"
+        required: false
+        default: ""
 
 jobs:
   release:
@@ -20,6 +26,9 @@ jobs:
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,15 +38,56 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cargo-dist
-        uses: taiki-e/install-action@cargo-dist
+      - name: Install musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: Build release binaries with cargo-dist
-        run: cargo dist build --target ${{ matrix.target }}
+      - name: Install aarch64 cross-compilation toolchain
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build high-performance release binaries (Profile: perf)
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --profile perf --target ${{ matrix.target }} -p agy-mcp -p agy-hooks -p agy-ctrl
+
+      - name: Package Release Bundle (${{ matrix.target }})
+        run: |
+          TARGET="${{ matrix.target }}"
+          DIST_DIR="agy-suite-${TARGET}"
+          mkdir -p "${DIST_DIR}/bin" "${DIST_DIR}/agents" "${DIST_DIR}/assets"
+
+          # Stage compiled stripped native binaries
+          cp target/${TARGET}/perf/agy-ctrl "${DIST_DIR}/bin/"
+          cp target/${TARGET}/perf/agy-mcp "${DIST_DIR}/bin/"
+          cp target/${TARGET}/perf/agy-hooks "${DIST_DIR}/bin/"
+          chmod +x "${DIST_DIR}/bin"/*
+
+          # Stage Antigravity plugin manifest, tools, and hooks
+          cp plugins/agy-suite/plugin.json "${DIST_DIR}/"
+          cp plugins/agy-suite/tools.toml "${DIST_DIR}/"
+          cp plugins/agy-suite/hooks.toml "${DIST_DIR}/"
+          cp plugins/agy-suite/hooks.json "${DIST_DIR}/"
+          cp plugins/agy-suite/project.toml "${DIST_DIR}/"
+          cp plugins/agy-suite/README.md "${DIST_DIR}/"
+          cp -r plugins/agy-suite/agents/* "${DIST_DIR}/agents/"
+          cp -r plugins/agy-suite/assets/* "${DIST_DIR}/assets/"
+
+          # Stage quickstart installer and license
+          cp install.sh "${DIST_DIR}/"
+          cp LICENSE "${DIST_DIR}/"
+
+          # Create compressed distribution archive & SHA256 checksum
+          tar -czvf "agy-suite-${TARGET}.tar.gz" "${DIST_DIR}"
+          sha256sum "agy-suite-${TARGET}.tar.gz" > "agy-suite-${TARGET}.tar.gz.sha256"
 
       - name: Publish Release Assets to GitHub Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          files: target/distrib/*
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          files: |
+            agy-suite-${{ matrix.target }}.tar.gz
+            agy-suite-${{ matrix.target }}.tar.gz.sha256
           generate_release_notes: true

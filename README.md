@@ -18,21 +18,21 @@
 
 ## ⚡ Quickstart (One-Liner)
 
-Install the full suite and register the Antigravity plugin with a single command (no prior cloning required):
+Install the full suite and register the Antigravity plugin with a single command (downloads precompiled native binaries for your target architecture; zero Rust compilation required):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
 ```
 
-*(Tip: For fast local development using Cranelift + Mold, append `-s -- --fast`).*
-
-Or clone and build manually from source:
+Or clone and compile from source using the high-performance `perf` profile (fat LTO, stripped):
 
 ```bash
 git clone https://github.com/JeronimoCapelle/agy-suite.git
 cd agy-suite
-./install.sh --fast
+./install.sh --perf
 ```
+
+*(Tip: For ultra-fast local development with Cranelift + Mold, append `--fast`).*
 
 Then boot the interactive flight deck in any repository:
 ```bash

@@ -217,6 +217,17 @@ debug = false
 debug-assertions = false
 overflow-checks = false
 
+[profile.dist]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+
 # ==============================================================================
 # CARGO-DIST (Automated Cross-Compiled Binary Releases)
 # ==============================================================================
