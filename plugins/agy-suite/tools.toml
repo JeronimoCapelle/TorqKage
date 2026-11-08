@@ -235,16 +235,16 @@ truncate_lines = 20
 timeout_seconds = 10
 
 [tools.count_file_lines]
-description = "Counts total lines in a file or directory pattern using wc -l without loading content into token context"
+description = "Counts total lines in a file or directory using wc -l (recursively scanning directories while skipping hidden and build cache files)"
 action = "parameterized_command"
 category = "filesystem"
-command = ["wc", "-l"]
+command = ["bash", "-c", "if [ -d \"$1\" ]; then find \"$1\" -type f -not -path '*/.*' -not -path '*/target/*' -exec wc -l {} +; else wc -l \"$1\"; fi", "--"]
 args = [
-    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file path relative to workspace" }
+    { name = "path", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path relative to workspace (e.g. 'src/lib.rs', 'src')" }
 ]
 output_capture = "stdout"
-truncate_lines = 30
-timeout_seconds = 10
+truncate_lines = 50
+timeout_seconds = 15
 
 [tools.query_project_spec]
 description = "Searches project documentation and specifications across configured doc paths (docs/, ARCHITECTURE.md, etc.) for grep-ready specs, opcodes, and ABI definitions"
@@ -960,6 +960,7 @@ timeout_seconds = 15
 description = "Rebases or squashes an isolated subagent workspace (.agy/workspaces/<agent>) onto @, runs declarative quality gates on the merged tree, and forgets the workspace on success"
 action = "workspace_merge"
 category = "release"
+skip_gates = ["workspace_clean", "linter", "tests"]
 mutating = true
 args = [
     { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be merged" },

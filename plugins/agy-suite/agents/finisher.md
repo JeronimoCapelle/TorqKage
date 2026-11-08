@@ -71,5 +71,5 @@ mcp_tools:
   4. **Workspace Cleanliness:** Verify workspace state hygiene (`inspect_workspace_clean`).
   5. **Changelog Generation:** Generate release notes from Conventional Commits via `git_cliff`.
   6. **Optional Consolidated Check:** If you need to re-verify the full pipeline after fixes, execute `pre_release_gauntlet`.
-- **Live CLI & Tool Ground Truth:** Never guess tool flags or schemas; use `query_tool_help(tool_name = "...")` to inspect live host CLI options or agy-suite MCP tool schemas.
+- **Live CLI & Tool Ground Truth:** Never guess tool flags or schemas; use the MCP tool `query_tool_help` (via MCP tool invocation with `tool_name = "..."`) to inspect live host CLI options or agy-suite MCP tool schemas.
 - **Release Verification Gate:** Present a final release scorecard once all checklist items and gauntlet checks pass, prompting the operator for confirmation before concluding.

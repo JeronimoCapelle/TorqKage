@@ -204,18 +204,27 @@ fn resolve_search_targets(
     project: &ProjectConfig,
     path_arg: Option<&str>,
 ) -> (Vec<std::path::PathBuf>, bool) {
+    let is_docs_tool =
+        tool.name == "query_project_spec" || tool.category.as_deref() == Some("documentation");
+
     if let Some(custom) = path_arg {
-        return (vec![workspace_root.join(custom)], false);
+        return (vec![workspace_root.join(custom)], is_docs_tool);
     }
 
-    if !project.docs.paths.is_empty()
-        && (tool.name == "query_project_spec" || tool.enforce_dir.as_deref() == Some("docs"))
-    {
-        let targets = project
-            .docs
-            .paths
-            .iter()
+    if is_docs_tool {
+        let mut doc_paths = project.docs.paths.clone();
+        if doc_paths.is_empty() {
+            doc_paths = ProjectConfig::detect_default_docs_paths(workspace_root);
+            if workspace_root.join("README.md").is_file()
+                && !doc_paths.iter().any(|p| p == "README.md")
+            {
+                doc_paths.push("README.md".to_owned());
+            }
+        }
+        let targets: Vec<std::path::PathBuf> = doc_paths
+            .into_iter()
             .map(|p| workspace_root.join(p))
+            .filter(|p| p.exists())
             .collect();
         return (targets, true);
     }
@@ -573,6 +582,32 @@ mod tests {
         let result = execute(&tool, &temp, &args).expect("literal mode");
         assert!(result.contains("Line with literal: OPCODE_[A-Z]+"));
         assert!(!result.contains("Other line: OPCODE_CALL"));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_query_project_spec_does_not_bleed_into_src() {
+        let temp = create_test_dir("no-src-bleed");
+        let src_dir = temp.join("src");
+        std::fs::create_dir_all(&src_dir).unwrap();
+        std::fs::write(
+            src_dir.join("main.rs"),
+            "pub fn hidden_in_source() { /* SECRET_SPEC_TOKEN */ }\n",
+        )
+        .unwrap();
+
+        let tool = ToolDefinition {
+            name: "query_project_spec".to_owned(),
+            category: Some("documentation".to_owned()),
+            ..Default::default()
+        };
+
+        let args = json!({ "pattern": "SECRET_SPEC_TOKEN" });
+        let result = execute(&tool, &temp, &args).unwrap();
+        // Since there are no doc paths, it must NOT find it in src/main.rs!
+        assert!(!result.contains("src/main.rs"));
+        assert!(result.contains("No documentation or specification paths found on disk"));
 
         drop(std::fs::remove_dir_all(&temp));
     }

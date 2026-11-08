@@ -81,8 +81,16 @@ pub(crate) fn execute(
         },
     };
 
+    let effective_content = if text_content.trim().is_empty()
+        && let Some(fallback) = &tool.empty_fallback
+    {
+        fallback.clone()
+    } else {
+        text_content
+    };
+
     let truncated = truncate_output(
-        &text_content,
+        &effective_content,
         tool.truncate_lines,
         tool.truncate_bytes,
         tool.emit_truncation_notice(),
@@ -114,5 +122,21 @@ mod tests {
         let (output, is_error) = execute(&tool, &root).expect("command failed");
         assert!(!is_error);
         assert!(output.contains("hello_systems"));
+    }
+
+    #[test]
+    fn test_static_command_empty_fallback() {
+        let root = std::env::temp_dir();
+        let tool = ToolDefinition {
+            name: "test_conflicts_fallback".to_owned(),
+            command: vec!["true".to_owned()],
+            output_capture: OutputCapture::Stdout,
+            empty_fallback: Some("Clean (0 merge/rebase conflicts detected)".to_owned()),
+            ..Default::default()
+        };
+
+        let (output, is_error) = execute(&tool, &root).expect("command failed");
+        assert!(!is_error);
+        assert_eq!(output, "Clean (0 merge/rebase conflicts detected)");
     }
 }
