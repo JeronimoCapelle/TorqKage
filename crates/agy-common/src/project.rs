@@ -1104,7 +1104,7 @@ docs = ["specs", "ARCHITECTURE.md"]
     #[test]
     fn test_parse_example_templates() {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let templates_dir = manifest_dir.join("../../examples/templates");
+        let templates_dir = manifest_dir.join("../../docs/templates");
         let template_files = [
             ("rust-project.toml", "rust"),
             ("typescript-project.toml", "typescript"),

@@ -218,6 +218,19 @@ When `project.toml` is absent or specific fields are omitted, `agy-suite` automa
 
 ---
 
+## Ecosystem Templates
+
+Ready-to-use production configuration templates are located in `docs/templates/`:
+
+- [`rust-project.toml`](../templates/rust-project.toml): Cargo compilation, test gates, Clippy linter.
+- [`typescript-project.toml`](../templates/typescript-project.toml): tsc type checks, Vitest runner, ESLint, Prettier.
+- [`python-project.toml`](../templates/python-project.toml): mypy type checks, Pytest, Ruff linter/formatter.
+- [`zig-project.toml`](../templates/zig-project.toml): zig build check, zig test, zig fmt.
+- [`go-project.toml`](../templates/go-project.toml): go build, go test, golangci-lint, gofmt.
+- [`c-cpp-project.toml`](../templates/c-cpp-project.toml): CMake build, CTest, Clang-Tidy, Clang-Format.
+
+---
+
 ## Discovery & Precedence
 
 `project.toml` is resolved in the following priority order:
@@ -225,4 +238,5 @@ When `project.toml` is absent or specific fields are omitted, `agy-suite` automa
 1. `<workspace>/.agy/project.toml` *(Workspace-local override)*
 2. `<workspace>/project.toml` *(Repository root configuration)*
 3. `<workspace>/plugins/agy-suite/project.toml` *(In-tree plugin default)*
-4. Dynamic synthesis via ecosystem auto-detection.
+4. `~/.gemini/config/plugins/agy-suite/project.toml` *(Global installed plugin fallback)*
+5. Dynamic synthesis via ecosystem auto-detection.
