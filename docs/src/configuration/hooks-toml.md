@@ -160,7 +160,7 @@ The circuit breaker prevents autonomous agents from entering infinite compile-fa
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `enabled` | Boolean | `true` | Enables or disables circuit breaker enforcement. |
-| `max_strikes` | Integer (usize) | `2` | Number of consecutive compiler failures before tripping. Set to `0` to disable strike counting.<br>When tripped:<br>• Non-mutating diagnostic tools (`read_project_file`, `query_project_spec`) remain **allowed**.<br>• Mutating tools (`modify_code`, `write_file`) are **denied** until the circuit is reset.<br>Resetting: Press `Ctrl+R` in `agy-ctrl` or achieve a clean compilation run. |
+| `max_strikes` | Integer (usize) | `2` | Number of consecutive compiler failures before tripping. Set to `0` to disable strike counting.<br>When tripped:<br>• Non-mutating diagnostic tools (`read_project_file`, `query_project_spec`) remain **allowed**.<br>• Mutating tools (`modify_code`, `write_file`) are **denied** until the circuit is reset.<br>Resetting: Press `c` (or `Shift+K`) in `agy-ctrl` or achieve a clean compilation run. |
 
 ---
 

@@ -103,7 +103,7 @@ enabled = true
 #   - Non-mutating diagnostic tools (`read_project_file`, `query_project_spec`) remain ALLOWED.
 #   - Mutating tools (`modify_code`, `write_file`) are DENIED with instructions to diagnose.
 # Set `max_strikes = 0` to disable strike counting.
-# Reset strikes in agy-ctrl using Ctrl+R, or by achieving a clean compilation run.
+# Reset strikes in agy-ctrl using 'c' or Shift+K, or by achieving a clean compilation run.
 max_strikes = 2
 
 

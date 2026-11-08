@@ -49,12 +49,19 @@ agy-ctrl
 
 | Key | Action |
 | :--- | :--- |
-| <kbd>j</kbd> / <kbd>k</kbd> | Navigate agent list or tool catalog |
-| <kbd>Space</kbd> | Toggle permission gate (`ALLOW` vs `ASK`) |
-| <kbd>Tab</kbd> | Switch between Fleet Matrix and Tool Catalog |
+| <kbd>j</kbd> / <kbd>k</kbd> | Navigate agent list, tool catalog, or scroll content |
+| <kbd>h</kbd> / <kbd>l</kbd> | Toggle focus between Agent List (left) and Tool List (right) |
+| <kbd>Space</kbd> | Toggle tool authorization for selected agent |
+| <kbd>Tab</kbd> / <kbd>BackTab</kbd> | Switch between Fleet Matrix, Tool Catalog, and Directives |
 | <kbd>Enter</kbd> / <kbd>r</kbd> | Launch or resume session with selected agent |
 | <kbd>n</kbd> | Force launch fresh, unresumed session |
 | <kbd>b</kbd> / <kbd>F8</kbd> | Toggle Bubblewrap OS container isolation for `agy` session |
 | <kbd>w</kbd> | Toggle Jujutsu isolated worktree (`.agy/workspaces/<agent>`) |
-| <kbd>?</kbd> | Open paginated in-deck manual |
+| <kbd>p</kbd> | Cycle agent permission policy (Autonomous / Supervised / Plan) |
+| <kbd>c</kbd> / <kbd>Shift+K</kbd> | Reset compiler failure circuit breaker strike counter |
+| <kbd>g</kbd> | Toggle tool permission gate (`ALLOW` vs `ASK`) |
+| <kbd>F2</kbd> / <kbd>S</kbd> | Atomic Save & Pre-flight Validation (`agy plugin validate`) |
+| <kbd>F4</kbd> | Atomic Rollback unsaved changes to disk/VCS state |
+| <kbd>i</kbd> | Run in-deck plugin installer and diagnostics |
+| <kbd>?</kbd> / <kbd>F1</kbd> | Open in-deck manual and controls reference |
 | <kbd>q</kbd> | Exit control deck |

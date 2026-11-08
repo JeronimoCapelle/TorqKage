@@ -58,7 +58,7 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
         empty(),
         h2("Session Management & Launching"),
         key(
-            "Enter",
+            "Enter / r",
             "Resume active agent session (or launch new session if none exists)",
         ),
         key(
@@ -75,7 +75,7 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
             "Cycle agent permission policy: Autonomous -> Supervised -> Planning",
         ),
         key(
-            "c / K",
+            "c / Shift+K",
             "Reset failure circuit breaker (clears consecutive failure counter)",
         ),
         key(
@@ -105,7 +105,7 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
             "Atomic Save & Validate: snapshot VCS, validate plugin, and install",
         ),
         key(
-            "F4 / r",
+            "F4",
             "Rollback unsaved modifications to original disk/VCS state",
         ),
         empty(),

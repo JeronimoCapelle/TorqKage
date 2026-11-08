@@ -252,7 +252,7 @@ fn draw_fleet_agent_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let agents_list = List::new(agent_items).block(
         Block::default()
             .title(format!(
-                " [Active Agents: {agent_pos}/{total_agents} (Enter/l to Launch in agy)] "
+                " [Active Agents: {agent_pos}/{total_agents} (Enter/r to Launch in agy)] "
             ))
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -390,7 +390,7 @@ fn draw_agent_metadata_panel(frame: &mut Frame<'_>, app: &App, agent: &AgentMani
                 Style::default().fg(Color::DarkGray),
             ),
             cb_span,
-            Span::styled(" [k: reset]", Style::default().fg(Color::DarkGray)),
+            Span::styled(" [c: reset]", Style::default().fg(Color::DarkGray)),
         ]),
     ];
     let meta_para = Paragraph::new(meta_lines).block(
@@ -931,6 +931,16 @@ fn draw_footer(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 }
 
+fn modal_key_line(k: &'static str, desc: &'static str, color: Color) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(
+            format!("  {k:<16}"),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(desc, Style::default().fg(Color::White)),
+    ])
+}
+
 fn build_help_modal_text() -> Vec<Line<'static>> {
     vec![
         Line::from(Span::styled(
@@ -940,90 +950,82 @@ fn build_help_modal_text() -> Vec<Line<'static>> {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
-        Line::from(vec![
-            Span::styled(
-                "  Enter / l       ",
-                Style::default()
-                    .fg(Color::LightGreen)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "Run pre-flight checks & launch interactive agy session with selected agent",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Tab / BackTab   ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Switch between Fleet Matrix, Tool Catalog, and Directives",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  ↑ / ↓ (or j / k)", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Navigate agents or tools in the active list",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Space           ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Toggle tool authorization on/off for selected agent",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  h / l (or ← / →)", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Switch focus between Agent List and Tool List",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                "  F2 (or s)       ",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "Atomic Save & Pre-flight Validation (runs agy plugin validate)",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  F4 (or r)       ", Style::default().fg(Color::Red)),
-            Span::styled(
-                "Atomic Rollback: revert unsaved changes to disk/VCS state",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  w               ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Toggle Jujutsu workspace isolation (.agy/workspaces/<agent>)",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  k               ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Reset 2-strike compiler circuit breaker to clean state",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  Esc / F1        ", Style::default().fg(Color::Cyan)),
-            Span::styled(
-                "Close modal or help dialog",
-                Style::default().fg(Color::White),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("  q               ", Style::default().fg(Color::Cyan)),
-            Span::styled("Exit agy-ctrl", Style::default().fg(Color::White)),
-        ]),
+        modal_key_line(
+            "Enter / r",
+            "Run pre-flight checks & launch/resume session with selected agent",
+            Color::LightGreen,
+        ),
+        modal_key_line(
+            "n",
+            "Force launch a fresh, unresumed session for selected agent",
+            Color::LightCyan,
+        ),
+        modal_key_line(
+            "Tab / BackTab",
+            "Switch between Fleet Matrix, Tool Catalog, and Directives",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "↑ / ↓ (or j / k)",
+            "Navigate agents or tools in the active list",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "Space",
+            "Toggle tool authorization on/off for selected agent",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "h / l (or ← / →)",
+            "Switch focus between Agent List and Tool List",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "g",
+            "Toggle tool permission gate (ASK operator vs ALLOW autonomous)",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "b / F8",
+            "Toggle outer-loop Bubblewrap sandbox isolation for agy session",
+            Color::Yellow,
+        ),
+        modal_key_line(
+            "w",
+            "Toggle Jujutsu workspace isolation (.agy/workspaces/<agent>)",
+            Color::Cyan,
+        ),
+        modal_key_line(
+            "p",
+            "Cycle agent permission policy: Autonomous -> Supervised -> Planning",
+            Color::Magenta,
+        ),
+        modal_key_line(
+            "c / Shift+K",
+            "Reset 2-strike compiler circuit breaker to clean state",
+            Color::LightRed,
+        ),
+        modal_key_line(
+            "i",
+            "Run in-deck plugin validation, installer, and environment diagnostics",
+            Color::LightBlue,
+        ),
+        modal_key_line(
+            "F2 (or S)",
+            "Atomic Save & Pre-flight Validation (runs agy plugin validate)",
+            Color::Green,
+        ),
+        modal_key_line(
+            "F4",
+            "Atomic Rollback: revert unsaved changes to disk/VCS state",
+            Color::Red,
+        ),
+        modal_key_line(
+            "Esc / F1 / ?",
+            "Close modal or toggle help manual",
+            Color::Cyan,
+        ),
+        modal_key_line("q / Ctrl+C", "Exit agy-ctrl", Color::Cyan),
         Line::from(""),
         Line::from(Span::styled(
             "Press Esc or Enter to close this help dialog.",
