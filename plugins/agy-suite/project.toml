@@ -151,6 +151,7 @@ failure_message = "Declarative formatter execution failed."
 CARGO_TARGET_DIR = "target"
 # Prevent cargo from emitting ANSI terminal escape sequences in tool output
 CARGO_TERM_COLOR = "never"
+NO_COLOR = "1"
 RUST_BACKTRACE = "1"
 
 

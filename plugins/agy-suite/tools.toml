@@ -192,7 +192,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["ls", "-la", "--group-directories-first", "--"]
 args = [
-    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory path to list (defaults to project root '.')" }
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Directory path to list (defaults to project root '.')" }
 ]
 output_capture = "stdout"
 truncate_lines = 150
@@ -207,7 +207,7 @@ ban_dangerous_files = true
 command = ["eza", "--tree", "--icons=never", "--ignore-glob", ".git|.jj|.agy|target"]
 args = [
     { name = "level", required = false, default = "2", type = "integer", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
-    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Root path to display tree from (defaults to '.')" }
+    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Root path to display tree from (defaults to '.')" }
 ]
 output_capture = "stdout"
 truncate_lines = 150
@@ -222,7 +222,7 @@ ban_dangerous_files = true
 command = ["fd", "--glob", "--hidden", "--exclude", ".git", "--exclude", ".jj", "--exclude", ".agy", "--exclude", "target"]
 args = [
     { name = "pattern", required = true, flag = "--", regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
-    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Root path to search from (defaults to '.')" }
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Root path to search from (defaults to '.')" }
 ]
 empty_fallback = "No files found matching pattern."
 output_capture = "stdout"
@@ -237,7 +237,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["stat", "--"]
 args = [
-    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file or directory path relative to workspace" }
+    { name = "path", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target file or directory path relative to workspace" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
@@ -251,7 +251,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["file", "-b", "--"]
 args = [
-    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file path relative to workspace" }
+    { name = "path", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target file path relative to workspace" }
 ]
 output_capture = "stdout"
 truncate_lines = 20
@@ -265,7 +265,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["bash", "-c", "if [ -d \"$1\" ]; then find \"$1\" -type f -not -path '*/.*' -not -path '*/target/*' -exec wc -l {} +; else wc -l \"$1\"; fi", "--"]
 args = [
-    { name = "path", required = true, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Target file or directory path relative to workspace (e.g. 'src/lib.rs', 'src')" }
+    { name = "path", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target file or directory path relative to workspace (e.g. 'src/lib.rs', 'src')" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
@@ -281,7 +281,7 @@ truncate_lines = 150
 timeout_seconds = 10
 args = [
     { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regular expression to search across documentation" },
-    { name = "path", required = false, regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" },
+    { name = "path", required = false, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Specific documentation directory or file to search (defaults to all configured doc paths)" },
     { name = "is_regex", required = false, description = "Whether to evaluate pattern as a regular expression (defaults to true if pattern is valid regex)" },
     { name = "case_sensitive", required = false, description = "Whether search is case-sensitive (defaults to false)" }
 ]
@@ -292,7 +292,7 @@ action = "parameterized_command"
 category = "filesystem"
 command = ["fd", "--extension", "md", "--extension", "markdown", "--"]
 args = [
-    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory to list docs from (defaults to project root '.')" }
+    { name = "path", required = false, default = ".", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Directory to list docs from (defaults to project root '.')" }
 ]
 empty_fallback = "No documentation files found."
 output_capture = "stdout"
@@ -309,7 +309,7 @@ command = ["rg", "--max-count", "30", "--max-columns", "200"]
 args = [
     { name = "fixed_strings", required = false, flag = "-F", switch = true, description = "Treat the query as a literal string rather than a regular expression" },
     { name = "query", required = true, flag = "-e", regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" },
-    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*)(/(\\.|\\.[a-zA-Z0-9_][a-zA-Z0-9_.-]*|[a-zA-Z0-9_][a-zA-Z0-9_.-]*))*$", description = "Directory or file to search (defaults to project root)" }
+    { name = "path", required = false, default = ".", flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Directory or file to search (defaults to project root)" }
 ]
 empty_fallback = "No occurrences found in codebase for the specified search query."
 success_exit_codes = [0, 1]
@@ -415,7 +415,7 @@ timeout_seconds = 60
 description = "Visualizes crate module tree and visibility boundaries (pub/crate). Defaults to clean module tree; can focus on specific modules or packages."
 action = "parameterized_command"
 category = "diagnostics"
-command = ["cargo", "--color=never", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
+command = ["env", "NO_COLOR=1", "RUST_BACKTRACE=0", "cargo", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
     { name = "bin", required = false, flag = "--bin", conflicts_with = ["lib"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
@@ -431,7 +431,7 @@ timeout_seconds = 30
 description = "Visualizes crate internal module dependency graph and coupling. Defaults to module-level dependency graph; can focus on specific modules or packages."
 action = "parameterized_command"
 category = "diagnostics"
-command = ["cargo", "--color=never", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
+command = ["env", "NO_COLOR=1", "RUST_BACKTRACE=0", "cargo", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
     { name = "bin", required = false, flag = "--bin", conflicts_with = ["lib"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
@@ -557,7 +557,7 @@ category = "diagnostics"
 command = ["graphtrail", "--db", ".agy/cache/graphtrail.db"]
 args = [
     { name = "action", required = true, enum = ["callers", "callees", "impact", "search", "context", "affected"], description = "Query action to execute (callers, callees, impact, search, context, affected)" },
-    { name = "target", required = true, regex = "^[^\\x00\\r\\n]+$", description = "Symbol name or relative file path to analyze" }
+    { name = "target", required = true, flag = "--", regex = "^[^\\x00\\r\\n]+$", description = "Symbol name or relative file path to analyze" }
 ]
 output_capture = "stdout"
 truncate_lines = 120
@@ -912,14 +912,19 @@ truncate_lines = 20
 timeout_seconds = 10
 
 [tools.inspect_workspace_diff]
-description = "Inspects the active working tree diff (jj diff or git diff) with automatic line truncation"
-action = "static_command"
+description = "Inspects the active working tree diff (jj diff) with optional file path scoping, summary mode, or revision targeting"
+action = "parameterized_command"
 category = "diagnostics"
 command = ["jj", "diff", "--color=never"]
+args = [
+    { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Specific file or directory path to focus the diff on (defaults to whole working tree)" },
+    { name = "summary", required = false, flag = "-s", switch = true, description = "Show concise summary of modified, added, and deleted files without line diffs" },
+    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:-]+$", description = "Target revision or revset (defaults to '@')" }
+]
 empty_fallback = "Clean (no working copy changes detected)"
 output_capture = "stdout"
-truncate_lines = 200
-timeout_seconds = 10
+truncate_lines = 250
+timeout_seconds = 20
 
 [tools.inspect_parent_commit]
 description = "Inspects the parent commit (@-) metadata, commit message, and full diff in Jujutsu"

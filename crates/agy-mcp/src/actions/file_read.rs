@@ -61,8 +61,24 @@ pub(crate) fn execute(
         ));
     }
 
-    let raw_content = std::fs::read_to_string(&safe_path)
+    let raw_bytes = std::fs::read(&safe_path)
         .map_err(|err| format!("Failed to read file '{}': {err}", safe_path.display()))?;
+
+    // Gracefully handle files that cannot be decoded as valid UTF-8 text or contain null bytes
+    if raw_bytes.iter().take(1024).any(|&b| b == 0) {
+        return Ok(format!(
+            "File '{}' contains non-UTF-8 or binary data ({} bytes) and cannot be displayed as plain text.",
+            safe_path.display(),
+            raw_bytes.len()
+        ));
+    }
+
+    let Ok(raw_content) = String::from_utf8(raw_bytes) else {
+        return Ok(format!(
+            "File '{}' contains non-UTF-8 or binary data and cannot be displayed as plain text.",
+            safe_path.display()
+        ));
+    };
 
     let start_line = arguments
         .get("start_line")
@@ -211,6 +227,15 @@ mod tests {
         let dir_args = serde_json::json!({ "path": "sub_dir" });
         let dir_err = execute(&root_tool, &temp, &dir_args, None, &guards).unwrap_err();
         assert!(dir_err.contains("is a directory, not a regular file"));
+
+        // 5. Binary/non-UTF8 file returns clean notice without unhandled panic or recommending tools
+        let bin_path = temp.join("output.bin");
+        std::fs::write(&bin_path, [0x7f, b'E', b'L', b'F', 0x00, 0x02, 0x01, 0x00]).unwrap();
+        let bin_args = serde_json::json!({ "path": "output.bin" });
+        let bin_res = execute(&root_tool, &temp, &bin_args, None, &guards).expect("read binary");
+        assert!(bin_res.contains(
+            "contains non-UTF-8 or binary data (8 bytes) and cannot be displayed as plain text"
+        ));
 
         drop(std::fs::remove_dir_all(&temp));
     }
