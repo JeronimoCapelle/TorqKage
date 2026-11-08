@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-or-later"
+license = "AGPL-3.0-or-later"
 authors = ["infinite"]
 repository = "https://github.com/JeronimoCapelle/agy-suite"
 description = "High-assurance systems programming toolkit, declarative MCP daemon, and Ratatui control deck for Google Antigravity"
