@@ -149,8 +149,8 @@ failure_message = "Declarative formatter execution failed."
 [environment]
 # Enforce cargo target directory isolation if desired
 CARGO_TARGET_DIR = "target"
-# Prevent cargo from attempting interactive terminal prompts
-CARGO_TERM_COLOR = "always"
+# Prevent cargo from emitting ANSI terminal escape sequences in tool output
+CARGO_TERM_COLOR = "never"
 RUST_BACKTRACE = "1"
 
 

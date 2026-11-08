@@ -215,8 +215,8 @@ pub(crate) fn launch_agy_interactive(
     // 3. Spawn agy with inherited stdio
     let mut cmd = Command::new("agy");
     let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
-    for (k, v) in &project_cfg.environment {
-        cmd.env(k, workspace_root.join(v));
+    for (k, v) in project_cfg.resolved_environment(workspace_root) {
+        cmd.env(k, v);
     }
     if sandbox {
         cmd.arg("--sandbox");
@@ -317,8 +317,8 @@ pub(crate) fn launch_agy_headless(
 
     let mut cmd = Command::new("agy");
     let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
-    for (k, v) in &project_cfg.environment {
-        cmd.env(k, workspace_root.join(v));
+    for (k, v) in project_cfg.resolved_environment(workspace_root) {
+        cmd.env(k, v);
     }
     if sandbox {
         cmd.arg("--sandbox");

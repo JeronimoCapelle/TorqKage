@@ -540,6 +540,46 @@ impl ProjectConfig {
         }
         paths
     }
+
+    /// Returns the environment variables mapped to their resolved string values.
+    ///
+    /// Paths are resolved relative to `workspace_root` only when appropriate:
+    /// - `CARGO_TARGET_DIR` (if relative) is anchored to `workspace_root` to preserve shared caching across isolated jj workspaces.
+    /// - Explicit relative paths (starting with `./` or `../`) are anchored to `workspace_root`.
+    /// - Path template tokens (`${workspace_root}` or `$WORKSPACE_ROOT`) are substituted.
+    /// - Literal configuration values (flags, options, numbers, tool settings like `CARGO_TERM_COLOR = "always"` or `RUST_BACKTRACE = "1"`)
+    ///   are preserved exactly as declared without prepending filesystem paths.
+    #[must_use]
+    #[allow(
+        clippy::literal_string_with_formatting_args,
+        reason = "Template tokens like ${workspace_root} are not Rust format strings"
+    )]
+    pub fn resolved_environment(&self, workspace_root: &Path) -> BTreeMap<String, String> {
+        let ws_str = workspace_root.to_string_lossy();
+        self.environment
+            .iter()
+            .map(|(k, v)| {
+                let resolved = if v.contains("${workspace_root}") || v.contains("$WORKSPACE_ROOT") {
+                    v.replace("${workspace_root}", &ws_str)
+                        .replace("$WORKSPACE_ROOT", &ws_str)
+                } else if k == "CARGO_TARGET_DIR" {
+                    let p = Path::new(v);
+                    if p.is_absolute() {
+                        v.clone()
+                    } else {
+                        workspace_root.join(v).to_string_lossy().into_owned()
+                    }
+                } else if let Some(stripped) = v.strip_prefix("./") {
+                    workspace_root.join(stripped).to_string_lossy().into_owned()
+                } else if v.starts_with("../") {
+                    workspace_root.join(v).to_string_lossy().into_owned()
+                } else {
+                    v.clone()
+                };
+                (k.clone(), resolved)
+            })
+            .collect()
+    }
 }
 
 /// Parses a TOML string into a structured `ProjectConfig`.
@@ -1132,5 +1172,35 @@ docs = ["specs", "ARCHITECTURE.md"]
                 "Template {filename} should have ignored_paths configured"
             );
         }
+    }
+
+    #[test]
+    fn test_resolved_environment() {
+        let ws = Path::new("/workspace/myproject");
+        let sample = r#"
+[environment]
+CARGO_TARGET_DIR = "target"
+CARGO_TERM_COLOR = "always"
+RUST_BACKTRACE = "1"
+CC = "clang"
+OUTPUT_DIR = "./build"
+PARENT_CACHE = "../shared_cache"
+CUSTOM_WS = "${workspace_root}/custom"
+ABS_DIR = "/opt/target"
+"#;
+        let parsed = parse_project_toml(sample).unwrap();
+        let envs = parsed.resolved_environment(ws);
+
+        assert_eq!(&envs["CARGO_TARGET_DIR"], "/workspace/myproject/target");
+        assert_eq!(&envs["CARGO_TERM_COLOR"], "always");
+        assert_eq!(&envs["RUST_BACKTRACE"], "1");
+        assert_eq!(&envs["CC"], "clang");
+        assert_eq!(&envs["OUTPUT_DIR"], "/workspace/myproject/build");
+        assert_eq!(
+            &envs["PARENT_CACHE"],
+            "/workspace/myproject/../shared_cache"
+        );
+        assert_eq!(&envs["CUSTOM_WS"], "/workspace/myproject/custom");
+        assert_eq!(&envs["ABS_DIR"], "/opt/target");
     }
 }

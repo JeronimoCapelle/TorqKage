@@ -62,6 +62,9 @@ where
     }
 
     let (base_args, dynamic_args) = args;
+    let project_cfg = agy_common::ProjectConfig::detect_or_load(workspace_root);
+    let resolved_env = project_cfg.resolved_environment(workspace_root);
+
     if enforce_sandbox {
         if which::which("bwrap").is_ok() {
             let resolved_program = if program.contains('/') {
@@ -70,12 +73,13 @@ where
                 which::which(program)
                     .map_or_else(|_| program.to_owned(), |p| p.to_string_lossy().into_owned())
             };
-            let cmd = agy_common::sandbox::build_bubblewrap_command(
+            let mut cmd = agy_common::sandbox::build_bubblewrap_command(
                 &resolved_program,
                 base_args,
                 dynamic_args,
                 workspace_root,
             );
+            cmd.envs(&resolved_env);
             let out = SubprocessSupervisor::run_supervised(cmd, timeout_seconds)?;
             if !out.status.success() {
                 let stderr = String::from_utf8_lossy(&out.stderr);
@@ -92,6 +96,7 @@ where
                         let mut fallback_cmd = Command::new(program);
                         fallback_cmd.args(base_args);
                         fallback_cmd.args(dynamic_args);
+                        fallback_cmd.envs(&resolved_env);
                         fallback_cmd.current_dir(workspace_root);
                         return SubprocessSupervisor::run_supervised(fallback_cmd, timeout_seconds);
                     }
@@ -105,6 +110,7 @@ where
             let mut cmd = Command::new(program);
             cmd.args(base_args);
             cmd.args(dynamic_args);
+            cmd.envs(&resolved_env);
             cmd.current_dir(workspace_root);
             SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
         } else {
@@ -116,6 +122,7 @@ where
         let mut cmd = Command::new(program);
         cmd.args(base_args);
         cmd.args(dynamic_args);
+        cmd.envs(&resolved_env);
         cmd.current_dir(workspace_root);
         SubprocessSupervisor::run_supervised(cmd, timeout_seconds)
     }
