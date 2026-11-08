@@ -410,7 +410,7 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
             app.run_installer_and_diagnostics();
             true
         },
-        KeyCode::F(2) | KeyCode::Char('S') => {
+        KeyCode::F(2) | KeyCode::Char('S' | 's') => {
             app.save_and_validate();
             true
         },
@@ -434,7 +434,7 @@ fn handle_global_shortcuts(app: &mut App, code: KeyCode, modifiers: KeyModifiers
             app.toggle_tool_permission_gate();
             true
         },
-        KeyCode::F(4) => {
+        KeyCode::F(4) | KeyCode::Char('u' | 'U') => {
             app.rollback();
             true
         },
