@@ -15,6 +15,7 @@ license = "AGPL-3.0-or-later"
 authors = ["Jerónimo Capelle"]
 repository = "https://github.com/JeronimoCapelle/agy-suite"
 readme = "README.md"
+description = "Declarative governance engine, sandboxed Meta-MCP runtime, and Ratatui control deck for autonomous AI fleets"
 keywords = ["mcp", "agentic", "systems", "ratatui", "antigravity"]
 categories = ["development-tools", "command-line-utilities"]
 

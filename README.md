@@ -18,7 +18,19 @@
 
 ---
 
-## 🎯 What is agy-suite?
+## 💡 About agy-suite
+
+**You wouldn't run untrusted microservices directly on bare-metal host ports without Docker or Kubernetes. Why are you running autonomous AI coding agents with raw terminal authority?**
+
+Autonomous coding agents are extraordinarily capable, but unleashing them with ambient shell access creates critical hazards: runaway `bash` scripts, destructive filesystem accidents, credential leaks, dirty git worktrees, and thousands of prompt tokens burned on every turn just explaining tool documentation.
+
+`agy-suite` is the **declarative container and governance engine** for autonomous AI fleets. Written in 100% Safe Rust (`#![forbid(unsafe_code)]`), it acts as a **Meta-MCP Server**: declare any CLI binary, script, or compiler in pure TOML, and the engine automatically turns it into an air-gapped, schema-validated MCP tool with Bubblewrap container sandboxing, sub-millisecond lifecycle hooks (<1ms), and dynamic per-agent allowlists.
+
+Whether you deploy our included 10-agent systems reference fleet, copy one of our pre-built starter kits for Go, Python, or TypeScript, or point an LLM to our schemas to scaffold a custom engineering team in 30 seconds, `agy-suite` gives you complete, deterministic control over your AI workforce.
+
+---
+
+## 🎯 The Problem: Ambient Shells vs. MCP Sprawl
 
 Building tool environments for autonomous coding agents today forces developers into an awful tradeoff:
 1. **The MCP Sprawl:** You write, debug, and run dozens of bespoke Node.js or Python MCP servers for every single linter, test runner, and CLI tool—bloating memory and fighting port collisions.
