@@ -4,8 +4,22 @@ on:
   push:
     branches: [ "main", "master" ]
     tags: [ "v*" ]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "*.md"
+      - "assets/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "LICENSE"
   pull_request:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - "*.md"
+      - "assets/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "LICENSE"
 
 env:
   CARGO_TERM_COLOR: always
