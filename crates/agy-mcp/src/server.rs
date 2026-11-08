@@ -38,7 +38,7 @@ impl McpServer {
                 let total = tools.len();
                 let filtered: Vec<_> = tools
                     .into_iter()
-                    .filter(|t| allowed.contains(&t.name))
+                    .filter(|t| allowed.contains("*") || allowed.contains(&t.name))
                     .collect();
                 eprintln!(
                     "[agy-mcp] Scoped to agent '{name}': exposing {} of {total} tools",
@@ -474,6 +474,56 @@ mod tests {
             err.message
                 .contains("unauthorized for agent 'restricted_agent'")
         );
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_agent_scoping_wildcard_grants_all_tools() {
+        let tools = vec![
+            ToolDefinition {
+                name: "modify_code".to_owned(),
+                description: "Modify source code".to_owned(),
+                action: ToolAction::MpatchEdit,
+                ..Default::default()
+            },
+            ToolDefinition {
+                name: "eval_symbolic_math".to_owned(),
+                description: "Symbolic math".to_owned(),
+                action: ToolAction::ParameterizedCommand,
+                ..Default::default()
+            },
+        ];
+
+        let temp_dir =
+            std::env::temp_dir().join(format!("agy_test_scope_wildcard_{}", std::process::id()));
+        let agents_dir = temp_dir.join("plugins/agy-suite/agents");
+        std::fs::create_dir_all(&agents_dir).expect("create dir");
+        std::fs::write(
+            agents_dir.join("wildcard_agent.md"),
+            "---\nname: wildcard_agent\nmcp_tools:\n  - \"*\"\n---\n",
+        )
+        .expect("write mock wildcard_agent.md");
+
+        let server = McpServer::new(
+            tools,
+            temp_dir.clone(),
+            Some("wildcard_agent".to_owned()),
+            BTreeMap::new(),
+        );
+
+        let list_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_owned(),
+            id: Some(json!(1)),
+            method: "tools/list".to_owned(),
+            params: None,
+        };
+        let list_resp = server.handle_request(list_req).expect("list resp");
+        let tool_list = list_resp.result.unwrap()["tools"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(tool_list.len(), 2);
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }
