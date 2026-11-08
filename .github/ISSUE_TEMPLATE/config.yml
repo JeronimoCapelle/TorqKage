@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Community Discussions & Q&A
+    url: https://github.com/JeronimoCapelle/agy-suite/discussions
+    about: Ask general questions, discuss prompt engineering, share custom workflows, or get help with setup.
+  - name: 🛡️ Security Vulnerability Reporting
+    url: https://github.com/JeronimoCapelle/agy-suite/blob/main/.github/SECURITY.md
+    about: Privately disclose sandbox escapes or security concerns.

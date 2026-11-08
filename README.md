@@ -8,6 +8,47 @@
 
 **High-assurance systems programming toolkit, bounded declarative MCP daemon, featherweight lifecycle hooks (<1ms, <500KB), and Ratatui 0.30 interactive control deck for Google Antigravity.**
 
+<!-- VHS Terminal Recording Skeleton (Run `vhs assets/demo.tape` to update) -->
+<p align="center">
+  <img src="assets/demo.gif" alt="agy-suite Interactive Terminal Control Deck Demo" width="100%" />
+</p>
+
+---
+
+## ⚡ Quickstart (One-Liner)
+
+Install the full suite and register the Antigravity plugin with a single command:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash -s -- --fast
+```
+
+Or build and install locally from source using Cranelift and Mold (<6 seconds):
+
+```bash
+git clone https://github.com/JeronimoCapelle/agy-suite.git
+cd agy-suite
+./install.sh --fast
+```
+
+Then boot the interactive flight deck in any repository:
+```bash
+agy-ctrl
+```
+
+---
+
+## ⚖️ Why This Exists (The Problem & The Solution)
+
+Autonomous coding agents are powerful, but raw terminal execution in production systems is inherently dangerous, non-deterministic, and token-inefficient.
+
+| Challenge in Raw AI Coding | How `agy-suite` Solves It |
+| :--- | :--- |
+| **Ambient Shell Poisoning:** Agents run unstructured `bash` commands with full host access, risking accidental `rm -rf`, network leaks, or credential corruption. | **Precision Bubblewrap Sandboxing:** Every command runs inside a private PID/IPC/mount container with read-only system roots, private loopback, and masked `.env` files. |
+| **Token Exhaustion:** Inlining multi-kilobyte prompt instructions and tool manuals burns ~2,000–5,000 tokens on every single model turn. | **Compiled Native Interceptors:** Bounded Rust daemons (<1ms, <500KB RSS) handle tool execution, regex sanitization, and output truncation offline. |
+| **Lost Conversation State:** Terminal drops or shell restarts lose the active conversational thread, forcing users to re-prompt from scratch. | **Multi-Source Session Resumption:** Embedded SQLite & history correlation automatically surfaces resumable sessions (`[Enter/r: Resume]`). |
+| **Branch Pollution:** Unsupervised model edits pollute the developer's working directory and editor buffers with uncommitted changes. | **Jujutsu Isolated Workspaces:** Agents operate in isolated `.agy/workspaces/<agent>` working copies without ever mutating the developer's main `@` revision. |
+
 ---
 
 ## 💡 About `agy-suite`

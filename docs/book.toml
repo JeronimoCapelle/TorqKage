@@ -1,0 +1,24 @@
+[book]
+authors = ["infinite"]
+language = "en"
+src = "src"
+title = "The agy-suite Engine Manual"
+description = "High-assurance systems programming toolkit, bounded declarative MCP daemon, and Ratatui control deck for Google Antigravity"
+
+[output.html]
+git-repository-url = "https://github.com/JeronimoCapelle/agy-suite"
+edit-url-template = "https://github.com/JeronimoCapelle/agy-suite/edit/main/docs/{path}"
+site-url = "/agy-suite/"
+default-theme = "ayu"
+preferred-dark-theme = "ayu"
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3

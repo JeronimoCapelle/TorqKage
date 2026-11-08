@@ -41,3 +41,6 @@ mutants.out/
 # Plugin Binary Bundles
 plugins/agy-suite/bin/
 
+# mdBook Build Output
+docs/book/
+

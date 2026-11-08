@@ -216,3 +216,16 @@ strip = "symbols"
 debug = false
 debug-assertions = false
 overflow-checks = false
+
+# ==============================================================================
+# CARGO-DIST (Automated Cross-Compiled Binary Releases)
+# ==============================================================================
+[workspace.metadata.dist]
+cargo-dist-version = "0.28.0"
+ci = "github"
+installers = ["shell"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-gnu",
+]

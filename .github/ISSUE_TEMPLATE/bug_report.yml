@@ -1,0 +1,68 @@
+name: 🐛 Bug Report
+description: File a reproducible bug report for agy-suite
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue! Please verify your bug is reproducible on the latest `main` branch before submitting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: When executing agy-ctrl with ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior.
+      placeholder: |
+        1. Run `agy-ctrl` in repository X
+        2. Select agent `copilot`
+        3. Press `Enter` to resume
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should have happened.
+      placeholder: The active session should resume with context...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Logs / Error Output
+      description: Copy and paste relevant terminal output or diagnostics.
+      render: shell
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      multiple: true
+      options:
+        - agy-ctrl (Terminal Control Deck)
+        - agy-mcp (Declarative MCP Daemon)
+        - agy-hooks (Lifecycle Runner)
+        - agy-common (Shared Primitives)
+        - Bubblewrap Sandboxing
+        - Antigravity Plugin Integration
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment Info
+      description: OS distribution, Rust version, and Antigravity CLI version.
+      placeholder: Arch Linux (kernel 6.x), Rust 1.85+, agy 0.1.x
+    validations:
+      required: true

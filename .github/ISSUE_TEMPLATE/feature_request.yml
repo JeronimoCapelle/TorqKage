@@ -1,0 +1,44 @@
+name: ✨ Feature Request
+description: Propose a new feature, agent tool, or verification gate
+title: "feat: "
+labels: ["enhancement", "proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        We welcome proposals for new agent archetypes, declarative MCP tools, and systems capabilities!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement / Motivation
+      description: Is your feature request related to a specific limitation or workflow?
+      placeholder: I frequently need to profile memory allocations during agent code runs...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed architecture or implementation.
+      placeholder: Introduce a new declarative MCP tool `cargo_valgrind` under `tools.toml`...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative approaches or workarounds you have considered.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target Subsystem
+      options:
+        - New Declarative MCP Tool
+        - New Specialized Agent Archetype
+        - TUI Control Deck (`agy-ctrl`)
+        - Sandboxing & Security Gates
+        - CI / Release Pipeline
