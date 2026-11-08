@@ -216,17 +216,9 @@ Agent manifests are discovered using the following deterministic search order:
 
 ---
 
-## The Zero-Skill Policy (`NO SKILL.md`) & Slash Commands
+## The Zero-Skill Policy (`NO SKILL.md`)
 
-### Why Skills Are Banned
 Google Antigravity natively supports interpreted Markdown skills (`SKILL.md`). In production systems engineering, this approach exhibits severe defects:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions burns 2,000–4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
 - **`agy-suite` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
-
-### High-Value Slash Commands Triage
-When operating interactively with Antigravity (`agy`), use these client-side macros to maintain high context hygiene:
-- `/compact`: Compresses the context window when interactive sessions get long.
-- `/plan`: Switches the session into read-only plan mode, preventing premature file edits.
-- `/clear`: Clears terminal history for visual decluttering.
-- `/exit`: Exits the session cleanly.
