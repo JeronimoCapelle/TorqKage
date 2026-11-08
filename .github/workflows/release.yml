@@ -50,6 +50,6 @@ jobs:
           archive: agy-suite-$target
           target: ${{ matrix.target }}
           build_tool: ${{ matrix.build_tool }}
-          profile: perf
+          profile: dist
           checksum: sha256
           token: ${{ secrets.GITHUB_TOKEN }}

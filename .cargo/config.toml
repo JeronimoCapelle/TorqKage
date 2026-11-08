@@ -1,3 +1,7 @@
+[build]
+rustc-wrapper = "sccache"
+rustc-workspace-wrapper = "clippy-driver"
+
 [unstable]
 profile-rustflags = true
 codegen-backend = true
@@ -112,6 +116,27 @@ codegen-backend = "cranelift"
 rustflags = ["-Z", "share-generics=y", "-C", "link-arg=-fuse-ld=mold"]
 
 [profile.perf]
+codegen-backend = "llvm"
+rustflags = [
+	"-D", 
+	"warnings",
+    "-C",
+    "target-cpu=native",
+    "-C",
+    "linker-plugin-lto",
+    "-C",
+    "link-arg=-fuse-ld=lld",
+    "-C",
+    "force-frame-pointers=no",
+    "-Z",
+    "mir-opt-level=4",
+    "-C",
+    "llvm-args=-inline-threshold=1000",
+    "-C",
+    "llvm-args=-unroll-threshold=500",
+]
+
+[profile.dist]
 codegen-backend = "llvm"
 rustflags = [
 	"-D", 
