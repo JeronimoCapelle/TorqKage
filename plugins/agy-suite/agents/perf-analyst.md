@@ -15,10 +15,7 @@ allowed_dirs:
 disallowed_dirs:
   - src
   - tests
-allowed_subagents:
-  - mini
-tools:
-  - invoke_subagent
+tools: []
 inheritMcp: false
 mcpServers:
   - name: agy-tools

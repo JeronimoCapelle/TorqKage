@@ -5,8 +5,6 @@ effort: high
 mainAgent: true
 permissionMode: acceptEdits
 commandExecutionPolicy: off
-allowed_subagents:
-  - mini
 allowed_dirs:
   - docs
   - .scratchpad
@@ -18,7 +16,6 @@ disallowed_dirs:
   - benches
 tools:
   - ask_question
-  - invoke_subagent
   - search_web
 inheritMcp: false
 mcpServers:

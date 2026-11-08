@@ -17,7 +17,7 @@ disallowed_dirs:
   - benches
   - docs
 mainAgent: true
-subagent: true
+subagent: false
 tools:
   - search_web
 inheritMcp: false

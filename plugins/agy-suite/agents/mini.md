@@ -1,9 +1,9 @@
 ---
 name: mini
-description: "Narrow mathematical, symbolic, and analytical calculation subagent"
+description: "Narrow mathematical, symbolic, and analytical calculation specialist"
 effort: low
 mainAgent: true
-subagent: true
+subagent: false
 inheritMcp: false
 disallowed_dirs:
   - "*"
