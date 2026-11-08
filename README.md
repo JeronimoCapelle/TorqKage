@@ -47,7 +47,7 @@ Autonomous coding agents are powerful, but raw terminal execution in production 
 
 | Challenge in Raw AI Coding | How `agy-suite` Solves It |
 | :--- | :--- |
-| **Ambient Shell Poisoning:** Agents run unstructured `bash` commands with full host access, risking accidental `rm -rf`, network leaks, or credential corruption. | **Precision Bubblewrap Sandboxing:** Every command runs inside a private PID/IPC/mount container with read-only system roots, private loopback, and masked `.env` files. |
+| **Ambient Shell Poisoning:** Agents run unstructured `bash` commands with full host access, risking accidental `rm -rf`, network leaks, or credential corruption. | **Configurable Container Sandboxing:** Run entire sessions jailed via `agy-ctrl` (toggle with `b`/`F8`) or declare `enforce_sandbox = true` per individual tool in `tools.toml`. |
 | **Token Exhaustion:** Inlining multi-kilobyte prompt instructions and tool manuals burns ~2,000–5,000 tokens on every single model turn. | **Compiled Native Interceptors:** Bounded Rust daemons (<1ms, <500KB RSS) handle tool execution, regex sanitization, and output truncation offline. |
 | **Lost Conversation State:** Terminal drops or shell restarts lose the active conversational thread, forcing users to re-prompt from scratch. | **Multi-Source Session Resumption:** Embedded SQLite & history correlation automatically surfaces resumable sessions (`[Enter/r: Resume]`). |
 | **Branch Pollution:** Unsupervised model edits pollute the developer's working directory and editor buffers with uncommitted changes. | **Jujutsu Isolated Workspaces:** Agents operate in isolated `.agy/workspaces/<agent>` working copies without ever mutating the developer's main `@` revision. |
@@ -60,7 +60,7 @@ Autonomous AI coding agents frequently suffer from two fatal failure modes in pr
 
 `agy-suite` (Antigravity Systems Suite) is an enterprise-grade, capability-based orchestration platform written in pure Safe Rust (Rust 2024 Edition, `#![forbid(unsafe_code)]`). Built as a hardened extension layer for Google Antigravity (`agy`), it replaces non-deterministic ambient shell access with:
 
-- **Precision Container Jailing:** Unshare-all Bubblewrap (`bwrap`) isolation with private loopback, unmounted network capability, read-only system roots, and credential masking.
+- **Configurable Container Sandboxing:** Ephemeral Bubblewrap (`bwrap`) isolation with private loopback, unmounted network capability, read-only system roots, and credential masking—toggleable per-session in `agy-ctrl` (<kbd>b</kbd> / <kbd>F8</kbd>) or declaratively enforced per-tool in `tools.toml`.
 - **Declarative MCP Tooling (`agy-mcp`):** Native JSON-RPC stdio daemon with regex parameter sanitization, bounded UTF-8 output slicing, and dynamic agent allowlists.
 - **Compiled Lifecycle Interceptors (`agy-hooks`):** Sub-millisecond (<1ms, <500KB RSS) execution gates featuring an automated 2-strike compiler circuit breaker and Turn-1 context wake injections.
 - **Interactive Flight Cockpit (`agy-ctrl`):** Ratatui 0.30 terminal dashboard for live policy matrix navigation, SQLite session resumption, and pre-flight gatekeeping.

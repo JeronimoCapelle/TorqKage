@@ -1,6 +1,6 @@
 # Tools Configuration (`tools.toml`)
 
-The `tools.toml` configuration file defines declarative Model Context Protocol (MCP) tools exposed to AI agents by the `agy-mcp` server. It acts as a zero-code tool engine: instead of compiling new Rust logic for every CLI utility, static analysis check, or code modifier, tools are declared declaratively in TOML. The engine automatically synthesizes MCP-compliant JSON Schemas, validates incoming arguments against strict regular expressions, enforces path confinement, monitors safety policies, and runs commands inside Bubblewrap isolation.
+The `tools.toml` configuration file defines declarative Model Context Protocol (MCP) tools exposed to AI agents by the `agy-mcp` server. It acts as a zero-code tool engine: instead of compiling new Rust logic for every CLI utility, static analysis check, or code modifier, tools are declared declaratively in TOML. The engine automatically synthesizes MCP-compliant JSON Schemas, validates incoming arguments against strict regular expressions, enforces path confinement, monitors safety policies, and optionally executes commands inside a Bubblewrap container when `enforce_sandbox = true` is declared.
 
 ---
 

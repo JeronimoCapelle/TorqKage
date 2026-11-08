@@ -22,12 +22,11 @@ Because `agy-suite` enforces Bubblewrap container boundaries, path isolation, an
 - Accidental leakage of host environment credentials (`.env`, SSH keys) through tool returns.
 
 ### Reporting Procedure
-**Please do not report security vulnerabilities through public GitHub issues.**
+Please report security vulnerabilities by opening an issue on GitHub:
 
-1. Send an email to the security contact: `jero.capelle@gmail.com`.
-2. Include:
+1. [Open a new issue](https://github.com/JeronimoCapelle/agy-suite/issues/new) in the repository.
+2. Title the issue with `[Security]` prefix and include:
    - A detailed description of the vulnerability.
    - Steps to reproduce or proof-of-concept (PoC).
-   - Your assessment of impact and affected components.
-3. You will receive an initial response within 48 hours.
-4. We will coordinate a patch and responsible disclosure timeline with you before releasing a public security advisory.
+   - Your assessment of impact, affected components, and configuration (e.g. sandbox settings).
+3. We will review, triage, and address the report promptly.

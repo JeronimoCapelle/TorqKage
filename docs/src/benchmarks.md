@@ -33,7 +33,7 @@ Developer iteration speed is critical. `agy-suite` configures dedicated Cargo co
 
 ## 3. Bubblewrap Sandbox Execution Overhead
 
-Every command executed through `bwrap_isolated` spawns inside a private namespace jail:
+When container isolation is active—either toggled in `agy-ctrl` or declared per-tool via `enforce_sandbox = true`—commands spawn inside a private namespace jail:
 
 | Operation | Direct Host Process | Inside `bwrap` Container | Container Overhead |
 | :--- | :--- | :--- | :--- |

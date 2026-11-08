@@ -11,7 +11,7 @@
 
 # Architecture & Invariants
 - [System Architecture](architecture/overview.md)
-- [Bubblewrap Sandboxing & Jails](architecture/security-and-sandboxing.md)
+- [Configurable Sandboxing & Security Jails](architecture/security-and-sandboxing.md)
 - [Multi-Source Session Resumption](architecture/session-resumption.md)
 
 # Engine Subsystems

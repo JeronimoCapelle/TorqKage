@@ -16,16 +16,18 @@ Open `tools.toml` (or `plugins/agy-suite/tools.toml`) and declare the tool under
 
 ```toml
 [tools.cargo_bloat]
-template = "perf_tool"
+inherit = "base_tools.perf_tool"
 action = "static_command"
-command = "cargo bloat --release -n 20"
+command = ["cargo", "bloat", "--release", "-n", "20"]
 description = "Analyzes binary size and lists the top 20 functions consuming the most space"
 require_permission_gate = false
+enforce_sandbox = true
 ```
 
 ### Explaining the Fields
-- `template = "perf_tool"`: Inherits default Bubblewrap sandboxing, 60s timeout, and `systems` category.
-- `action = "static_command"`: An exact, zero-argument command safely executed inside the container.
+- `inherit = "base_tools.perf_tool"`: Inherits base configuration, 60s timeout, and `systems` category.
+- `action = "static_command"`: An exact, zero-argument command safely executed.
+- `enforce_sandbox = true`: Explicitly runs this tool inside an isolated Bubblewrap container.
 - `require_permission_gate = false`: Allows the agent to run it autonomously (`ALLOW`).
 
 ---

@@ -29,6 +29,6 @@ Autonomous AI coding agents frequently suffer from two fatal failure modes in pr
 
 `agy-suite` replaces ambient, unstructured execution with **deterministic capability perimeters**:
 - **Pure Safe Rust:** The entire workspace enforces `#![forbid(unsafe_code)]`.
-- **Bubblewrap Root Jails:** Ephemeral container isolation with private loopback, read-only system roots, and credential masking.
+- **Configurable Container Sandboxing:** Ephemeral Bubblewrap (`bwrap`) isolation toggleable for the entire session in `agy-ctrl` or declared per-tool (`enforce_sandbox = true`), featuring private loopback, read-only system roots, and credential masking.
 - **Featherweight Daemons:** Sub-millisecond (<1ms, <500KB RSS) lifecycle intercepts and bounded MCP tool execution.
 - **Offline Human Cockpit:** Single-pane Ratatui dashboard for toggling permissions, inspecting tools, and resuming previous sessions.

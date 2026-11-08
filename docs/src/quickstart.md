@@ -4,7 +4,7 @@ Get started with `agy-suite` in under 60 seconds.
 
 ## Prerequisites
 
-- **Linux** (x86_64 or aarch64) with `bubblewrap` (`bwrap`) installed.
+- **Linux** (x86_64 or aarch64) — `bubblewrap` (`bwrap`) is optional, needed if container sandboxing is enabled.
 - **Rust Toolchain:** Rust 1.85+ (Nightly or Rust 2024 Edition).
 - **Google Antigravity CLI:** `agy` installed on `$PATH`.
 - *(Optional for fast compilation):* `mold` linker and `rustc-codegen-cranelift`.
@@ -54,7 +54,7 @@ agy-ctrl
 | <kbd>Tab</kbd> | Switch between Fleet Matrix and Tool Catalog |
 | <kbd>Enter</kbd> / <kbd>r</kbd> | Launch or resume session with selected agent |
 | <kbd>n</kbd> | Force launch fresh, unresumed session |
-| <kbd>b</kbd> | Toggle Bubblewrap OS container isolation |
+| <kbd>b</kbd> / <kbd>F8</kbd> | Toggle Bubblewrap OS container isolation for `agy` session |
 | <kbd>w</kbd> | Toggle Jujutsu isolated worktree (`.agy/workspaces/<agent>`) |
 | <kbd>?</kbd> | Open paginated in-deck manual |
 | <kbd>q</kbd> | Exit control deck |
