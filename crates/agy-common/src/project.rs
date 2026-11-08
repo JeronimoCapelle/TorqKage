@@ -280,7 +280,7 @@ impl ProjectConfig {
             return self.workspace.containers.clone();
         }
         let mut detected = Vec::new();
-        for dir in ["crates", "packages"] {
+        for dir in ["crates", "packages", "apps", "libs", "services", "modules"] {
             if workspace_root.join(dir).is_dir() {
                 detected.push(dir.to_owned());
             }
@@ -310,14 +310,17 @@ impl ProjectConfig {
     /// with auto-detected documentation paths.
     #[must_use]
     pub fn detect_or_load(workspace_root: &Path) -> Self {
-        let mut candidates = vec![
-            workspace_root.join(".agy/project.toml"),
-            workspace_root.join("project.toml"),
-            workspace_root.join("plugins/agy-suite/project.toml"),
-        ];
+        let mut candidates = Vec::new();
+        if let Ok(custom) = std::env::var("AGY_PROJECT_CONFIG") {
+            candidates.push(PathBuf::from(custom));
+        }
+        candidates.push(workspace_root.join(".agy/project.toml"));
+        candidates.push(workspace_root.join("project.toml"));
+        candidates.push(workspace_root.join("plugins/agy-suite/project.toml"));
         if let Ok(home) = std::env::var("HOME") {
-            candidates
-                .push(PathBuf::from(home).join(".gemini/config/plugins/agy-suite/project.toml"));
+            let home_path = PathBuf::from(home);
+            candidates.push(home_path.join(".agy/project.toml"));
+            candidates.push(home_path.join(".config/agy/project.toml"));
         }
 
         for path in &candidates {
@@ -562,17 +565,20 @@ impl ProjectConfig {
                 let resolved = if v.contains("${workspace_root}") || v.contains("$WORKSPACE_ROOT") {
                     v.replace("${workspace_root}", &ws_str)
                         .replace("$WORKSPACE_ROOT", &ws_str)
-                } else if k == "CARGO_TARGET_DIR" {
+                } else if let Some(stripped) = v.strip_prefix("./") {
+                    workspace_root.join(stripped).to_string_lossy().into_owned()
+                } else if v.starts_with("../") {
+                    workspace_root.join(v).to_string_lossy().into_owned()
+                } else if k.ends_with("_TARGET_DIR")
+                    || k.ends_with("_CACHE_DIR")
+                    || k.ends_with("_DIR")
+                {
                     let p = Path::new(v);
                     if p.is_absolute() {
                         v.clone()
                     } else {
                         workspace_root.join(v).to_string_lossy().into_owned()
                     }
-                } else if let Some(stripped) = v.strip_prefix("./") {
-                    workspace_root.join(stripped).to_string_lossy().into_owned()
-                } else if v.starts_with("../") {
-                    workspace_root.join(v).to_string_lossy().into_owned()
                 } else {
                     v.clone()
                 };

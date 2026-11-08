@@ -147,6 +147,7 @@ pub(crate) fn execute(
                 workspace_root,
                 &matcher,
                 &project.security,
+                &project.workspace.ignored_paths,
                 &mut collected_matches,
             );
         } else if target.is_file() {
@@ -282,11 +283,30 @@ fn search_single_file(
     }
 }
 
+fn is_path_ignored(rel_str: &str, ignored_paths: &[String]) -> bool {
+    let normalized = rel_str.trim_matches(['/', '\\']).replace('\\', "/");
+    for ignored in ignored_paths {
+        let clean = ignored.trim_matches(['/', '\\']).replace('\\', "/");
+        if clean.is_empty() {
+            continue;
+        }
+        if normalized == clean
+            || normalized.starts_with(&format!("{clean}/"))
+            || normalized.contains(&format!("/{clean}/"))
+            || normalized.ends_with(&format!("/{clean}"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn walk_and_search(
     dir: &Path,
     workspace_root: &Path,
     matcher: &SearchMatcher,
     security: &ProjectSecurityConfig,
+    ignored_paths: &[String],
     collected_matches: &mut Vec<String>,
 ) {
     let mut builder = ignore::WalkBuilder::new(dir);
@@ -303,8 +323,9 @@ fn walk_and_search(
 
         let path = entry.path();
         if path.is_file() {
-            let name_lossy = entry.file_name().to_string_lossy();
-            if name_lossy == "target" || name_lossy == "node_modules" {
+            let rel = path.strip_prefix(workspace_root).unwrap_or(path);
+            let rel_str = rel.to_string_lossy();
+            if is_path_ignored(&rel_str, ignored_paths) {
                 continue;
             }
             search_single_file(path, workspace_root, matcher, security, collected_matches);

@@ -83,14 +83,13 @@ impl SyntaxConfig {
 
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         match ext.to_lowercase().as_str() {
+            "rs" => Self::rust(),
             "py" | "pyi" => Self::python(),
             "go" => Self::go(),
             "zig" => Self::zig(),
-            "c" | "cpp" | "cc" | "cxx" | "h" | "hpp" | "java" | "cs" | "swift" | "kt" | "js"
-            | "ts" | "jsx" | "tsx" => Self::c_family(),
             "sh" | "bash" | "zsh" => Self::shell(),
             "lua" | "sql" => Self::lua(),
-            _ => Self::rust(),
+            _ => Self::c_family(),
         }
     }
 

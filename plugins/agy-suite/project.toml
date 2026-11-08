@@ -35,10 +35,12 @@
 # DISCOVERY ORDER:
 # ----------------
 # The agy-suite engine checks for `project.toml` in the following order:
-#   1. `<project_root>/.agy/project.toml`     (Workspace override)
-#   2. `<project_root>/project.toml`          (Repository root)
-#   3. `<project_root>/plugins/agy-suite/project.toml` (Plugin bundle default)
-#   4. `~/.gemini/config/plugins/agy-suite/project.toml` (Global installed fallback)
+#   1. `$AGY_PROJECT_CONFIG` (Explicit override)
+#   2. `<project_root>/.agy/project.toml`     (Workspace override)
+#   3. `<project_root>/project.toml`          (Repository root)
+#   4. `<project_root>/plugins/agy-suite/project.toml` (Co-located plugin repository root)
+#   5. `~/.agy/project.toml` or `~/.config/agy/project.toml` (User global configuration)
+#   6. Auto-inference from workspace structure (when no configuration file is present)
 #
 # ==============================================================================
 

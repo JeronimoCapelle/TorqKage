@@ -29,6 +29,10 @@ pub(crate) fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> b
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "Procedural parameter validation, default resolution, and pattern matching"
+)]
 fn validate_and_build_args(
     tool: &ToolDefinition,
     workspace_root: &Path,
@@ -105,8 +109,12 @@ fn validate_and_build_args(
 
             let is_path_arg = arg.name == "path"
                 || arg.name == "file"
+                || arg.name == "dir"
+                || arg.name == "directory"
                 || arg.name == "workspace_path"
-                || arg.name.ends_with("_path");
+                || arg.name.ends_with("_path")
+                || arg.name.ends_with("_file")
+                || arg.name.ends_with("_dir");
 
             if is_path_arg {
                 if tool.enforce_workspace_bounds() {

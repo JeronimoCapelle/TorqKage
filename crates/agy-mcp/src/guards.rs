@@ -186,29 +186,38 @@ pub(crate) fn check_dangerous_files_with_security(
 
 /// Helper verifying if a relative path is scoped within a directory name at root or crate level.
 fn matches_directory_scope(rel_path: &str, target_dir: &str) -> bool {
-    let clean = target_dir.trim_matches(['/', '\\']);
+    matches_directory_scope_with_containers(rel_path, target_dir, &[])
+}
+
+/// Helper verifying if a relative path is scoped within a directory name at root or declared container package level.
+fn matches_directory_scope_with_containers(
+    rel_path: &str,
+    target_dir: &str,
+    containers: &[String],
+) -> bool {
+    let clean = target_dir.trim_matches(['/', '\\']).replace('\\', "/");
+    if clean.is_empty() {
+        return false;
+    }
     if clean == "*" {
         return true;
     }
 
-    // 1. Root-level match: e.g. "src/lib.rs" matches "src"
-    if rel_path == clean
-        || rel_path.starts_with(&format!("{clean}/"))
-        || rel_path.starts_with(&format!("{clean}\\"))
-    {
+    let normalized = rel_path.trim_matches(['/', '\\']).replace('\\', "/");
+
+    // 1. Root-level match: e.g. "src" or "src/lib.rs"
+    if normalized == clean || normalized.starts_with(&format!("{clean}/")) {
         return true;
     }
 
-    // 2. Workspace container-level match: e.g. "packages/subpackage/src/main.rs" matches "src"
-    for prefix in &["crates/", "packages/", "crates\\", "packages\\"] {
-        if let Some(sub) = rel_path.strip_prefix(prefix)
-            && let Some((_crate_name, crate_rel)) = sub.split_once(['/', '\\'])
-            && (crate_rel == clean
-                || crate_rel.starts_with(&format!("{clean}/"))
-                || crate_rel.starts_with(&format!("{clean}\\")))
-        {
-            return true;
-        }
+    // 2. Monorepo container-level match: e.g. "<container>/<package>/<target_dir>/..."
+    let parts: Vec<&str> = normalized.split('/').collect();
+    if let (Some(&container), Some(&sub_dir)) = (parts.first(), parts.get(2))
+        && sub_dir == clean
+        && (containers.iter().any(|c| c == container)
+            || ["crates", "packages", "apps", "libs", "services", "modules"].contains(&container))
+    {
+        return true;
     }
 
     false
