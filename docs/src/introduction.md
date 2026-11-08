@@ -2,8 +2,8 @@
 
 Welcome to **The `agy-suite` Engine Manual**.
 
-> ### Stop writing MCP servers. agy-suite is the last MCP runtime you'll ever need.
-> Turn any CLI binary, compiler, or script into an air-gapped, schema-validated MCP tool in 6 lines of TOML—and compose governed autonomous agent fleets in seconds.
+> ### Sandboxed Meta-MCP Runtime and Declarative Fleet Engine
+> Turn any CLI binary, compiler, or script into an isolated, schema-validated MCP tool with declarative TOML configurations.
 
 `agy-suite` (Antigravity Systems Suite) is a declarative governance engine, Meta-MCP server, featherweight lifecycle runner, and Ratatui 0.30 interactive flight deck designed as an enterprise-grade extension layer for **Google Antigravity** (`agy`).
 
