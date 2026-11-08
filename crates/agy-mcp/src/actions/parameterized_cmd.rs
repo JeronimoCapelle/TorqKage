@@ -15,13 +15,34 @@ fn validate_and_build_args(
     let mut dynamic_args = Vec::new();
 
     for arg in &tool.args {
-        let val_opt = arguments
-            .get(&arg.name)
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim);
+        if arg.switch {
+            let is_active = match arguments.get(&arg.name) {
+                Some(serde_json::Value::Bool(b)) => *b,
+                Some(serde_json::Value::String(s)) => {
+                    let trimmed = s.trim().to_ascii_lowercase();
+                    trimmed == "true" || trimmed == "1" || trimmed == "yes"
+                },
+                _ => arg
+                    .default
+                    .as_deref()
+                    .map(|d| d.trim().to_ascii_lowercase())
+                    .is_some_and(|d| d == "true" || d == "1" || d == "yes"),
+            };
+
+            if is_active && let Some(flag) = &arg.flag {
+                dynamic_args.push(flag.clone());
+            }
+            continue;
+        }
+
+        let val_opt = arguments.get(&arg.name).and_then(|v| match v {
+            serde_json::Value::String(s) => Some(s.trim().to_owned()),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        });
 
         let effective_val = match val_opt {
-            Some(v) if !v.is_empty() => Some(v.to_owned()),
+            Some(v) if !v.is_empty() => Some(v),
             _ => arg.default.clone(),
         };
 
@@ -87,6 +108,12 @@ fn format_captured_output(output: &std::process::Output, tool: &ToolDefinition) 
 
         OutputCapture::Stdout | OutputCapture::JsonSpans => {
             let text = String::from_utf8_lossy(&output.stdout);
+            if text.trim().is_empty() && !output.status.success() {
+                let err = String::from_utf8_lossy(&output.stderr);
+                if !err.trim().is_empty() {
+                    return err.into_owned();
+                }
+            }
             if text.trim().is_empty()
                 && let Some(fallback) = &tool.empty_fallback
             {
@@ -275,6 +302,7 @@ mod tests {
                     flag: None,
                     description: "Message".to_owned(),
                     default: None,
+                    ..Default::default()
                 },
                 ToolArg {
                     name: "prefix".to_owned(),
@@ -283,6 +311,7 @@ mod tests {
                     flag: Some("-n".to_owned()),
                     description: "No newline".to_owned(),
                     default: None,
+                    ..Default::default()
                 },
             ],
             output_capture: OutputCapture::Stdout,
@@ -343,6 +372,7 @@ mod tests {
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "pattern".to_owned(),
                     default: None,
+                    ..Default::default()
                 },
                 ToolArg {
                     name: "rewrite".to_owned(),
@@ -351,6 +381,7 @@ mod tests {
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "rewrite".to_owned(),
                     default: None,
+                    ..Default::default()
                 },
             ],
             output_capture: OutputCapture::Both,
@@ -383,6 +414,7 @@ mod tests {
                     flag: None,
                     description: "Message".to_owned(),
                     default: None,
+                    ..Default::default()
                 },
                 ToolArg {
                     name: "path".to_owned(),
@@ -391,6 +423,7 @@ mod tests {
                     flag: None,
                     description: "Path".to_owned(),
                     default: Some(".".to_owned()),
+                    ..Default::default()
                 },
             ],
             output_capture: OutputCapture::Stdout,
@@ -404,6 +437,45 @@ mod tests {
         let (out, is_err) = execute(&tool, &temp, &args).unwrap();
         assert!(!is_err);
         assert!(out.contains("hello ."));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_switch_and_number_arg() {
+        let temp = create_test_dir("switch_and_num");
+        let tool = ToolDefinition {
+            name: "test_switch".to_owned(),
+            command: vec!["echo".to_owned()],
+            args: vec![
+                ToolArg {
+                    name: "lib".to_owned(),
+                    flag: Some("--lib".to_owned()),
+                    switch: true,
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "depth".to_owned(),
+                    flag: Some("--depth".to_owned()),
+                    regex: Some("^[0-9]+$".to_owned()),
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "target".to_owned(),
+                    default: Some("default_tgt".to_owned()),
+                    ..Default::default()
+                },
+            ],
+            output_capture: OutputCapture::Stdout,
+            ..Default::default()
+        };
+
+        let args = json!({
+            "lib": true,
+            "depth": 3
+        });
+
+        let (out, is_err) = execute(&tool, &temp, &args).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("--lib --depth 3 default_tgt"));
     }
 
     #[test]
@@ -465,6 +537,7 @@ mod tests {
                 regex: Some("^[^\\x00]+$".to_owned()),
                 description: "python code".to_owned(),
                 default: None,
+                ..Default::default()
             }],
             output_capture: OutputCapture::Stdout,
             ..Default::default()
@@ -499,6 +572,7 @@ mod tests {
                 regex: Some("^[^\\x00]+$".to_owned()),
                 description: "python code".to_owned(),
                 default: None,
+                ..Default::default()
             }],
             output_capture: OutputCapture::Both,
             ..Default::default()

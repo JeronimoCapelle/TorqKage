@@ -139,12 +139,20 @@ fn build_parameterized_schema(args: &[crate::models::ToolArg]) -> serde_json::Va
 
     for arg in args {
         let mut prop = serde_json::Map::new();
-        prop.insert("type".to_owned(), json!("string"));
+        if arg.switch {
+            prop.insert("type".to_owned(), json!("boolean"));
+            if let Some(ref def) = arg.default {
+                let is_truthy = def == "true" || def == "1";
+                prop.insert("default".to_owned(), json!(is_truthy));
+            }
+        } else {
+            prop.insert("type".to_owned(), json!("string"));
+            if let Some(ref def) = arg.default {
+                prop.insert("default".to_owned(), json!(def));
+            }
+        }
         if !arg.description.is_empty() {
             prop.insert("description".to_owned(), json!(arg.description));
-        }
-        if let Some(ref def) = arg.default {
-            prop.insert("default".to_owned(), json!(def));
         }
         properties.insert(arg.name.clone(), serde_json::Value::Object(prop));
 

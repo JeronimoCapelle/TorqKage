@@ -84,58 +84,14 @@ fn main() -> ExitCode {
             let has_isolated = args.iter().any(|a| a == "--isolated" || a == "--workspace");
             handle_cli_launch(&workspace_root, agent_arg, has_sandbox, has_isolated)
         },
-        Some("reset-breaker" | "reset-circuit-breaker") => {
-            let mut ledger = agy_common::CircuitBreakerLedger::load(&workspace_root);
-            if ledger.reset(&workspace_root).is_ok() {
-                println!(
-                    "✅ [agy-ctrl] Circuit breaker ledger reset successfully in .agy/state/circuit_breaker.json"
-                );
-                ExitCode::SUCCESS
-            } else {
-                eprintln!("🛑 [agy-ctrl] Failed to reset circuit breaker.");
-                ExitCode::FAILURE
-            }
-        },
-        Some("workspace" | "ws") => {
-            let sub = args.get(2).map(String::as_str);
-            let agent = args.get(3).map(String::as_str);
-            match (sub, agent) {
-                (Some("ensure"), Some(agent_name)) => {
-                    match agy_common::JujutsuWorkspace::ensure_agent_workspace(
-                        &workspace_root,
-                        agent_name,
-                    ) {
-                        Ok(p) => {
-                            println!("✅ [agy-ctrl] Workspace ready at: {}", p.display());
-                            ExitCode::SUCCESS
-                        },
-                        Err(e) => {
-                            eprintln!("🛑 [agy-ctrl] Failed to ensure workspace: {e}");
-                            ExitCode::FAILURE
-                        },
-                    }
-                },
-                (Some("forget" | "remove"), Some(agent_name)) => {
-                    match agy_common::JujutsuWorkspace::forget_agent_workspace(
-                        &workspace_root,
-                        agent_name,
-                    ) {
-                        Ok(()) => {
-                            println!("✅ [agy-ctrl] Workspace forgotten for agent: {agent_name}");
-                            ExitCode::SUCCESS
-                        },
-                        Err(e) => {
-                            eprintln!("🛑 [agy-ctrl] Failed to forget workspace: {e}");
-                            ExitCode::FAILURE
-                        },
-                    }
-                },
-                _ => {
-                    eprintln!("Usage: agy-ctrl workspace <ensure|forget> <agent-name>");
-                    ExitCode::FAILURE
-                },
-            }
-        },
+        Some(
+            "reset-breaker"
+            | "reset-circuit-breaker"
+            | "inspect-breaker"
+            | "breaker-status"
+            | "circuit-breaker",
+        ) => handle_breaker_cli(&workspace_root, command.unwrap_or_default()),
+        Some("workspace" | "ws") => handle_workspace_cli(&workspace_root, &args),
         Some("--help" | "-h" | "help") => {
             print_cli_usage();
             ExitCode::SUCCESS
@@ -202,6 +158,83 @@ fn handle_cli_launch(
     }
 }
 
+fn handle_breaker_cli(workspace_root: &Path, command: &str) -> ExitCode {
+    match command {
+        "reset-breaker" | "reset-circuit-breaker" => {
+            let mut ledger = agy_common::CircuitBreakerLedger::load(workspace_root);
+            if ledger.reset(workspace_root).is_ok() {
+                println!(
+                    "✅ [agy-ctrl] Circuit breaker ledger reset successfully in .agy/state/circuit_breaker.json"
+                );
+                ExitCode::SUCCESS
+            } else {
+                eprintln!("🛑 [agy-ctrl] Failed to reset circuit breaker.");
+                ExitCode::FAILURE
+            }
+        },
+        _ => {
+            let ledger = agy_common::CircuitBreakerLedger::load(workspace_root);
+            let status = if ledger.tripped {
+                "🛑 TRIPPED"
+            } else {
+                "🟢 HEALTHY"
+            };
+            println!("Circuit Breaker Status: {status}");
+            println!("Agent: {}", ledger.agent);
+            println!(
+                "Consecutive Failures: {} / {}",
+                ledger.consecutive_failures, ledger.max_strikes
+            );
+            if let Some(tool) = &ledger.last_tool {
+                println!("Last Tool: {tool}");
+            }
+            if let Some(sig) = &ledger.last_error_signature {
+                println!("Last Error Signature: {sig}");
+            }
+            if let Some(details) = &ledger.last_error_details {
+                println!("Error Details:\n{details}");
+            }
+            println!("Last Updated: {}", ledger.last_updated);
+            ExitCode::SUCCESS
+        },
+    }
+}
+
+fn handle_workspace_cli(workspace_root: &Path, args: &[String]) -> ExitCode {
+    let sub = args.get(2).map(String::as_str);
+    let agent = args.get(3).map(String::as_str);
+    match (sub, agent) {
+        (Some("ensure"), Some(agent_name)) => {
+            match agy_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, agent_name) {
+                Ok(p) => {
+                    println!("✅ [agy-ctrl] Workspace ready at: {}", p.display());
+                    ExitCode::SUCCESS
+                },
+                Err(e) => {
+                    eprintln!("🛑 [agy-ctrl] Failed to ensure workspace: {e}");
+                    ExitCode::FAILURE
+                },
+            }
+        },
+        (Some("forget" | "remove"), Some(agent_name)) => {
+            match agy_common::JujutsuWorkspace::forget_agent_workspace(workspace_root, agent_name) {
+                Ok(()) => {
+                    println!("✅ [agy-ctrl] Workspace forgotten for agent: {agent_name}");
+                    ExitCode::SUCCESS
+                },
+                Err(e) => {
+                    eprintln!("🛑 [agy-ctrl] Failed to forget workspace: {e}");
+                    ExitCode::FAILURE
+                },
+            }
+        },
+        _ => {
+            eprintln!("Usage: agy-ctrl workspace <ensure|forget> <agent-name>");
+            ExitCode::FAILURE
+        },
+    }
+}
+
 fn print_cli_usage() {
     println!(
         "agy-ctrl: Offline Ratatui terminal configuration deck & agent launcher for agy-suite\n\
@@ -217,6 +250,7 @@ fn print_cli_usage() {
            --sandbox             Launch agent session inside an isolated Bubblewrap OS container\n\
            --isolated, --workspace Launch session inside isolated Jujutsu workspace (.agy/workspaces/<agent>)\n\
            reset-breaker         Reset the circuit breaker strike counter in .agy/state/circuit_breaker.json\n\
+           inspect-breaker       Inspect the circuit breaker status, strikes, and error details\n\
            workspace <subcmd>    Manage subagent workspaces (ensure <agent>, forget <agent>)\n\
            --help, -h            Show this help reference\n\
          \n\

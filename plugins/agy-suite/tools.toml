@@ -187,7 +187,7 @@ timeout_seconds = 10
 description = "Visualizes recursive directory tree hierarchy up to a specified depth using eza"
 action = "parameterized_command"
 category = "filesystem"
-command = ["eza", "--tree", "--icons=never"]
+command = ["eza", "--tree", "--icons=never", "--ignore-glob", ".git|.jj|.agy|target"]
 args = [
     { name = "level", required = false, default = "2", flag = "-L", regex = "^[1-5]$", description = "Max recursion tree depth (1 to 5, defaults to 2)" },
     { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to display tree from (defaults to '.')" }
@@ -200,7 +200,7 @@ timeout_seconds = 10
 description = "Finds project files matching a name or regex pattern across the workspace using fd (skips VCS internals by default)"
 action = "parameterized_command"
 category = "filesystem"
-command = ["fd", "--hidden", "--exclude", ".git", "--exclude", ".jj"]
+command = ["fd", "--glob", "--hidden", "--exclude", ".git", "--exclude", ".jj", "--exclude", ".agy", "--exclude", "target"]
 args = [
     { name = "pattern", required = true, regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
     { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Root path to search from (defaults to '.')" }
@@ -280,8 +280,9 @@ action = "parameterized_command"
 category = "filesystem"
 enforce_workspace_bounds = true
 ban_dangerous_files = true
-command = ["rg", "--max-count", "30", "--max-columns", "200", "--"]
+command = ["rg", "--max-count", "30", "--max-columns", "200"]
 args = [
+    { name = "fixed_strings", required = false, flag = "-F", switch = true, description = "Treat the query as a literal string rather than a regular expression" },
     { name = "query", required = true, regex = "^[^\\x00-\\x1f]+$", description = "Text or regex search query to search across project files" },
     { name = "path", required = false, default = ".", regex = "^[a-zA-Z0-9_./-]+$", description = "Directory or file to search (defaults to project root)" }
 ]
@@ -387,10 +388,12 @@ category = "diagnostics"
 command = ["cargo", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus tree on a specific path, e.g. 'actions' or 'server'" },
     { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
 ]
-output_capture = "stdout"
+output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 30
 
@@ -401,10 +404,12 @@ category = "diagnostics"
 command = ["cargo", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus dependency graph on a specific module path" },
     { name = "max_depth", required = false, flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
 ]
-output_capture = "stdout"
+output_capture = "both"
 truncate_lines = 200
 timeout_seconds = 30
 
@@ -441,9 +446,9 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["cargo-public-api", "-s", "-s", "-v"]
 args = [
-    { name = "package", required = true, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Name of the package or dependency to inspect (e.g. 'ratatui', 'serde', 'agy-common')" }
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Name of the package or dependency to inspect (e.g. 'ratatui', 'serde', 'agy-common', defaults to current root crate)" }
 ]
-output_capture = "stdout"
+output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 30
 
@@ -842,11 +847,30 @@ category = "diagnostics"
 truncate_lines = 50
 timeout_seconds = 10
 
+[tools.inspect_circuit_breaker]
+description = "Inspects the active circuit breaker ledger status, consecutive failure count, strike threshold, and last recorded error signature"
+action = "static_command"
+category = "diagnostics"
+command = ["agy-ctrl", "inspect-breaker"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 10
+
+[tools.reset_circuit_breaker]
+description = "Resets the deterministic compiler circuit breaker consecutive failure counter and clears the tripped gate"
+action = "static_command"
+category = "diagnostics"
+command = ["agy-ctrl", "reset-breaker"]
+output_capture = "stdout"
+truncate_lines = 20
+timeout_seconds = 10
+
 [tools.inspect_workspace_diff]
 description = "Inspects the active working tree diff (jj diff or git diff) with automatic line truncation"
 action = "static_command"
 category = "diagnostics"
-command = ["jj", "diff"]
+command = ["jj", "diff", "--color=never"]
+empty_fallback = "Clean (no working copy changes detected)"
 output_capture = "stdout"
 truncate_lines = 200
 timeout_seconds = 10
@@ -855,7 +879,7 @@ timeout_seconds = 10
 description = "Inspects the parent commit (@-) metadata, commit message, and full diff in Jujutsu"
 action = "static_command"
 category = "diagnostics"
-command = ["jj", "show", "@-"]
+command = ["jj", "show", "@-", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 250
 timeout_seconds = 10
@@ -864,7 +888,7 @@ timeout_seconds = 10
 description = "Displays the recent Jujutsu revision history and change graph with change IDs and descriptions"
 action = "static_command"
 category = "diagnostics"
-command = ["jj", "log", "-n", "10", "--no-graph"]
+command = ["jj", "log", "-n", "10", "--no-graph", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 10
@@ -873,7 +897,8 @@ timeout_seconds = 10
 description = "Checks if any commits or files in the Jujutsu repository contain unresolved merge/rebase conflicts"
 action = "static_command"
 category = "diagnostics"
-command = ["jj", "log", "-r", "conflicts()", "--no-graph"]
+command = ["jj", "log", "-r", "conflicts()", "--no-graph", "--color=never"]
+empty_fallback = "Clean (0 merge/rebase conflicts detected)"
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
@@ -882,7 +907,7 @@ timeout_seconds = 10
 description = "Lists Jujutsu bookmarks (git branches) and their remote tracking status"
 action = "static_command"
 category = "diagnostics"
-command = ["jj", "bookmark", "list"]
+command = ["jj", "bookmark", "list", "--color=never"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 10
@@ -902,7 +927,7 @@ description = "Sets or updates the commit description message for a Jujutsu revi
 action = "parameterized_command"
 category = "diagnostics"
 mutating = true
-command = ["jj", "describe"]
+command = ["jj", "describe", "--color=never"]
 args = [
     { name = "message", required = true, flag = "-m", regex = "^[^\\x00]+$", description = "Commit description message (e.g. 'feat(mcp): add module dependency inspection')" },
     { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:-]+$", description = "Target revision to describe (defaults to '@')" }
@@ -947,7 +972,7 @@ timeout_seconds = 120
 description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
 action = "parameterized_command"
 category = "diagnostics"
-command = ["jj", "diff", "--summary"]
+command = ["jj", "diff", "--summary", "--color=never"]
 args = [
     { name = "workspace_path", required = false, flag = "-R", regex = "^[a-zA-Z0-9_./-]+$", description = "Optional workspace path to inspect (defaults to current workspace)" }
 ]

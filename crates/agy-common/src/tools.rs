@@ -51,6 +51,8 @@ pub struct ToolArg {
     pub flag: Option<String>,
     #[serde(default)]
     pub default: Option<String>,
+    #[serde(default)]
+    pub switch: bool,
 }
 
 /// Security policies governing tool mutability and permission gates.

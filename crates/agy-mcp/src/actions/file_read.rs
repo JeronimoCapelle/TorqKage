@@ -71,6 +71,14 @@ pub(crate) fn execute(
         .get("end_line")
         .and_then(serde_json::Value::as_u64);
 
+    if let (Some(start), Some(end)) = (start_line, end_line)
+        && start > end
+    {
+        return Err(format!(
+            "Invalid line range: start_line ({start}) cannot be greater than end_line ({end})"
+        ));
+    }
+
     let content_to_process = if start_line.is_some() || end_line.is_some() {
         slice_lines(&raw_content, start_line, end_line)
     } else {
@@ -119,6 +127,30 @@ mod tests {
         let content = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5";
         let sliced = slice_lines(content, Some(2), Some(4));
         assert_eq!(sliced, "Line 2\nLine 3\nLine 4");
+    }
+
+    #[test]
+    fn test_file_read_inverted_bounds_error() {
+        let temp = std::env::temp_dir().join(format!("agy_read_bounds_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp));
+        std::fs::create_dir_all(&temp).expect("create dir");
+        let file_path = temp.join("test.txt");
+        std::fs::write(&file_path, "Line 1\nLine 2\n").expect("write test file");
+
+        let tool = ToolDefinition {
+            name: "file_read".to_owned(),
+            ..Default::default()
+        };
+        let guards = BTreeMap::new();
+        let args = serde_json::json!({
+            "path": file_path.to_str().unwrap(),
+            "start_line": 10,
+            "end_line": 5
+        });
+
+        let res = execute(&tool, &temp, &args, None, &guards);
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("Invalid line range"));
     }
 
     #[test]

@@ -245,6 +245,13 @@ impl ProjectConfig {
                 paths.push(p.clone());
             }
         }
+        let default_ignored = [".agy", ".git", ".jj", "target"];
+        for def in default_ignored {
+            let s = (*def).to_owned();
+            if !paths.contains(&s) {
+                paths.push(s);
+            }
+        }
         paths
     }
 
@@ -913,6 +920,10 @@ extra_banned_files = ["firmware_key.pem", ".secret_payload"]
             parsed.extra_banned_files,
             vec!["firmware_key.pem", ".secret_payload"]
         );
+        assert!(parsed.is_ignored_or_cache_path(".agy/cache/graphtrail.db"));
+        assert!(parsed.is_ignored_or_cache_path(".git/HEAD"));
+        assert!(parsed.is_ignored_or_cache_path(".jj/repo"));
+        assert!(parsed.is_ignored_or_cache_path("target/debug/build"));
     }
 
     #[test]
