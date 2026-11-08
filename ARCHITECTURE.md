@@ -4,6 +4,9 @@
 **Status:** Canonical & Permanent Architecture Specification  
 **Authority:** Root repository manual for human developers and autonomous AI agents (`coder`, `planner`, `spec-checker`, `finisher`, `copilot`).
 
+> **Quickstart & Usage:** For installation, terminal workflows, and the interactive control deck guide, see [README.md](README.md).  
+> **Online Engine Manual:** For full documentation, guides, and tutorials, visit the [agy-suite Engine Manual](https://jeronimocapelle.github.io/agy-suite/).
+
 ---
 
 ## 1. System Invariants & Non-Negotiable Directives
@@ -208,6 +211,42 @@ agy-suite/
 ---
 
 ## 8. High-Assurance Systems Architecture: The 4 Crates & Sandboxing
+
+### High-Level Topology
+
+```mermaid
+flowchart TD
+    subgraph Host ["Host & Human Interaction"]
+        Operator["Human Operator (Terminal)"] <-->|"Ratatui 0.30 TUI"| Ctrl["agy-ctrl (Control Deck)"]
+        Ctrl -.->|"rusqlite (in-process)"| SQLite[("~/.gemini/antigravity-cli/\nconversation_summaries.db")]
+    end
+
+    subgraph RuntimeBridge ["Orchestration & Sandbox Bridge"]
+        Ctrl -->|"fork() / execvp('agy')\n(Raw mode suspended)"| AgyCLI["agy CLI Agent Runtime"]
+        Ctrl -.->|"jj workspace add .agy/workspaces/<agent>"| JJWorkspaces[".agy/workspaces/<agent>\n(Jujutsu Isolation)"]
+    end
+
+    subgraph PluginServices ["Antigravity Lifecycle & Plugin Services"]
+        AgyCLI <-->|"JSON-RPC 2.0 over stdio (pipes)"| MCPDaemon["agy-mcp (Tool Daemon)"]
+        AgyCLI <-->|"ProtoJSON on stdin / stdout\n(per lifecycle hook invocation)"| HooksRunner["agy-hooks (Ephemeral CLI)"]
+    end
+
+    subgraph DeclarativeState ["Declarative Manifests & State"]
+        ToolsTOML["plugins/agy-suite/tools.toml\n(Tools, Templates, Guards)"] -.->|"Bootstrapped at startup"| MCPDaemon
+        ToolsTOML -.->|"Queried for mutating & permission flags"| HooksRunner
+        AgentMD["plugins/agy-suite/agents/*.md\n(YAML frontmatter: mcp_tools, pre_launch_checks)"] -.->|"Dynamic Scoping"| MCPDaemon
+        AgentMD -.->|"Pre-Launch Quality Gates"| HooksRunner
+        AgentMD -.->|"F2 Save & Validate"| Ctrl
+    end
+
+    subgraph ExecutionLayer ["Supervised Execution Layer"]
+        MCPDaemon -->|"SubprocessSupervisor\n(Process Group Isolation)"| Supervisor["agy-common::SubprocessSupervisor"]
+        Supervisor -->|"bwrap --unshare-all (Optional)"| BwrapJail["Bubblewrap Sandbox"]
+        BwrapJail --> NativeTools["Native Binaries (cargo, jj, ast-grep, etc.)"]
+        MCPDaemon <-->|".agy/state/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
+        HooksRunner <-->|".agy/state/handoff.json"| HandoffState[("Session Handoff Bridge")]
+    end
+```
 
 ### 8.1 The 4 Crates Architecture
 1. **`agy-common` (Systems Foundation):**
