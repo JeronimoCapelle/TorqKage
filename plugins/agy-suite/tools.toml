@@ -513,12 +513,16 @@ truncate_lines = 100
 timeout_seconds = 180
 
 [tools.cargo_outdated]
-description = "Scans dependencies to find available SemVer updates and compatibility ranges"
-action = "static_command"
+description = "Scans dependencies to find available SemVer updates and breaking major releases via native cargo update dry-run"
+action = "parameterized_command"
 category = "diagnostics"
-command = ["cargo", "outdated", "--depth", "1"]
-output_capture = "stdout"
-truncate_lines = 60
+command = ["cargo", "update", "--dry-run", "--verbose"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to inspect for dependency updates (defaults to workspace)" }
+]
+empty_fallback = "All dependencies are up to date (no newer compatible or breaking releases detected)."
+output_capture = "both"
+truncate_lines = 100
 timeout_seconds = 60
 
 [tools.cargo_expand]
