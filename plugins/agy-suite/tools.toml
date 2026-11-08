@@ -346,7 +346,7 @@ tracks_circuit_breaker = false
 command = ["cargo", "fast", "check", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
-success_exit_codes = [0, 101]
+success_exit_codes = [0]
 
 [tools.cargo_check]
 description = "Runs cargo fast check and returns concise compiler diagnostics"
@@ -402,8 +402,8 @@ action = "parameterized_command"
 category = "compilation"
 command = ["cargo", "fast", "run"]
 args = [
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Specific binary name to execute" },
-    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific package containing the binary" }
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific binary name to execute" },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package containing the binary" }
 ]
 output_capture = "both"
 truncate_lines = 100
@@ -524,11 +524,16 @@ timeout_seconds = 60
 
 [tools.ast_grep]
 description = "Performs structural AST pattern queries across source trees via ast-grep"
-action = "static_command"
+action = "parameterized_command"
 category = "diagnostics"
-command = ["ast-grep", "scan"]
+command = ["ast-grep", "run"]
+args = [
+    { name = "pattern", required = true, flag = "--pattern", regex = "^[^\\x00]+$", description = "Structural AST pattern to match (e.g. 'fn $NAME($$$ARGS) -> $RET')" },
+    { name = "lang", required = false, flag = "--lang", enum = ["rust", "c", "cpp", "python", "javascript", "typescript"], description = "Source language (defaults to rust)" },
+    { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "File or directory to search (defaults to project root)" }
+]
 output_capture = "stdout"
-truncate_lines = 120
+truncate_lines = 150
 timeout_seconds = 30
 
 [tools.ast_grep_rewrite]
@@ -605,7 +610,7 @@ category = "testing"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "test"]
 args = [
-    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
 ]
 output_capture = "stdout"
@@ -619,7 +624,7 @@ category = "testing"
 tracks_circuit_breaker = true
 command = ["cargo", "nextest", "run"]
 args = [
-    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Optional integration test target" },
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--test", description = "Optional integration test target" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
 ]
 output_capture = "stdout"
@@ -692,7 +697,7 @@ category = "testing"
 tracks_circuit_breaker = true
 command = ["cargo", "test"]
 args = [
-    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--test", description = "Target loom test harness binary (e.g. 'loom_ring_buffer')" },
+    { name = "test_target", required = false, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--test", description = "Target loom test harness binary (e.g. 'loom_ring_buffer')" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test filter" }
 ]
 output_capture = "both"
@@ -734,7 +739,7 @@ category = "profiling"
 require_gates = ["tests"]
 command = ["cargo", "bench"]
 args = [
-    { name = "bench_target", required = false, regex = "^[a-zA-Z0-9_-]+$", flag = "--bench", description = "Specific benchmark target ('benchmark', 'criterion_bench', 'gungraun_bench')" },
+    { name = "bench_target", required = false, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--bench", description = "Specific benchmark target ('benchmark', 'criterion_bench', 'gungraun_bench')" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional benchmark name filter" }
 ]
 output_capture = "stdout"
@@ -793,10 +798,12 @@ timeout_seconds = 30
 description = "Disassembles raw binary or object file using llvm-objdump with instruction decoding (useful for differential testing)"
 action = "parameterized_command"
 category = "diagnostics"
+enforce_workspace_bounds = true
+ban_dangerous_files = true
 command = ["llvm-objdump", "-d"]
 args = [
-    { name = "file", required = true, regex = "^[a-zA-Z0-9_./-]+$", description = "Target binary, ELF, or object file to disassemble" },
-    { name = "arch", required = false, flag = "--arch-name", regex = "^[a-zA-Z0-9_]+$", description = "Target architecture (e.g. 'riscv64', 'riscv32', 'x86_64')" }
+    { name = "arch", required = false, flag = "--arch-name", regex = "^[a-zA-Z0-9_]+$", description = "Target architecture (e.g. 'riscv64', 'riscv32', 'x86_64')" },
+    { name = "file", required = true, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target binary, ELF, or object file relative to workspace to disassemble" }
 ]
 output_capture = "stdout"
 truncate_lines = 200
@@ -808,7 +815,7 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["cargo", "size"]
 args = [
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Target binary name" }
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Target binary name" }
 ]
 output_capture = "stdout"
 truncate_lines = 60
@@ -820,7 +827,7 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["cargo", "nm"]
 args = [
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Target binary name" }
+    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Target binary name" }
 ]
 output_capture = "stdout"
 truncate_lines = 100
@@ -836,12 +843,19 @@ timeout_seconds = 30
 # timeout_seconds = 180
 
 [tools.nasm_check]
-description = "Assembles x86 real-mode and bare-metal bootloader assembly sources via NASM"
-action = "static_command"
+description = "Assembles and verifies x86/x86_64 assembly source files (.asm/.s) via NASM, checking for syntax errors, invalid opcodes, and label resolution"
+action = "parameterized_command"
 category = "compilation"
-command = ["nasm", "-f", "elf64", "-v"]
-output_capture = "stdout"
-truncate_lines = 50
+enforce_workspace_bounds = true
+ban_dangerous_files = true
+command = ["nasm", "-o", "/dev/null"]
+args = [
+    { name = "format", required = false, default = "elf64", flag = "-f", enum = ["elf64", "elf32", "bin"], description = "Target output format ('elf64', 'elf32', or raw 'bin', defaults to 'elf64')" },
+    { name = "file", required = true, regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Assembly source file (.asm or .s) relative to workspace to assemble and verify" }
+]
+empty_fallback = "Assembly check passed (valid syntax and instruction encoding)"
+output_capture = "both"
+truncate_lines = 100
 timeout_seconds = 30
 
 # [tools.run_qemu_kernel_test]
@@ -919,7 +933,7 @@ command = ["jj", "diff", "--color=never"]
 args = [
     { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Specific file or directory path to focus the diff on (defaults to whole working tree)" },
     { name = "summary", required = false, flag = "-s", switch = true, description = "Show concise summary of modified, added, and deleted files without line diffs" },
-    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:-]+$", description = "Target revision or revset (defaults to '@')" }
+    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:][a-zA-Z0-9_@~^.:-]*$", description = "Target revision or revset (defaults to '@')" }
 ]
 empty_fallback = "Clean (no working copy changes detected)"
 output_capture = "stdout"
@@ -981,7 +995,7 @@ mutating = true
 command = ["jj", "describe", "--color=never"]
 args = [
     { name = "message", required = true, flag = "-m", regex = "^[^\\x00]+$", description = "Commit description message (e.g. 'feat(mcp): add module dependency inspection')" },
-    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:-]+$", description = "Target revision to describe (defaults to '@')" }
+    { name = "revision", required = false, flag = "-r", regex = "^[a-zA-Z0-9_@~^.:][a-zA-Z0-9_@~^.:-]*$", description = "Target revision to describe (defaults to '@')" }
 ]
 output_capture = "stdout"
 truncate_lines = 50
@@ -992,7 +1006,7 @@ description = "Ensures an isolated Jujutsu workspace exists for a subagent (.agy
 action = "workspace_ensure"
 category = "diagnostics"
 args = [
-    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name (e.g. 'coder', 'test-author', 'mini', 'perf-analyst')" }
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Subagent name (e.g. 'coder', 'test-author', 'mini', 'perf-analyst')" }
 ]
 truncate_lines = 50
 timeout_seconds = 15
@@ -1002,7 +1016,7 @@ description = "Inspects revisions and working-copy diffs within a subagent's iso
 action = "workspace_inspect"
 category = "diagnostics"
 args = [
-    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be inspected" }
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Subagent name whose isolated workspace should be inspected" }
 ]
 truncate_lines = 250
 timeout_seconds = 15
@@ -1014,7 +1028,7 @@ category = "release"
 skip_gates = ["workspace_clean", "linter", "tests"]
 mutating = true
 args = [
-    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be merged" },
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Subagent name whose isolated workspace should be merged" },
     { name = "strategy", required = false, default = "rebase", enum = ["rebase", "squash"], description = "Merge strategy: 'rebase' (default) or 'squash'" }
 ]
 truncate_lines = 100
@@ -1024,9 +1038,10 @@ timeout_seconds = 120
 description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
 action = "parameterized_command"
 category = "diagnostics"
+enforce_workspace_bounds = true
 command = ["jj", "diff", "--summary", "--color=never"]
 args = [
-    { name = "workspace_path", required = false, flag = "-R", regex = "^[a-zA-Z0-9_./-]+$", description = "Optional workspace path to inspect (defaults to current workspace)" }
+    { name = "workspace_path", required = false, flag = "-R", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Optional workspace path to inspect (defaults to current workspace)" }
 ]
 empty_fallback = "Clean (0 uncommitted changes)"
 output_capture = "stdout"
