@@ -221,6 +221,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["fd", "--glob", "--hidden", "--exclude", ".git", "--exclude", ".jj", "--exclude", ".agy", "--exclude", "target"]
 args = [
+    { name = "file_type", required = false, flag = "-t", enum = ["f", "d", "l", "x"], description = "Filter by file type: 'f' (file), 'd' (directory), 'l' (symlink), 'x' (executable)" },
     { name = "pattern", required = true, flag = "--", regex = "^[^\\x00-\\x1f]+$", description = "File name pattern or extension (e.g. '*.toml', 'state', 'test_')" },
     { name = "path", required = false, default = ".", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Root path to search from (defaults to '.')" }
 ]
@@ -350,10 +351,14 @@ success_exit_codes = [0]
 
 [tools.cargo_check]
 description = "Runs cargo fast check and returns concise compiler diagnostics"
-action = "static_command"
+action = "parameterized_command"
 category = "compilation"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "check", "--message-format=short", "--color=never"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to check (defaults to workspace)" },
+    { name = "all_targets", required = false, flag = "--all-targets", switch = true, description = "Check all targets including tests, benches, and examples" }
+]
 output_capture = "both"
 empty_fallback = "Verification passed: 0 errors, 0 warnings."
 truncate_lines = 120
@@ -361,10 +366,13 @@ timeout_seconds = 120
 
 [tools.cargo_clippy]
 description = "Runs cargo fast clippy across all targets with -D warnings, emitting concise diagnostics"
-action = "static_command"
+action = "parameterized_command"
 category = "compilation"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=short", "--color=never", "--", "-D", "warnings"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to lint (defaults to workspace)" }
+]
 output_capture = "both"
 empty_fallback = "Verification passed: 0 errors, 0 warnings."
 truncate_lines = 120
@@ -390,7 +398,8 @@ command = ["cargo", "fast", "build"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to build (defaults to workspace)" },
     { name = "bin", required = false, flag = "--bin", conflicts_with = ["all_targets"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific binary to build" },
-    { name = "all_targets", required = false, flag = "--all-targets", switch = true, conflicts_with = ["bin"], description = "Build all binaries, tests, benches, and examples" }
+    { name = "all_targets", required = false, flag = "--all-targets", switch = true, conflicts_with = ["bin"], description = "Build all binaries, tests, benches, and examples" },
+    { name = "release", required = false, flag = "--release", switch = true, description = "Build artifacts in release mode with optimizations" }
 ]
 output_capture = "both"
 truncate_lines = 100
@@ -484,9 +493,12 @@ timeout_seconds = 30
 
 [tools.cargo_semver_checks]
 description = "Verifies semantic versioning contract rules against the published API baseline"
-action = "static_command"
+action = "parameterized_command"
 category = "release"
 command = ["cargo", "semver-checks", "check-release"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to check for SemVer violations (defaults to workspace)" }
+]
 output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
@@ -515,6 +527,7 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["cargo", "expand"]
 args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package containing the item" },
     { name = "item_path", required = true, regex = "^[a-zA-Z0-9_:]+$", description = "Target item or module path to expand (e.g. 'Processor' or 'types::state')" }
 ]
 error_fallback = "token_smart_not_found"
@@ -802,7 +815,7 @@ enforce_workspace_bounds = true
 ban_dangerous_files = true
 command = ["llvm-objdump", "-d"]
 args = [
-    { name = "arch", required = false, flag = "--arch-name", regex = "^[a-zA-Z0-9_]+$", description = "Target architecture (e.g. 'riscv64', 'riscv32', 'x86_64')" },
+    { name = "arch", required = false, flag = "--arch-name", enum = ["riscv64", "riscv32", "x86_64", "aarch64", "arm", "wasm32"], description = "Target architecture ('riscv64', 'riscv32', 'x86_64', 'aarch64', 'arm', 'wasm32')" },
     { name = "file", required = true, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target binary, ELF, or object file relative to workspace to disassemble" }
 ]
 output_capture = "stdout"
@@ -1060,10 +1073,14 @@ timeout_seconds = 10
 
 [tools.cargo_doc]
 description = "Compiles offline crate documentation and checks for broken intra-doc links via cargo doc --no-deps"
-action = "static_command"
+action = "parameterized_command"
 category = "release"
 skip_gates = ["workspace_clean"]
 command = ["cargo", "doc", "--no-deps"]
+args = [
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to document (defaults to workspace)" },
+    { name = "private_items", required = false, flag = "--document-private-items", switch = true, description = "Document all private items in addition to public API" }
+]
 output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 120
