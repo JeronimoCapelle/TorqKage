@@ -25,6 +25,14 @@ pub(crate) fn execute(
     }
 
     let strategy = arguments.get("strategy").and_then(|v| v.as_str());
+    if let Some(strat) = strategy
+        && strat != "rebase"
+        && strat != "squash"
+    {
+        return Err(format!(
+            "Invalid merge strategy '{strat}': expected 'rebase' or 'squash'"
+        ));
+    }
 
     match JujutsuWorkspace::merge_agent_workspace(workspace_root, agent, strategy) {
         Ok(output) => Ok((output, false)),
@@ -55,6 +63,19 @@ mod tests {
         assert!(
             execute(Path::new("."), &args_dash)
                 .is_err_and(|e| e.contains("must start with an alphanumeric"))
+        );
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
+    fn test_workspace_merge_invalid_strategy() {
+        let args = serde_json::json!({
+            "agent": "fuzz_probe",
+            "strategy": "invalid_xyz"
+        });
+        assert!(
+            execute(Path::new("."), &args)
+                .is_err_and(|e| e.contains("Invalid merge strategy 'invalid_xyz'"))
         );
     }
 }

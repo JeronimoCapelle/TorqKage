@@ -128,9 +128,15 @@ fn validate_and_build_args(
             }
 
             if let Some(flag) = &arg.flag {
-                dynamic_args.push(flag.clone());
+                if flag.ends_with('=') {
+                    dynamic_args.push(format!("{flag}{val}"));
+                } else {
+                    dynamic_args.push(flag.clone());
+                    dynamic_args.push(val);
+                }
+            } else {
+                dynamic_args.push(val);
             }
-            dynamic_args.push(val);
         } else if arg.required {
             return Err(format!(
                 "Missing required argument '{}' for tool '{}'",
@@ -447,7 +453,7 @@ mod tests {
                 ToolArg {
                     name: "pattern".to_owned(),
                     required: true,
-                    flag: Some("-p".to_owned()),
+                    flag: Some("--pattern=".to_owned()),
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "pattern".to_owned(),
                     default: None,
@@ -456,9 +462,18 @@ mod tests {
                 ToolArg {
                     name: "rewrite".to_owned(),
                     required: true,
-                    flag: Some("-r".to_owned()),
+                    flag: Some("--rewrite=".to_owned()),
                     regex: Some("^[^\\x00]+$".to_owned()),
                     description: "rewrite".to_owned(),
+                    default: None,
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "path".to_owned(),
+                    required: false,
+                    flag: Some("--".to_owned()),
+                    regex: Some("^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$".to_owned()),
+                    description: "path".to_owned(),
                     default: None,
                     ..Default::default()
                 },
@@ -477,6 +492,23 @@ mod tests {
         let (out, is_err) = execute(&tool, &temp, &args).unwrap();
         assert!(!is_err);
         assert_eq!(out, "No matching AST patterns found to rewrite.");
+
+        // Verify that patterns starting with dashes like --help are handled safely without CLI option injection
+        let args_dash = json!({
+            "pattern": "--help",
+            "rewrite": "replaced"
+        });
+        let (out_dash, is_err_dash) = execute(&tool, &temp, &args_dash).unwrap();
+        assert!(!is_err_dash);
+        assert_eq!(out_dash, "No matching AST patterns found to rewrite.");
+
+        // Verify that invalid path options like --help are rejected upfront by regex
+        let args_path_dash = json!({
+            "pattern": "foo",
+            "rewrite": "bar",
+            "path": "--help"
+        });
+        assert!(execute(&tool, &temp, &args_path_dash).is_err());
     }
 
     #[test]

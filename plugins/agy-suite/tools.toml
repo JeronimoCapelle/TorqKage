@@ -134,6 +134,21 @@ timeout_seconds = 15
 category = "profiling"
 timeout_seconds = 180
 
+[categories.vcs]
+category = "vcs"
+tracks_circuit_breaker = true
+timeout_seconds = 30
+
+[categories.workspace]
+category = "workspace"
+tracks_circuit_breaker = true
+timeout_seconds = 30
+
+[categories.management]
+category = "management"
+tracks_circuit_breaker = false
+timeout_seconds = 10
+
 
 # ==============================================================================
 # BASE TOOL TEMPLATES (Abstract engines inherited by concrete scoped tools)
@@ -545,7 +560,7 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["ast-grep", "run"]
 args = [
-    { name = "pattern", required = true, flag = "--pattern", regex = "^[^\\x00]+$", description = "Structural AST pattern to match (e.g. 'fn $NAME($$$ARGS) -> $RET')" },
+    { name = "pattern", required = true, flag = "--pattern=", regex = "^[^\\x00]+$", description = "Structural AST pattern to match (e.g. 'fn $NAME($$$ARGS) -> $RET')" },
     { name = "lang", required = false, flag = "--lang", enum = ["rust", "c", "cpp", "python", "javascript", "typescript"], description = "Source language (defaults to rust)" },
     { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "File or directory to search (defaults to project root)" }
 ]
@@ -563,10 +578,10 @@ mutating = true
 require_permission_gate = true
 command = ["ast-grep", "run", "--update-all"]
 args = [
-    { name = "pattern", required = true, flag = "-p", regex = "^[^\\x00]+$", description = "AST pattern to match (e.g. '$A.unwrap()')" },
-    { name = "rewrite", required = true, flag = "-r", regex = "^[^\\x00]+$", description = "Replacement AST template (e.g. '$A?')" },
-    { name = "lang", required = false, flag = "-l", regex = "^[a-zA-Z0-9]+$", description = "Target language (e.g. 'rust', 'toml', 'json', 'yaml')" },
-    { name = "path", required = false, regex = "^[a-zA-Z0-9_./-]+$", description = "Target file or directory path (defaults to whole repository)" }
+    { name = "pattern", required = true, flag = "--pattern=", regex = "^[^\\x00]+$", description = "AST pattern to match (e.g. '$A.unwrap()')" },
+    { name = "rewrite", required = true, flag = "--rewrite=", regex = "^[^\\x00]+$", description = "Replacement AST template (e.g. '$A?')" },
+    { name = "lang", required = false, flag = "--lang", enum = ["rust", "c", "cpp", "python", "javascript", "typescript"], description = "Target language (defaults to rust)" },
+    { name = "path", required = false, flag = "--", regex = "^(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*)(/(\\.|\\.[^\\x00-\\x1f/.][^\\x00-\\x1f/]*|[^\\x00-\\x1f/.-][^\\x00-\\x1f/]*))*/?$", description = "Target file or directory path (defaults to whole repository)" }
 ]
 empty_fallback = "No matching AST patterns found to rewrite."
 success_exit_codes = [0, 1]
@@ -891,8 +906,8 @@ timeout_seconds = 30
 [tools.git_cliff]
 description = "Generates structured Markdown changelog from Conventional Commits using git-cliff"
 action = "static_command"
-category = "release"
-skip_gates = ["workspace_clean"]
+category = "documentation"
+skip_gates = ["*"]
 command = ["git-cliff", "--unreleased", "--strip", "header"]
 output_capture = "stdout"
 truncate_lines = 120
@@ -938,7 +953,7 @@ timeout_seconds = 10
 [tools.reset_circuit_breaker]
 description = "Resets the deterministic compiler circuit breaker consecutive failure counter and clears the tripped gate"
 action = "static_command"
-category = "diagnostics"
+category = "management"
 command = ["agy-ctrl", "reset-breaker"]
 output_capture = "stdout"
 truncate_lines = 20
@@ -999,7 +1014,7 @@ timeout_seconds = 10
 [tools.jj_absorb_working_copy]
 description = "Auto-distributes working copy edits into their closest ancestor commits via Jujutsu absorb"
 action = "static_command"
-category = "diagnostics"
+category = "vcs"
 mutating = true
 command = ["jj", "absorb", "--color=never"]
 output_capture = "stdout"
@@ -1009,7 +1024,7 @@ timeout_seconds = 15
 [tools.jj_describe_revision]
 description = "Sets or updates the commit description message for a Jujutsu revision (defaults to active working copy @)"
 action = "parameterized_command"
-category = "diagnostics"
+category = "vcs"
 mutating = true
 command = ["jj", "describe", "--color=never"]
 args = [
@@ -1023,7 +1038,7 @@ timeout_seconds = 15
 [tools.ensure_agent_workspace]
 description = "Ensures an isolated Jujutsu workspace exists for a subagent (.agy/workspaces/<agent>), automatically rebasing clean workspaces onto default@ and symlinking the shared build target cache"
 action = "workspace_ensure"
-category = "diagnostics"
+category = "workspace"
 args = [
     { name = "agent", required = true, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Subagent name (e.g. 'coder', 'test-author', 'mini', 'perf-analyst')" }
 ]
@@ -1054,7 +1069,7 @@ truncate_lines = 100
 timeout_seconds = 120
 
 [tools.inspect_workspace_clean]
-description = "Verifies whether the current Jujutsu workspace (or a specified subagent workspace) has zero uncommitted changes"
+description = "Inspects the current Jujutsu workspace (or a specified subagent workspace) for uncommitted changes, listing modified files or returning 'Clean (0 uncommitted changes)'"
 action = "parameterized_command"
 category = "diagnostics"
 enforce_workspace_bounds = true

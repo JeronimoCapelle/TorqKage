@@ -428,6 +428,10 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `AgyError` if rebase, conflicts, or quality gates fail.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Comprehensive VCS merge and gate workflow"
+    )]
     pub fn merge_agent_workspace(
         workspace_root: &Path,
         agent: &str,
@@ -441,6 +445,13 @@ impl JujutsuWorkspace {
         {
             return Err(AgyError::Workspace(format!(
                 "Invalid agent workspace name '{agent}': must start with an alphanumeric or underscore character"
+            )));
+        }
+
+        let strat = strategy.unwrap_or("rebase");
+        if strat != "rebase" && strat != "squash" {
+            return Err(AgyError::Workspace(format!(
+                "Invalid merge strategy '{strat}': expected 'rebase' or 'squash'"
             )));
         }
 
@@ -497,7 +508,6 @@ impl JujutsuWorkspace {
         }
 
         let start_op_id = query_current_op_id(&repo_root);
-        let strat = strategy.unwrap_or("rebase");
 
         if let Err(e) = execute_merge_vcs_steps(&repo_root, agent, strat) {
             restore_op(&repo_root, start_op_id.as_deref());
@@ -855,5 +865,16 @@ mod tests {
             .to_path_buf();
         let res = JujutsuWorkspace::merge_agent_workspace(&root, "non_existent_agent_999", None);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_merge_agent_workspace_invalid_strategy() {
+        let root = Path::new(".");
+        let res =
+            JujutsuWorkspace::merge_agent_workspace(root, "test_agent", Some("invalid_strat"));
+        assert!(res.is_err_and(|e| {
+            e.to_string()
+                .contains("Invalid merge strategy 'invalid_strat'")
+        }));
     }
 }
