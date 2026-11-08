@@ -1116,10 +1116,8 @@ docs = ["specs", "ARCHITECTURE.md"]
 
         for (filename, expected_lang) in template_files {
             let path = templates_dir.join(filename);
-            let content = std::fs::read_to_string(&path)
-                .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
-            let parsed = parse_project_toml(&content)
-                .unwrap_or_else(|e| panic!("Failed to parse {filename}: {e}"));
+            let content = std::fs::read_to_string(&path).expect("Failed to read template");
+            let parsed = parse_project_toml(&content).expect("Failed to parse template");
             assert_eq!(
                 parsed.project.language.as_deref(),
                 Some(expected_lang),
