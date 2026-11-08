@@ -58,8 +58,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust toolchain (Nightly / Rust 2024)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust toolchain (Stable)
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
@@ -86,8 +86,8 @@ jobs:
       - name: Install sccache
         uses: taiki-e/install-action@sccache
 
-      - name: Install Rust toolchain (Nightly / Rust 2024)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust toolchain (Stable)
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
 

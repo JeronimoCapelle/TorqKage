@@ -1,7 +1,6 @@
 # VHS Tape: agy-suite interactive terminal control deck
 # Output configuration
 Output "assets/demo.gif"
-Output "assets/demo.mp4"
 
 # Terminal window setup
 Set FontSize 14

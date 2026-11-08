@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Offline Ratatui terminal configuration deck for agy-suite"
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 

@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Shared types, process hygiene supervisor, and workspace resolver for agy-suite"
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 

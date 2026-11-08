@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "Ultra-fast ephemeral lifecycle hook CLI runner (<500KB, <1ms) for Antigravity"
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 

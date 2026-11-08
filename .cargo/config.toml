@@ -1,172 +1,13 @@
-[build]
-rustc-wrapper = "sccache"
-rustc-workspace-wrapper = "clippy-driver"
-
-[unstable]
-profile-rustflags = true
-codegen-backend = true
-
 # ==============================================================================
-# GLOBAL LINUX TARGET FLAGS
+# .cargo/config.toml — agy-suite Cargo Configuration
 # ==============================================================================
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = [
-    "-Z", "threads=0",
-    "-Z", "macro-backtrace",
-    "-C", "symbol-mangling-version=v0",
-
-    # TIER 3: Always warn in both dev and release; immune to `-D warnings`
-		"--force-warn", "clippy::too_many_lines",
-        "--force-warn", "clippy::too_many_arguments",
-        "--force-warn", "clippy::cognitive_complexity",
-        "--force-warn", "clippy::type_complexity",
-        "--force-warn", "clippy::struct_excessive_bools",
-        "--force-warn", "clippy::fn_params_excessive_bools",
-        "--force-warn", "clippy::large_stack_frames",
-        "--force-warn", "clippy::large_types_passed_by_value",
-        "--force-warn", "clippy::module_name_repetitions",
-        "--force-warn", "clippy::similar_names",
-        "--force-warn", "clippy::many_single_char_names",
-]
+# 100% compatible with standard Stable Rust (no hardcoded mold, clang, or -Z flags).
+#
+# Optional optimizations:
+#   - SCCACHE: Set `export RUSTC_WRAPPER=sccache` in your shell profile.
+#   - MOLD LINKER: Set `export RUSTFLAGS="-C link-arg=-fuse-ld=mold"`.
+#   - CRANELIFT + MOLD: Run `cargo cranelift-build` (or with `--config .cargo/config.fast.toml`).
 # ==============================================================================
-# 1. DEV PROFILE (Debuggable Daily Work -> target/debug)
-# ==============================================================================
-[profile.dev]
-opt-level = 0
-debug = 1
-split-debuginfo = "unpacked"
-rustflags = [
-    "-Z",
-    "share-generics=y",
-    "-C",
-    "link-arg=-fuse-ld=mold",
-    "-C",
-    "force-frame-pointers=yes",
-]
-
-[profile.dev.package."*"]
-opt-level = 3
-
-# ==============================================================================
-# 2. TEST PROFILE (Nextest / Miri / Sanitizers -> target/debug)
-# ==============================================================================
-[profile.test]
-opt-level = 0
-debug = 1
-split-debuginfo = "unpacked"
-rustflags = [
-    "-Z",
-    "share-generics=y",
-    "-C",
-    "link-arg=-fuse-ld=mold",
-    "-Z",
-    "randomize-layout",
-]
-
-[profile.test.package."*"]
-opt-level = 3
-
-# ==============================================================================
-# 3. RELEASE PROFILE (Portable Release + Frame Pointers -> target/release)
-# ==============================================================================
-[profile.release]
-opt-level = 3
-codegen-backend = "llvm"
-codegen-units = 16
-panic = "unwind"
-strip = "none"
-debug = "line-tables-only"
-rustflags = ["-D", "warnings", "-C", "link-arg=-fuse-ld=mold", "-C", "force-frame-pointers=yes"]
-
-# ==============================================================================
-# 4. BENCH PROFILE (Divan / Criterion Harnesses -> target/release/deps)
-# ==============================================================================
-[profile.bench]
-opt-level = 3
-codegen-backend = "llvm"
-lto = "fat"
-codegen-units = 1
-debug = false
-strip = "symbols"
-debug-assertions = false
-overflow-checks = false
-rustflags = [
-	"-D", 
-	"warnings",
-    "-C",
-    "target-cpu=native",
-    "-C",
-    "link-arg=-fuse-ld=lld",
-    "-C",
-    "force-frame-pointers=no",
-    "-Z",
-    "mir-opt-level=4",
-    "-C",
-    "llvm-args=-inline-threshold=1000",
-    "-C",
-    "llvm-args=-unroll-threshold=500",
-]
-
-# ==============================================================================
-# 5. CUSTOM LIMIT PROFILES (fast, perf, min-size)
-# ==============================================================================
-[profile.fast]
-codegen-backend = "cranelift"
-rustflags = ["-Z", "share-generics=y", "-C", "link-arg=-fuse-ld=mold"]
-
-[profile.perf]
-codegen-backend = "llvm"
-rustflags = [
-	"-D", 
-	"warnings",
-    "-C",
-    "target-cpu=native",
-    "-C",
-    "linker-plugin-lto",
-    "-C",
-    "link-arg=-fuse-ld=lld",
-    "-C",
-    "force-frame-pointers=no",
-    "-Z",
-    "mir-opt-level=4",
-    "-C",
-    "llvm-args=-inline-threshold=1000",
-    "-C",
-    "llvm-args=-unroll-threshold=500",
-]
-
-[profile.dist]
-codegen-backend = "llvm"
-rustflags = [
-	"-D", 
-	"warnings",
-    "-C",
-    "force-frame-pointers=no",
-    "-Z",
-    "mir-opt-level=4",
-    "-C",
-    "llvm-args=-inline-threshold=1000",
-    "-C",
-    "llvm-args=-unroll-threshold=500",
-]
-
-[profile.min-size]
-codegen-backend = "llvm"
-rustflags = [
-	"-D", 
-	"warnings",
-    "-C",
-    "linker-plugin-lto",
-    "-C",
-    "link-arg=-fuse-ld=lld",
-    "-C",
-    "link-arg=-Wl,--gc-sections",
-    "-Z",
-    "location-detail=none",
-    "-Z",
-    "fmt-debug=none",
-]
 
 [alias]
 # ==============================================================================
@@ -177,7 +18,7 @@ r            = "run"
 c            = "check"
 t            = "nextest run"
 
-# Rapid Cranelift+Mold iteration profile aliases
+# Rapid iteration profile aliases (fully stable, declared in Cargo.toml)
 fast-check   = "check --profile fast"
 fast-build   = "build --profile fast"
 fast-test    = "test --profile fast"
@@ -186,16 +27,18 @@ fc           = "check --profile fast"
 fb           = "build --profile fast"
 ft           = "test --profile fast"
 
+# Cranelift + Mold rapid iteration (requires Nightly + Cranelift + Mold)
+cranelift-check = "check --config .cargo/config.fast.toml --profile fast"
+cranelift-build = "build --config .cargo/config.fast.toml --profile fast"
+cranelift-test  = "test --config .cargo/config.fast.toml --profile fast"
+
 # ==============================================================================
 # 2. TESTING, SANITIZERS & VERIFICATION
 # ==============================================================================
-# Nextest-based runners
 mutants      = "mutants --test-tool nextest"
 insta        = "insta test --accept"
 hack         = "hack check --each-feature"
 
-# Dynamic verification & undefined behavior checks
-# (Note: Miri runs the MIR interpreter directly and does not support nextest)
 t-miri       = "miri test"
 careful      = "careful test"
 asan         = "test -Zbuild-std -Zsanitizer=address --target x86_64-unknown-linux-gnu"
@@ -226,7 +69,6 @@ samply-rec   = "samply record --no-open"
 bloat-fns    = "bloat --release -n 20"
 bloat-crates = "bloat --release --crates"
 
-# Binutils defaults to release binaries before passing raw flags to LLVM
 size-dump    = "size --release -- -A"
 disasm       = "objdump --release -- --disassemble --no-show-raw-insn"
 symbols      = "nm --release -- --demangle"

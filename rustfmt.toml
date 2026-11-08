@@ -1,9 +1,8 @@
 # ==============================================================================
-# GLOBAL RUSTFMT CONFIGURATION (~/.config/rustfmt/rustfmt.toml)
+# RUSTFMT CONFIGURATION (rustfmt.toml)
 # ==============================================================================
-
-# Enable unstable features (Nightly toolchain)
-unstable_features = true
+# Stable Rustfmt Configuration (100% compatible with Rust 2024 Stable)
+# ==============================================================================
 
 # Use Style Guide Edition 2024
 style_edition = "2024"
@@ -11,25 +10,10 @@ style_edition = "2024"
 # Enforce POSIX line endings
 newline_style = "Unix"
 
-# ==============================================================================
-# 1. IMPORTS & MODULES
-# ==============================================================================
-# Merge imports from the same crate into a single `use` statement
-imports_granularity = "Crate"
-
-# Group imports into three distinct blocks:
-# 1. std, core, and alloc
-# 2. External crates (crates.io)
-# 3. Local imports (crate, super, self)
-group_imports = "StdExternalCrate"
-
-# Alphabetically sort imports and modules within groups
+# Alphabetically sort imports and modules
 reorder_imports = true
 reorder_modules = true
 
-# ==============================================================================
-# 2. CODE HYGIENE & TRAILING COMMAS
-# ==============================================================================
 # Consistent diffs: require a trailing comma on multiline match blocks
 match_block_trailing_comma = true
 
@@ -39,25 +23,18 @@ use_field_init_shorthand = true
 # Modern error propagation: rewrite `try!(expr)` to `expr?`
 use_try_shorthand = true
 
-# Order type and const definitions before methods in impl blocks
-reorder_impl_items = true
-
 # ==============================================================================
-# 3. COMMENTS & DOCUMENTATION
+# NIGHTLY-ONLY FORMATTING OPTIONS
 # ==============================================================================
-# Automatically format code blocks embedded inside `///` doc comments
-format_code_in_doc_comments = true
-doc_comment_code_block_width = 100
-
-# Normalize block comments `/* */` to line comments `//` where possible
-normalize_comments = true
-
-# Convert `#[doc = "..."]` attributes to `///` markdown doc comments
-normalize_doc_attributes = true
-
-# ==============================================================================
-# 4. MACROS
-# ==============================================================================
-# Format declarative macro matching arms ($pattern:ty) and macro bodies
-format_macro_matchers = true
-format_macro_bodies = true
+# Uncomment when running with `cargo +nightly fmt`:
+#
+# unstable_features = true
+# imports_granularity = "Crate"
+# group_imports = "StdExternalCrate"
+# reorder_impl_items = true
+# format_code_in_doc_comments = true
+# doc_comment_code_block_width = 100
+# normalize_comments = true
+# normalize_doc_attributes = true
+# format_macro_matchers = true
+# format_macro_bodies = true

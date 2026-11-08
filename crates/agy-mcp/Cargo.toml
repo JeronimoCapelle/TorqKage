@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 description = "High-performance native Rust Model Context Protocol (MCP) daemon for Antigravity"
+readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 

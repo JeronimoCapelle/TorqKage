@@ -1,0 +1,28 @@
+# ==============================================================================
+# .cargo/config.fast.toml — Fast Cranelift + Mold Profile
+# ==============================================================================
+# Opt-in configuration for sub-second edit-compile cycles on Linux.
+# Requirements:
+#   - Nightly Rust: `rustup toolchain install nightly`
+#   - Cranelift:    `rustup component add rustc-codegen-cranelift-preview --toolchain nightly`
+#   - Mold Linker:  `sudo apt install mold` (or distro package)
+#
+# Usage:
+#   cargo cranelift-build
+#   cargo cranelift-check
+# Or:
+#   cargo --config .cargo/config.fast.toml build --profile fast
+# ==============================================================================
+
+[unstable]
+codegen-backend = true
+
+[profile.fast]
+codegen-backend = "cranelift"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = [
+    "-C", "link-arg=-fuse-ld=mold",
+    "-Z", "share-generics=y",
+]

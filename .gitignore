@@ -29,9 +29,7 @@ mutants.out/
 .env.*
 !.env.example
 .idea/
-.zed/*
-!.zed/debug.json
-!.zed/tasks.json
+.zed/
 *.swp
 *~
 
