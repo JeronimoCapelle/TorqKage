@@ -1,0 +1,18 @@
+# ==============================================================================
+# hooks.toml — TypeScript / Fullstack Lifecycle Interceptors
+# ==============================================================================
+
+[circuit_breaker]
+enabled = true
+max_consecutive_failures = 2
+
+[subagent_admission]
+enabled = true
+allow_parallel = false
+require_clean_workspace = true
+
+[vcs_conflicts]
+enabled = true
+
+[tool_policy]
+intercept_mutating = true

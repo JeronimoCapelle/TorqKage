@@ -1,0 +1,38 @@
+# ==============================================================================
+# tools.toml — Python & Data Engineering Declarative Tool Catalog
+# ==============================================================================
+
+[tools.pytest_run]
+description = "Executes pytest inside an isolated Bubblewrap sandbox with keyword filtering"
+action = "parameterized_command"
+category = "testing"
+enforce_sandbox = true
+command = ["uv", "run", "pytest", "-q"]
+args = [
+    { name = "filter", required = false, flag = "-k", regex = "^[a-zA-Z0-9_]+$", description = "Test name keyword filter" },
+    { name = "scope", required = false, default = "tests", enum = ["tests", "tests/unit", "tests/integration"], description = "Directory scope to execute" },
+    { name = "fail_fast", required = false, default = "false", flag = "-x", type = "boolean", description = "Exit instantly on first failure" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 60
+
+[tools.mypy_check]
+description = "Executes Mypy static type checking across the workspace"
+action = "static_command"
+category = "types"
+command = ["uv", "run", "mypy", "."]
+output_capture = "stdout"
+truncate_lines = 60
+timeout_seconds = 30
+
+[tools.ruff_fix]
+description = "Applies automated Ruff linter fixes (mutating)"
+action = "static_command"
+category = "formatting"
+mutating = true
+require_permission_gate = false
+command = ["uv", "run", "ruff", "check", "--fix", "."]
+output_capture = "stdout"
+truncate_lines = 40
+timeout_seconds = 20

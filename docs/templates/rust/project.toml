@@ -1,0 +1,45 @@
+# ==============================================================================
+# project.toml — Standard Rust Systems Setup
+# ==============================================================================
+
+[project]
+name = "my-rust-project"
+language = "rust"
+version = "0.1.0"
+
+[workspace]
+containers = ["crates", "src"]
+ignored_paths = [
+    "target",
+    ".agy/state",
+    ".agy/workspaces",
+]
+
+[sandbox]
+bind_mounts = [
+    "target",
+]
+
+[gates.compilation]
+command = ["cargo", "check", "--workspace", "--all-targets"]
+timeout_seconds = 30
+failure_message = "Cargo check failed. Fix compilation errors before proceeding."
+
+[gates.tests]
+command = ["cargo", "test", "--workspace"]
+timeout_seconds = 60
+failure_message = "Cargo test suite failed."
+
+[gates.linter]
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+timeout_seconds = 45
+failure_message = "Clippy detected warnings. Zero warnings permitted."
+
+[gates.fmt]
+command = ["cargo", "fmt", "--check"]
+timeout_seconds = 15
+failure_message = "Rustfmt detected unformatted code (`cargo fmt --check`)."
+
+[docs]
+paths = ["docs", "README.md", "ARCHITECTURE.md"]
+tool_name = "query_project_spec"

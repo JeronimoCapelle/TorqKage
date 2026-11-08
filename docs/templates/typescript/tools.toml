@@ -1,0 +1,35 @@
+# ==============================================================================
+# tools.toml — TypeScript / Fullstack Declarative Tool Catalog
+# ==============================================================================
+
+[tools.vitest_run]
+description = "Executes Vitest in a sandboxed Bubblewrap container with target scoping"
+action = "parameterized_command"
+category = "testing"
+enforce_sandbox = true
+command = ["pnpm", "vitest"]
+args = [
+    { name = "mode", required = false, default = "run", enum = ["run", "related"], description = "Execution mode: run all or related only" },
+    { name = "target", required = false, regex = "^[a-zA-Z0-9_/.-]+$", description = "Test file or spec path" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 45
+
+[tools.tsc_check]
+description = "Runs TypeScript type checking without emitting JavaScript files"
+action = "static_command"
+category = "types"
+command = ["pnpm", "tsc", "--noEmit"]
+output_capture = "stdout"
+truncate_lines = 60
+timeout_seconds = 30
+
+[tools.eslint_check]
+description = "Runs ESLint with zero-warning enforcement across source files"
+action = "static_command"
+category = "linter"
+command = ["pnpm", "eslint", ".", "--max-warnings=0"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 30

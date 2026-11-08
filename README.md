@@ -7,7 +7,8 @@
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
 [![Ratatui](https://img.shields.io/badge/Ratatui-0.30-purple.svg)](https://ratatui.rs/)
 
-**Enterprise-grade capability sandbox, declarative MCP daemon, and Ratatui 0.30 interactive flight deck for Google Antigravity.**
+**The Declarative Governance Engine & Sandboxed MCP Server for Autonomous AI Fleets.**  
+*Compose, sandbox, and govern air-gapped multi-agent engineering teams using pure TOML and Markdown—or point your AI to the schemas to build them for you.*
 
 <p align="center">
   <img src="assets/demo.gif" alt="agy-suite Interactive Terminal Control Deck Demo" width="100%" />
@@ -15,16 +16,16 @@
 
 ---
 
-## 🎯 Why agy-suite?
+## 🎯 What is agy-suite?
 
 Autonomous AI coding agents are extraordinarily capable, but unleashing them with raw terminal access in production repositories creates critical risks: non-deterministic execution, destructive shell accidents, massive token bills, and dirty git trees.
 
-`agy-suite` hardens [Google Antigravity (`agy`)](https://github.com/google/antigravity) into a disciplined, capability-based systems engineering platform written in 100% Safe Rust (`#![forbid(unsafe_code)]`):
+`agy-suite` is **the declarative container & governance engine** for [Google Antigravity (`agy`)](https://github.com/google/antigravity). Written in 100% Safe Rust (`#![forbid(unsafe_code)]`), it turns any CLI tool, compiler, or script into a sandboxed, capability-confined MCP server governed by declarative contracts:
 
-| The Raw AI Coding Problem | The `agy-suite` Solution |
+| The Raw AI Coding Problem | How the `agy-suite` Engine Solves It |
 | :--- | :--- |
-| **Ambient Shell Poisoning:** Agents execute uncontrolled `bash` commands with host authority, risking accidental `rm -rf`, network exfiltration, or credential leaks. | 🛡️ **Container-Grade Bubblewrap Sandboxing:** Precision-jail runs with private PID/IPC/network namespaces, private loopback only, zero external sockets, and read-only host mounts. |
-| **Token Exhaustion:** Inlining multi-kilobyte prompt instructions, markdown skills, and manuals burns 2,000–5,000 baseline tokens on *every single turn*. | ⚡ **Compiled Native Interceptors (<1ms, <500KB RSS):** Bounded Rust daemons handle tool dispatch, parameter validation, and output slicing offline with zero prompt token waste. |
+| **Ambient Shell Poisoning:** Agents execute uncontrolled `bash` commands with host authority, risking accidental `rm -rf`, network leaks, or credential theft. | 🛡️ **Container-Grade Bubblewrap Sandboxing:** Declare `enforce_sandbox = true` on any tool in `tools.toml` to run in an isolated Bubblewrap jail with private loopback, unshared network, and read-only host mounts. |
+| **Token Exhaustion:** Inlining multi-kilobyte prompt instructions, markdown skills, and manuals burns 2,000–5,000 baseline tokens on *every single turn*. | ⚡ **Compiled Native Interceptors (<1ms, <500KB RSS):** Offline Rust daemons handle parameter schemas, regex validation, and output slicing with **zero baseline prompt token burn**. |
 | **Lost Conversational State:** Terminal drops or shell disconnects lose the active conversational thread, forcing you to re-prompt from scratch. | 🔄 **Multi-Source Session Resumption:** Embedded SQLite & history correlation automatically surface resumable sessions directly in `agy-ctrl` (`[Enter]` / `r`). |
 | **Worktree & Buffer Pollution:** Unsupervised model edits pollute your active working copy and editor buffers with uncommitted churn. | 🌿 **Jujutsu Workspace Isolation:** Agents operate in dedicated, sparse Jujutsu working copies (`.agy/workspaces/<agent>`) without ever mutating your active `@` revision. |
 | **Runaway Failure Loops:** Agents hallucinate or repeat the same failing compiler fix across endless expensive API turns. | 🛑 **2-Strike Circuit Breaker:** Automatically trips after 2 consecutive compiler/test failures, halting execution until human review or single-key reset (`c`). |
@@ -34,7 +35,7 @@ Autonomous AI coding agents are extraordinarily capable, but unleashing them wit
 ## ⚡ Quickstart
 
 ### 1. Instant Install (Precompiled Binaries)
-Install the full suite and register the Antigravity plugin with a single command (downloads precompiled native binaries for your architecture; zero Rust compilation required):
+Install the full engine and register the Antigravity plugin with a single command (downloads precompiled native binaries for your architecture; zero Rust compilation required):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
@@ -75,20 +76,13 @@ agy-ctrl
 | <kbd>q</kbd> / <kbd>Esc</kbd> | Exit `agy-ctrl` |
 
 ### 2. Launching Specialized Agents
-You can also invoke specialized agents directly from the command line:
+You can invoke any configured agent directly from the command line:
 
 ```bash
-# Production systems implementation in src/ against failing tests
+# Launch specific personas in the active workspace
 agy --agent coder
-
-# Design Verification (DV) engineer authoring adversarial edge-case tests
 agy --agent test-author
-
-# Technical documentation, rustdoc, and architectural RFC author
-agy --agent doc-author
-
-# Adversarial release gatekeeper running pre-release gauntlets
-agy --agent finisher
+agy --agent reviewer
 ```
 
 ### 3. Sub-Second Build Acceleration
@@ -102,9 +96,48 @@ agy --agent finisher
 
 ---
 
-## 👥 The 10-Agent Specialized Fleet
+## 📦 Pre-Built Ecosystem Starter Kits
 
-Rather than relying on a single monolithic prompt, `agy-suite` deploys a 10-persona fleet operating under the Silicon Design Verification (DV) discipline—where implementation engineers never author their own verification harnesses:
+You don't need to configure everything from scratch. `agy-suite` ships with complete, copy-pasteable starter setups in [`docs/templates/`](docs/templates/):
+
+| Starter Kit | Target Ecosystem | Included Tooling & Sandboxing Highlights | Agent Team |
+| :--- | :--- | :--- | :--- |
+| **[Go Microservices](https://jeronimocapelle.github.io/agy-suite/templates/go-setup.html)** | Go 1.22+ (`cmd/`, `internal/`) | Sandboxed `go test`, `enum` mode flags (`-short`, `-race`), database migration permission gates | `coder`, `reviewer` |
+| **[Python & Data Engineering](https://jeronimocapelle.github.io/agy-suite/templates/python-setup.html)** | Python 3.12+ (uv / pytest / ruff / mypy) | Sandboxed `pytest` with keyword regex filters, Mypy static typing, automated Ruff fixer | `coder`, `tester` |
+| **[TypeScript & Fullstack Web](https://jeronimocapelle.github.io/agy-suite/templates/typescript-setup.html)** | Node.js / React / Next.js (pnpm / Vitest / tsc) | Sandboxed `vitest` with target scoping, `tsc --noEmit` gate, ESLint zero-warning checks | `frontend`, `reviewer` |
+| **[Standard Rust Systems](https://jeronimocapelle.github.io/agy-suite/templates/rust-setup.html)** | Rust 2024 Edition (Cargo workspaces) | Bubblewrap sandboxed `cargo test`, `enum` targets (`--lib`, `--bins`), Clippy `-D warnings` gate | `coder`, `doc-author` |
+| **[Adversarial QA Auditor](https://jeronimocapelle.github.io/agy-suite/templates/qa-tester.html)** | Ecosystem-agnostic | Fuzz testing with LLVM sanitizers (`enum`), schema verification, unrestricted adversarial probing | `tester` (`tester.md`) |
+
+To use any starter kit, copy it into `.agy/`:
+```bash
+mkdir -p .agy
+cp -r docs/templates/go/* .agy/
+agy-ctrl
+```
+
+---
+
+## 🤖 The "Prompt-to-Fleet" Workflow (LLM as Fleet Architect)
+
+Because `agy-suite` is 100% declarative, you can point Claude, ChatGPT, Gemini, or Antigravity to your schemas and prompt:
+
+```text
+"Act as an agy-suite Fleet Architect. I am building a project in <Language/Framework>.
+Based on the agy-suite declarative schemas, generate:
+1. project.toml: with gates for compilation, unit tests, and linting.
+2. tools.toml: declaring test runners and diagnostic tools with enforce_sandbox = true,
+   strict regex parameter validation, and enums for mutually exclusive flags.
+3. hooks.toml: with a 2-strike compiler circuit breaker.
+4. agents/: 2 specialized agent personas with clean allowed_dirs and mcp_tools allowlists."
+```
+
+The AI outputs pure TOML and Markdown. Drop them into `.agy/`, run `agy-ctrl`, and your bespoke air-gapped engineering team is live in seconds. **Zero code written. Zero compilation needed.**
+
+---
+
+## 👥 The Flagship 10-Agent Reference Fleet
+
+Included out-of-the-box in `plugins/agy-suite/` is our flagship reference fleet, built under the Silicon Design Verification (DV) discipline—where implementation engineers never author their own testbenches:
 
 | Agent Profile | Role & Specialty | Permitted Directory Scope | Content & Security Policy |
 | :--- | :--- | :--- | :--- |
@@ -126,7 +159,7 @@ Rather than relying on a single monolithic prompt, `agy-suite` deploys a 10-pers
 You do not need to write Rust code or recompile binaries to customize tools or agents:
 
 ### 1. Add a Tool in `tools.toml` (30 Seconds)
-Declare tools in [`plugins/agy-suite/tools.toml`](plugins/agy-suite/tools.toml):
+Declare tools in [`plugins/agy-suite/tools.toml`](plugins/agy-suite/tools.toml) or `.agy/tools.toml`:
 ```toml
 [tools.my_scanner]
 inherit = "base_tools.cargo_base"
@@ -144,7 +177,7 @@ regex = "^[a-zA-Z0-9_-]+$"                      # Hard input validation
 ```
 
 ### 2. Define a Specialized Agent
-Create [`plugins/agy-suite/agents/my-agent.md`](plugins/agy-suite/agents/):
+Create [`plugins/agy-suite/agents/my-agent.md`](plugins/agy-suite/agents/) or `.agy/agents/my-agent.md`:
 ```markdown
 ---
 name: my-agent
@@ -179,6 +212,7 @@ For in-depth systems design, formal verification contracts, and extended guides:
   * Bubblewrap container sandboxing & private loopback network model.
   * The Silicon Design Verification (DV) methodology.
 * 📖 **[The agy-suite Engine Manual (Online Docs)](https://jeronimocapelle.github.io/agy-suite/)**:
+  * [Pre-Built Ecosystem Starter Kits](https://jeronimocapelle.github.io/agy-suite/templates/overview.html)
   * Step-by-step setup and real-world workflow tutorials.
   * Deep dives into the 4-phase verification sandwich.
   * Sub-millisecond latency & memory footprint benchmarks.

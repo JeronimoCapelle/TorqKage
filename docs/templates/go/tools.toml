@@ -1,0 +1,42 @@
+# ==============================================================================
+# tools.toml — Go Microservices Declarative Tool Catalog
+# ==============================================================================
+
+[tools.go_test]
+description = "Executes Go test runner in a sandboxed Bubblewrap container with package selection"
+action = "parameterized_command"
+category = "testing"
+enforce_sandbox = true
+command = ["go", "test"]
+args = [
+    { name = "package", required = false, default = "./...", regex = "^[a-zA-Z0-9_/.-]+$", description = "Package path or pattern (defaults to ./...)" },
+    { name = "mode", required = false, default = "short", enum = ["short", "race", "cover"], flag = "-", description = "Execution mode: -short, -race, or -cover" },
+    { name = "run", required = false, flag = "-run", regex = "^[a-zA-Z0-9_]+$", description = "Specific test function regex to execute" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 60
+
+[tools.go_build]
+description = "Verifies binary compilation across all workspace packages"
+action = "static_command"
+category = "compilation"
+command = ["go", "build", "./..."]
+output_capture = "stderr"
+truncate_lines = 50
+timeout_seconds = 30
+
+[tools.go_migrate]
+description = "Runs database schema migrations (requires operator permission gate)"
+action = "parameterized_command"
+category = "database"
+mutating = true
+require_permission_gate = true
+command = ["migrate", "-path", "migrations", "-database", "postgres://localhost/app"]
+args = [
+    { name = "action", required = true, enum = ["up", "down", "version", "force"], description = "Migration action to execute" },
+    { name = "steps", required = false, default = "1", regex = "^[0-9]+$", description = "Number of migration steps" }
+]
+output_capture = "stdout"
+truncate_lines = 40
+timeout_seconds = 30

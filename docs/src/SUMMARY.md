@@ -3,6 +3,14 @@
 [Introduction](introduction.md)
 [Quickstart](quickstart.md)
 
+# Declarative Fleet Setups & Templates
+- [Pre-Built Ecosystem Starter Kits](templates/overview.md)
+  - [Go Microservices](templates/go-setup.md)
+  - [Python & Data Engineering](templates/python-setup.md)
+  - [TypeScript & Fullstack Web](templates/typescript-setup.md)
+  - [Standard Rust Systems](templates/rust-setup.md)
+  - [Adversarial QA Auditor (tester.md)](templates/qa-tester.md)
+
 # Real-World Workflows & Examples
 - [Overview](examples/overview.md)
 - [End-to-End Compiler Refactor](examples/compiler-refactor.md)

@@ -1,0 +1,27 @@
+# ==============================================================================
+# tools.toml — QA Auditor & Fuzzer Declarative Tool Catalog
+# ==============================================================================
+
+[tools.run_fuzz_target]
+description = "Executes fuzz target binary inside sandboxed Bubblewrap container with time bounds"
+action = "parameterized_command"
+category = "testing"
+enforce_sandbox = true
+command = ["cargo", "fuzz", "run"]
+args = [
+    { name = "target", required = true, regex = "^[a-zA-Z0-9_]+$", description = "Fuzz target name" },
+    { name = "sanitizer", required = false, default = "address", enum = ["address", "memory", "thread", "undefined"], flag = "-s", description = "LLVM sanitizer to attach" },
+    { name = "max_time", required = false, default = "30", flag = "-max_total_time", regex = "^[0-9]+$", description = "Timeout in seconds" }
+]
+output_capture = "stderr"
+truncate_lines = 100
+timeout_seconds = 60
+
+[tools.verify_schema_contract]
+description = "Validates JSON/TOML schemas against active agent frontmatters"
+action = "static_command"
+category = "testing"
+command = ["agy-ctrl", "--check"]
+output_capture = "stdout"
+truncate_lines = 50
+timeout_seconds = 15

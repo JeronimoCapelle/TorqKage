@@ -1,0 +1,36 @@
+# ==============================================================================
+# tools.toml — Standard Rust Declarative Tool Catalog
+# ==============================================================================
+
+[tools.cargo_test]
+description = "Executes cargo test inside a sandboxed Bubblewrap container with target scoping"
+action = "parameterized_command"
+category = "testing"
+enforce_sandbox = true
+command = ["cargo", "test"]
+args = [
+    { name = "target", required = false, default = "--all-targets", enum = ["--all-targets", "--lib", "--bins", "--examples"], description = "Target scope" },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific crate package name" },
+    { name = "filter", required = false, flag = "--", regex = "^[a-zA-Z0-9_:]+$", description = "Test name filter" }
+]
+output_capture = "stdout"
+truncate_lines = 100
+timeout_seconds = 60
+
+[tools.cargo_check]
+description = "Runs fast compiler syntax and type diagnostics"
+action = "static_command"
+category = "compilation"
+command = ["cargo", "check", "--workspace", "--all-targets"]
+output_capture = "stderr"
+truncate_lines = 50
+timeout_seconds = 30
+
+[tools.cargo_clippy]
+description = "Runs strict compiler linter checks with zero warnings allowed"
+action = "static_command"
+category = "linter"
+command = ["cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+output_capture = "stderr"
+truncate_lines = 50
+timeout_seconds = 45

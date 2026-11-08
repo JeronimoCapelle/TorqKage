@@ -1,0 +1,20 @@
+[project]
+name = "qa-auditor-suite"
+language = "agnostic"
+version = "0.1.0"
+
+[workspace]
+containers = ["tests", "fuzz", "specs"]
+ignored_paths = [
+    ".agy/state",
+    ".agy/workspaces",
+]
+
+[gates.consistency]
+command = ["agy-ctrl", "--help"]
+timeout_seconds = 15
+failure_message = "Host tooling failed sanity check."
+
+[docs]
+paths = ["README.md", "docs"]
+tool_name = "query_project_spec"

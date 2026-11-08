@@ -62,6 +62,11 @@ All autonomous agents and human contributors operating within this repository or
 - Workspace configuration always takes precedence: `<workspace>/.agy/project.toml` $\to$ `<workspace>/project.toml` $\to$ `<workspace>/plugins/agy-suite/project.toml`.
 - When operating in an external repository without a `project.toml`, `agy-suite` falls back to a **blank, restrictive default configuration** rather than making language assumptions.
 
+### 2.1 Engine vs. Reference Fleet Separation
+`agy-suite` is fundamentally an **extensible, capability-governed engine and sandboxed MCP runtime**. The 10-agent fleet described in [Section 3](#3-agent-fleet-perimeters--blast-boundaries) represents the flagship reference implementation tailored for low-level systems engineering and Silicon Design Verification.
+
+Any developer or autonomous AI can define bespoke fleets and tool catalogs for different languages and domains (e.g. Go, Python, TypeScript, or custom DSLs) simply by declaring a `.agy/` directory with `project.toml`, `tools.toml`, `hooks.toml`, and agent Markdown profiles (`agents/*.md`). Pre-built ecosystem starter kits are maintained in `docs/templates/` and documented in the [Engine Manual](https://jeronimocapelle.github.io/agy-suite/templates/overview.html).
+
 ---
 
 ## 3. Agent Fleet Perimeters & Blast Boundaries
