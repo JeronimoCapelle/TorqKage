@@ -172,12 +172,10 @@ action = "parameterized_command"
 command = ["cargo", "audit"]
 enforce_sandbox = true                          # Run in isolated Bubblewrap jail
 mutating = false
-
-[[tools.my_scanner.args]]
-name = "target"
-required = false
-flag = "--target"
-regex = "^[a-zA-Z0-9_-]+$"                      # Hard input validation
+args = [
+    { name = "target", required = false, flag = "--target", regex = "^[a-zA-Z0-9_-]+$", description = "Crate target name" },
+    { name = "mode", required = false, default = "advisories", enum = ["advisories", "bans", "licenses"], description = "Audit check mode" }
+]
 ```
 
 ### 2. Define a Specialized Agent

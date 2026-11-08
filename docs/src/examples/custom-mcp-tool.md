@@ -41,7 +41,7 @@ Open `plugins/agy-suite/agents/perf-analyst.md` and add `cargo_bloat` to the `mc
 name: perf-analyst
 description: Hardware performance profiler and benchmark engineer
 effort: high
-permission_mode: plan
+permissionMode: plan
 mcp_tools:
   - read_project_file
   - cargo_asm
@@ -64,3 +64,31 @@ Alternatively, from the shell:
 ```
 
 The tool is immediately available to `perf-analyst` via the JSON-RPC daemon with complete parameter sanitization and container isolation.
+
+---
+
+## Advanced Scenario: Parameterized Tool with Sandboxing & Enums
+
+To declare dynamic tools that take user parameters safely, define `action = "parameterized_command"` with typed `args`:
+
+```toml
+[tools.run_benchmark]
+description = "Executes benchmark target inside an isolated Bubblewrap container"
+action = "parameterized_command"
+category = "profiling"
+enforce_sandbox = true
+command = ["cargo", "bench"]
+args = [
+    { name = "target", required = false, flag = "--bench", regex = "^[a-zA-Z0-9_-]+$", description = "Specific benchmark target name" },
+    { name = "mode", required = false, default = "quick", enum = ["quick", "full", "profile"], description = "Benchmark sampling mode" },
+    { name = "verbose", required = false, flag = "--verbose", type = "boolean", description = "Emit verbose timing distributions" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 120
+```
+
+The engine automatically:
+1. Synthesizes an MCP-compliant JSON Schema with `mode` restricted strictly to the declared `enum` choices.
+2. Validates incoming arguments against regex before executing commands.
+3. Jails the process inside a Bubblewrap container (`enforce_sandbox = true`) with private loopback and zero external network access.

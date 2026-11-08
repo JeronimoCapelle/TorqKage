@@ -81,19 +81,12 @@ Parameterized commands define their input arguments in the `args` array:
 action = "parameterized_command"
 command = ["cargo", "test"]
 description = "Runs a specific unit or integration test by name"
-
-[[tools.run_single_test.args]]
-name = "test_name"
-description = "The exact name of the test function or filter"
-required = true
-regex = "^[a-zA-Z0-9_:]+$"
-
-[[tools.run_single_test.args]]
-name = "exact"
-description = "Match test name exactly"
-required = false
-flag = "--exact"
-default = ""
+enforce_sandbox = true
+args = [
+    { name = "test_name", required = true, regex = "^[a-zA-Z0-9_:]+$", description = "The exact name of the test function or filter" },
+    { name = "exact", required = false, flag = "--exact", type = "boolean", description = "Match test name exactly" },
+    { name = "target", required = false, enum = ["lib", "bins", "examples"], flag = "--", description = "Target type to execute" }
+]
 ```
 
 #### Argument Fields
@@ -101,10 +94,13 @@ default = ""
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `name` | String | *Required* | Parameter property name in the generated MCP JSON Schema. |
+| `type` | String enum | `"string"` | Argument data type: `"string"`, `"integer"`, `"boolean"`, `"path"`, or `"enum"`. |
 | `description` | String | `""` | Detailed explanation of the argument provided to the LLM. |
 | `required` | Boolean | `false` | When `true`, callers must supply this argument; calls omitting it are rejected before execution. |
 | `regex` | String | `None` | Strict regular expression pattern that the argument value must match. Defends against shell injection and malicious input. |
-| `flag` | String | `None` | Optional CLI flag prepended to the argument when constructing the command line (e.g., `"-p"`, `"--bin"`, `"-C"`). |
+| `enum` | Array of strings | `[]` | Allowed discrete values when `type = "enum"`. Rejects any argument value not matching one of the variants. |
+| `conflicts_with` | Array of strings | `[]` | Names of other arguments that cannot be supplied simultaneously (enforcing mutually exclusive flags). |
+| `flag` | String | `None` | Optional CLI flag prepended to the argument when constructing the command line (e.g., `"-p"`, `"--bin"`, `"-C"`, `"--"`). |
 | `default` | String | `None` | Default value injected if the caller omits the argument. |
 
 ---
@@ -218,6 +214,7 @@ empty_fallback = "Verification passed: 0 errors, 0 warnings."
 
 The `agy-mcp` daemon and `agy-hooks` engine discover `tools.toml` across the following locations:
 
-1. `<workspace>/tools.toml` *(Per-repository project overrides)*
-2. `<workspace>/plugins/agy-suite/tools.toml` *(In-tree plugin bundle default)*
-3. `~/.gemini/config/plugins/agy-suite/tools.toml` *(Global user configuration)*
+1. `<workspace>/.agy/tools.toml` *(Workspace-local custom override)*
+2. `<workspace>/tools.toml` *(Per-repository project overrides)*
+3. `<workspace>/plugins/agy-suite/tools.toml` *(In-tree plugin bundle default)*
+4. `~/.gemini/config/plugins/agy-suite/tools.toml` *(Global user configuration)*
