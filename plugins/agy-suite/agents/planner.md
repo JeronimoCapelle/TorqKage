@@ -38,6 +38,7 @@ mcp_tools:
   - cargo_public_api
   - query_public_api
   - query_code_graph
+  - inspect_dead_code
   - sync_code_graph
   - query_project_spec
   - list_project_docs

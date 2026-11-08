@@ -388,9 +388,9 @@ category = "compilation"
 tracks_circuit_breaker = true
 command = ["cargo", "fast", "build"]
 args = [
-    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_-]+$", description = "Specific package to build (defaults to workspace)" },
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_-]+$", description = "Specific binary to build" },
-    { name = "all_targets", required = false, flag = "--all-targets", regex = "^true$", description = "Build all binaries, tests, benches, and examples" }
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to build (defaults to workspace)" },
+    { name = "bin", required = false, flag = "--bin", conflicts_with = ["all_targets"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific binary to build" },
+    { name = "all_targets", required = false, flag = "--all-targets", switch = true, conflicts_with = ["bin"], description = "Build all binaries, tests, benches, and examples" }
 ]
 output_capture = "both"
 truncate_lines = 100
@@ -418,8 +418,8 @@ category = "diagnostics"
 command = ["cargo", "--color=never", "modules", "structure", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
-    { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
+    { name = "bin", required = false, flag = "--bin", conflicts_with = ["lib"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "lib", required = false, flag = "--lib", switch = true, conflicts_with = ["bin"], description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus tree on a specific path, e.g. 'actions' or 'server'" },
     { name = "max_depth", required = false, type = "integer", flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum tree depth" }
 ]
@@ -434,8 +434,8 @@ category = "diagnostics"
 command = ["cargo", "--color=never", "modules", "dependencies", "--no-fns", "--no-traits", "--no-types"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific workspace package to inspect (e.g. agy-mcp)" },
-    { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
-    { name = "lib", required = false, flag = "--lib", switch = true, description = "Disambiguate library target for hybrid crates" },
+    { name = "bin", required = false, flag = "--bin", conflicts_with = ["lib"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Disambiguate binary target for hybrid crates (e.g. 'pureV')" },
+    { name = "lib", required = false, flag = "--lib", switch = true, conflicts_with = ["bin"], description = "Disambiguate library target for hybrid crates" },
     { name = "focus_on", required = false, flag = "--focus-on", regex = "^[a-zA-Z0-9_:]+$", description = "Focus dependency graph on a specific module path" },
     { name = "max_depth", required = false, type = "integer", flag = "--max-depth", regex = "^[0-9]+$", description = "Maximum dependency graph depth" }
 ]
@@ -556,12 +556,24 @@ action = "parameterized_command"
 category = "diagnostics"
 command = ["graphtrail", "--db", ".agy/cache/graphtrail.db"]
 args = [
-    { name = "action", required = true, regex = "^(callers|callees|impact|search|context|affected|dead-code)$", description = "Query action to execute (callers, callees, impact, search, context, affected, dead-code)" },
-    { name = "target", required = false, regex = "^[^\\x00\\r\\n]+$", description = "Symbol name or relative file path to analyze" }
+    { name = "action", required = true, enum = ["callers", "callees", "impact", "search", "context", "affected"], description = "Query action to execute (callers, callees, impact, search, context, affected)" },
+    { name = "target", required = true, regex = "^[^\\x00\\r\\n]+$", description = "Symbol name or relative file path to analyze" }
 ]
 output_capture = "stdout"
 truncate_lines = 120
 timeout_seconds = 20
+
+[tools.inspect_dead_code]
+description = "Audits and identifies candidate callables with no incoming call edges across the repository using the Tree-sitter code graph"
+action = "parameterized_command"
+category = "diagnostics"
+command = ["graphtrail", "--db", ".agy/cache/graphtrail.db", "dead-code"]
+args = [
+    { name = "limit", required = false, default = "50", type = "integer", flag = "--limit", regex = "^[0-9]+$", description = "Maximum number of candidate dead code callables to return (defaults to 50)" }
+]
+output_capture = "stdout"
+truncate_lines = 150
+timeout_seconds = 30
 
 [tools.sync_code_graph]
 description = "Indexes or refreshes the Tree-sitter code graph database (.agy/cache/graphtrail.db) across the repository"
@@ -703,10 +715,14 @@ timeout_seconds = 300
 # --- Performance Profiling & Hardware Diagnostics Tooling ---
 
 [tools.cargo_asm]
-description = "Disassembles functions to inspect generated assembly, auto-vectorization, and spills"
-action = "static_command"
+description = "Disassembles functions to inspect generated assembly, auto-vectorization, and spills. Lists available symbols if symbol argument is omitted."
+action = "parameterized_command"
 category = "profiling"
 command = ["cargo", "asm"]
+args = [
+    { name = "symbol", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Target function or method path to disassemble (e.g. 'crate::server::run'). If omitted, lists available symbols." },
+    { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package in workspace" }
+]
 output_capture = "stdout"
 truncate_lines = 250
 timeout_seconds = 60
@@ -994,7 +1010,7 @@ skip_gates = ["workspace_clean", "linter", "tests"]
 mutating = true
 args = [
     { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Subagent name whose isolated workspace should be merged" },
-    { name = "strategy", required = false, default = "rebase", regex = "^(rebase|squash)$", description = "Merge strategy: 'rebase' (default) or 'squash'" }
+    { name = "strategy", required = false, default = "rebase", enum = ["rebase", "squash"], description = "Merge strategy: 'rebase' (default) or 'squash'" }
 ]
 truncate_lines = 100
 timeout_seconds = 120

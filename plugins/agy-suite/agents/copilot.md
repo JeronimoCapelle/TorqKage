@@ -43,6 +43,7 @@ mcp_tools:
   - merge_agent_workspace
   - query_public_api
   - query_code_graph
+  - inspect_dead_code
   - sync_code_graph
   - inspect_workspace_clean
   - query_tool_help

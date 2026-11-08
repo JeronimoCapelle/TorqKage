@@ -170,8 +170,30 @@ fn build_parameterized_schema(args: &[crate::models::ToolArg]) -> serde_json::Va
                 prop.insert("default".to_owned(), json!(def));
             }
         }
+        if !arg.enum_values.is_empty() {
+            prop.insert("enum".to_owned(), json!(arg.enum_values));
+        }
+
         if !arg.description.is_empty() {
-            prop.insert("description".to_owned(), json!(arg.description));
+            let mut desc = arg.description.clone();
+            if !arg.conflicts_with.is_empty() {
+                use std::fmt::Write as _;
+                let _ = write!(
+                    desc,
+                    " (Mutually exclusive with: {})",
+                    arg.conflicts_with.join(", ")
+                )
+                .ok();
+            }
+            prop.insert("description".to_owned(), json!(desc));
+        } else if !arg.conflicts_with.is_empty() {
+            prop.insert(
+                "description".to_owned(),
+                json!(format!(
+                    "(Mutually exclusive with: {})",
+                    arg.conflicts_with.join(", ")
+                )),
+            );
         }
         properties.insert(arg.name.clone(), serde_json::Value::Object(prop));
 

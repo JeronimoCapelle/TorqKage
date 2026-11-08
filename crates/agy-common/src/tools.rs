@@ -55,6 +55,10 @@ pub struct ToolArg {
     pub switch: bool,
     #[serde(default, rename = "type", alias = "arg_type")]
     pub arg_type: Option<String>,
+    #[serde(default, rename = "enum", alias = "values")]
+    pub enum_values: Vec<String>,
+    #[serde(default)]
+    pub conflicts_with: Vec<String>,
 }
 
 /// Security policies governing tool mutability and permission gates.

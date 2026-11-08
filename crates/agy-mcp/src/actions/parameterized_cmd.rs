@@ -2,17 +2,55 @@
 
 use std::path::Path;
 
+use agy_common::tools::ToolArg;
+
 use crate::{
     actions::execute_supervised_command_with_detector,
     guards::{strip_ansi, truncate_output},
     models::{OutputCapture, ToolDefinition},
 };
 
+fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> bool {
+    if arg.switch {
+        match arguments.get(&arg.name) {
+            Some(serde_json::Value::Bool(b)) => *b,
+            Some(serde_json::Value::String(s)) => {
+                let trimmed = s.trim().to_ascii_lowercase();
+                trimmed == "true" || trimmed == "1" || trimmed == "yes"
+            },
+            _ => false,
+        }
+    } else {
+        arguments.get(&arg.name).is_some_and(|v| match v {
+            serde_json::Value::String(s) => !s.trim().is_empty(),
+            serde_json::Value::Number(_) | serde_json::Value::Bool(_) => true,
+            _ => false,
+        })
+    }
+}
+
 fn validate_and_build_args(
     tool: &ToolDefinition,
     workspace_root: &Path,
     arguments: &serde_json::Value,
 ) -> Result<Vec<String>, String> {
+    // 1. Check declarative parameter conflicts
+    for arg in &tool.args {
+        if !arg.conflicts_with.is_empty() && is_arg_supplied(arg, arguments) {
+            for conflicting_name in &arg.conflicts_with {
+                if let Some(conflicting_arg) =
+                    tool.args.iter().find(|a| &a.name == conflicting_name)
+                    && is_arg_supplied(conflicting_arg, arguments)
+                {
+                    return Err(format!(
+                        "Parameter conflict: Argument '{}' cannot be used together with '{conflicting_name}' for tool '{}'",
+                        arg.name, tool.name
+                    ));
+                }
+            }
+        }
+    }
+
     let mut dynamic_args = Vec::new();
 
     for arg in &tool.args {
@@ -48,6 +86,14 @@ fn validate_and_build_args(
         };
 
         if let Some(val) = effective_val {
+            if !arg.enum_values.is_empty() && !arg.enum_values.iter().any(|ev| ev == &val) {
+                return Err(format!(
+                    "Validation error: Argument '{}' with value '{val}' is not one of allowed enum values: {}",
+                    arg.name,
+                    arg.enum_values.join(", ")
+                ));
+            }
+
             if let Some(pattern) = &arg.regex
                 && !matches_pattern(&val, pattern)
             {
@@ -212,19 +258,25 @@ where
 
     let raw_text = format_captured_output(&output, tool);
 
+    let error_text = if is_error && raw_text.contains("Multiple targets present in package") {
+        "Multiple targets present in package (both library and binary). Please explicitly specify target using 'lib: true' or 'bin: \"<binary_name>\"'.".to_owned()
+    } else {
+        raw_text
+    };
+
     // Apply declarative error fallback if configured and process failed
     let final_text = if is_error
         && let Some(fallback) = tool.error_fallback.as_deref()
-        && (raw_text.contains("could not find") || raw_text.contains("not found"))
+        && (error_text.contains("could not find") || error_text.contains("not found"))
     {
         let advice = if fallback == "token_smart_not_found" {
             "Item not found in module tree. Verify item path or inspect module hierarchy."
         } else {
             fallback
         };
-        format!("{advice}\n\n{raw_text}")
+        format!("{advice}\n\n{error_text}")
     } else {
-        raw_text
+        error_text
     };
 
     let clean_text = strip_ansi(&final_text);
@@ -680,6 +732,87 @@ mod tests {
         let (out, is_err) = execute(&tool, &temp, &args).unwrap();
         assert!(!is_err);
         assert_eq!(out, "RED_ALERT");
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_conflicts_with() {
+        let temp = create_test_dir("conflicts");
+        let tool = ToolDefinition {
+            name: "test_cargo".to_owned(),
+            command: vec!["echo".to_owned()],
+            args: vec![
+                ToolArg {
+                    name: "bin".to_owned(),
+                    flag: Some("--bin".to_owned()),
+                    conflicts_with: vec!["lib".to_owned(), "all_targets".to_owned()],
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "lib".to_owned(),
+                    switch: true,
+                    flag: Some("--lib".to_owned()),
+                    conflicts_with: vec!["bin".to_owned()],
+                    ..Default::default()
+                },
+                ToolArg {
+                    name: "all_targets".to_owned(),
+                    switch: true,
+                    flag: Some("--all-targets".to_owned()),
+                    conflicts_with: vec!["bin".to_owned()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        // 1. Either bin or lib passes on its own
+        let args_bin = json!({ "bin": "pureV" });
+        assert!(execute(&tool, &temp, &args_bin).is_ok());
+
+        let args_lib = json!({ "lib": true });
+        assert!(execute(&tool, &temp, &args_lib).is_ok());
+
+        // 2. Both bin and lib supplied -> conflict error
+        let args_conflict = json!({ "bin": "pureV", "lib": true });
+        let err = execute(&tool, &temp, &args_conflict).unwrap_err();
+        assert!(
+            err.contains("Parameter conflict: Argument 'bin' cannot be used together with 'lib'")
+        );
+
+        // 3. Both bin and all_targets supplied -> conflict error
+        let args_all_conflict = json!({ "bin": "pureV", "all_targets": true });
+        let err_all = execute(&tool, &temp, &args_all_conflict).unwrap_err();
+        assert!(err_all.contains(
+            "Parameter conflict: Argument 'bin' cannot be used together with 'all_targets'"
+        ));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_parameterized_cmd_enum_values() {
+        let temp = create_test_dir("enum");
+        let tool = ToolDefinition {
+            name: "test_strategy".to_owned(),
+            command: vec!["echo".to_owned()],
+            args: vec![ToolArg {
+                name: "strategy".to_owned(),
+                enum_values: vec!["rebase".to_owned(), "squash".to_owned()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+
+        // 1. Valid enum value passes
+        let args_ok = json!({ "strategy": "rebase" });
+        assert!(execute(&tool, &temp, &args_ok).is_ok());
+
+        // 2. Invalid enum value fails
+        let args_bad = json!({ "strategy": "invalid_strat" });
+        let err = execute(&tool, &temp, &args_bad).unwrap_err();
+        assert!(err.contains("not one of allowed enum values"));
 
         drop(std::fs::remove_dir_all(&temp));
     }
