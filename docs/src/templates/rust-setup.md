@@ -4,7 +4,7 @@ The Standard Rust starter kit (`docs/templates/rust/`) is a lightweight, clean b
 
 ## Directory Structure
 ```
-.agy/
+.tkg/
 ├── project.toml       # `cargo check`, `cargo test`, `clippy -D warnings`, and `fmt`
 ├── tools.toml         # Sandboxed `cargo_test`, static `cargo_check`, and `cargo_clippy`
 ├── hooks.toml         # 2-strike compiler circuit breaker and manifest mutation guards
@@ -45,4 +45,4 @@ path_policies:
   - path: src
     filter: comments_only
 ```
-Any attempt to mutate executable functions or logic in `src/` is automatically intercepted and rejected by `agy-mcp`.
+Any attempt to mutate executable functions or logic in `src/` is automatically intercepted and rejected by `tkg-mcp`.

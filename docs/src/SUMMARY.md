@@ -23,9 +23,9 @@
 - [Multi-Source Session Resumption](architecture/session-resumption.md)
 
 # Engine Subsystems
-- [Declarative MCP Daemon (agy-mcp)](engine/mcp-daemon.md)
-- [Lifecycle Interceptors (agy-hooks)](engine/lifecycle-hooks.md)
-- [Flight Control Deck (agy-ctrl)](engine/flight-deck.md)
+- [Declarative MCP Daemon (tkg-mcp)](engine/mcp-daemon.md)
+- [Lifecycle Interceptors (tkg-hooks)](engine/lifecycle-hooks.md)
+- [Flight Control Deck (tkg)](engine/flight-deck.md)
 
 # Fleet & Verification
 - [The 10-Agent Fleet](fleet/personas.md)

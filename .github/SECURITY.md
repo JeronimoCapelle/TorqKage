@@ -13,7 +13,7 @@ We provide security updates and patches for the following versions:
 
 ## 🚨 Reporting a Vulnerability
 
-Because `agy-suite` enforces Bubblewrap container boundaries, path isolation, and agent capability perimeters, we treat security vulnerabilities with top priority.
+Because `Torqkage` enforces Bubblewrap container boundaries, path isolation, and agent capability perimeters, we treat security vulnerabilities with top priority.
 
 ### In-Scope Vulnerabilities
 - Bubblewrap sandbox escapes or filesystem unshare circumventions.
@@ -24,7 +24,7 @@ Because `agy-suite` enforces Bubblewrap container boundaries, path isolation, an
 ### Reporting Procedure
 Please report security vulnerabilities by opening an issue on GitHub:
 
-1. [Open a new issue](https://github.com/JeronimoCapelle/agy-suite/issues/new) in the repository.
+1. [Open a new issue](https://github.com/JeronimoCapelle/TorqKage/issues/new) in the repository.
 2. Title the issue with `[Security]` prefix and include:
    - A detailed description of the vulnerability.
    - Steps to reproduce or proof-of-concept (PoC).

@@ -1,6 +1,6 @@
 # The 10-Agent Fleet
 
-`agy-suite` provides 10 specialized agent archetypes configured in `plugins/agy-suite/agents/`:
+`Torqkage` provides 10 specialized agent archetypes configured in `plugins/TorqKage/agents/`:
 
 | Agent | Role | Default Mode | Key MCP Capabilities |
 | :--- | :--- | :--- | :--- |
@@ -17,7 +17,7 @@
 
 ## Authoring Custom Agents
 
-To create a custom agent, add `<name>.md` to `plugins/agy-suite/agents/`:
+To create a custom agent, add `<name>.md` to `plugins/TorqKage/agents/`:
 
 ```yaml
 ---

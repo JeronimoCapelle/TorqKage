@@ -1,26 +1,26 @@
 # Performance & Benchmarks
 
-`agy-suite` is engineered for zero runtime overhead, sub-millisecond lifecycle interception, and minimal memory footprint.
+`Torqkage` is engineered for zero runtime overhead, sub-millisecond lifecycle interception, and minimal memory footprint.
 
 ---
 
-## 1. Lifecycle Interceptor Latency (`agy-hooks`)
+## 1. Lifecycle Interceptor Latency (`tkg-hooks`)
 
 Lifecycle hooks run synchronously on model events (`pre-tool-use`, `detect-wip`, `inject-wake`, `record-handoff`). They must not delay agent generation.
 
-| Metric | `agy-hooks` (Pure Safe Rust) | Typical Node.js / Python Hooks | Speedup |
+| Metric | `tkg-hooks` (Pure Safe Rust) | Typical Node.js / Python Hooks | Speedup |
 | :--- | :--- | :--- | :--- |
 | **Startup to Exit Latency** | **0.82 ms** (via `hyperfine`) | 45.0 ms – 120.0 ms | **55× – 140× faster** |
 | **Memory Footprint (RSS)** | **< 480 KB** | 35 MB – 85 MB | **70× – 170× smaller** |
 | **Binary Size (`min-size`)** | **~420 KB** (stripped) | N/A (requires runtime) | Native static binary |
 
-*Benchmarked via `hyperfine --warmup 10 './target/fast/agy-hooks detect-wip'` on Linux 6.x.*
+*Benchmarked via `hyperfine --warmup 10 './target/fast/tkg-hooks detect-wip'` on Linux 6.x.*
 
 ---
 
 ## 2. Compilation Speed Profiles
 
-Developer iteration speed is critical. `agy-suite` configures dedicated Cargo compilation profiles in `Cargo.toml`:
+Developer iteration speed is critical. `Torqkage` configures dedicated Cargo compilation profiles in `Cargo.toml`:
 
 | Profile | Compiler Backend | Linker | Full Workspace Build Time | Optimization Level |
 | :--- | :--- | :--- | :--- | :--- |
@@ -33,7 +33,7 @@ Developer iteration speed is critical. `agy-suite` configures dedicated Cargo co
 
 ## 3. Bubblewrap Sandbox Execution Overhead
 
-When container isolation is active—either toggled in `agy-ctrl` or declared per-tool via `enforce_sandbox = true`—commands spawn inside a private namespace jail:
+When container isolation is active—either toggled in `tkg` or declared per-tool via `enforce_sandbox = true`—commands spawn inside a private namespace jail:
 
 | Operation | Direct Host Process | Inside `bwrap` Container | Container Overhead |
 | :--- | :--- | :--- | :--- |
@@ -47,7 +47,7 @@ When container isolation is active—either toggled in `agy-ctrl` or declared pe
 
 ## 4. Hardware Instruction Profiling Methodology
 
-When profiling low-level systems or optimizing hot loops in production code, `agy-suite`'s `perf-analyst` leverages:
+When profiling low-level systems or optimizing hot loops in production code, `Torqkage`'s `perf-analyst` leverages:
 1. **Microarchitectural Pipeline Simulation:** `llvm-mca -mcpu=native` to inspect instruction IPC and throughput bottlenecks.
 2. **Assembly Inspection:** `cargo asm --rust` to inspect generated vectorization and register allocations.
 3. **Statistical Flamegraphs:** `cargo flamegraph` for call stack CPU sampling.

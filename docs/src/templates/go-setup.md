@@ -4,7 +4,7 @@ The Go Microservices starter kit (`docs/templates/go/`) configures an air-gapped
 
 ## Directory Structure
 ```
-.agy/
+.tkg/
 ├── project.toml       # Compilation, test, formatting, and linting gates
 ├── tools.toml         # Sandboxed `go test`, static `go build`, and guarded `migrate`
 ├── hooks.toml         # 2-strike compiler circuit breaker and mutating policy
@@ -26,7 +26,7 @@ version = "0.1.0"
 
 [workspace]
 containers = ["cmd", "internal", "pkg"]
-ignored_paths = [".cache/go-build", ".agy/state", ".agy/workspaces"]
+ignored_paths = [".cache/go-build", ".tkg/state", ".tkg/workspaces"]
 
 [sandbox]
 bind_mounts = [".cache/go-build"]

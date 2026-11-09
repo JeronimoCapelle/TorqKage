@@ -1,10 +1,10 @@
 # Multi-Source Session Resumption
 
-`agy-suite` solves conversational state loss across terminal restarts by providing pluggable, multi-source session discovery.
+`Torqkage` solves conversational state loss across terminal restarts by providing pluggable, multi-source session discovery.
 
 ## Pluggable `SessionProvider` Architecture
 
-Session discovery is abstracted behind the `SessionProvider` trait. Depending on the configured execution harness in `project.toml` (`[runner] harness = "..."`), `agy-ctrl` dynamically selects the appropriate backend:
+Session discovery is abstracted behind the `SessionProvider` trait. Depending on the configured execution harness in `project.toml` (`[runner] harness = "..."`), `tkg` dynamically selects the appropriate backend:
 
 1. **`AntigravitySessionProvider` (`harness = "agy"`):**  
    - Embedded `rusqlite` query against `~/.gemini/antigravity-cli/conversation_summaries.db`.
@@ -18,11 +18,11 @@ Session discovery is abstracted behind the `SessionProvider` trait. Depending on
    - Extracts session ID, agent filter, message turn counts, and preview descriptions.
 
 3. **`GenericSessionProvider` (`harness = "claude"` or `"custom"`):**  
-   - Discovers state records in `.agy/state/sessions/*.json`.
+   - Discovers state records in `.tkg/state/sessions/*.json`.
 
 ## User Interface
 
-In `agy-ctrl`, when a prior session with steps is found:
+In `tkg`, when a prior session with steps is found:
 ```text
 Resumable (conv: f1bb6355, 50 steps)
 [Enter/r: Resume]  [n: New Session]

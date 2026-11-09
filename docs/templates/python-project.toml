@@ -16,8 +16,8 @@ ignored_paths = [
     "__pycache__",
     ".venv",
     "dist",
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [sandbox]

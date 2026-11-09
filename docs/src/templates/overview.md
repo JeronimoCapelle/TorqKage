@@ -1,6 +1,6 @@
 # Pre-Built Ecosystem Starter Kits
 
-`agy-suite` is a **declarative governance engine and sandboxed MCP runtime**. Rather than locking you into a single pre-configured fleet, the engine enables developers—and autonomous AIs—to define completely custom, air-gapped agent teams using pure TOML and Markdown.
+`Torqkage` is a **declarative governance engine and sandboxed MCP runtime**. Rather than locking you into a single pre-configured fleet, the engine enables developers—and autonomous AIs—to define completely custom, air-gapped agent teams using pure TOML and Markdown.
 
 To accelerate bootstrapping, the engine includes ready-to-use, production-hardened starter kits located in `docs/templates/`:
 
@@ -16,15 +16,15 @@ To accelerate bootstrapping, the engine includes ready-to-use, production-harden
 
 ## ⚡ How to Deploy a Starter Kit in 30 Seconds
 
-1. Copy the desired starter kit into your workspace's `.agy/` directory:
+1. Copy the desired starter kit into your workspace's `.tkg/` directory:
    ```bash
-   mkdir -p .agy
-   cp -r /path/to/agy-suite/docs/templates/go/* .agy/
+   mkdir -p .tkg
+   cp -r /path/to/TorqKage/docs/templates/go/* .tkg/
    ```
 
 2. Boot the interactive flight deck:
    ```bash
-   agy-ctrl
+   tkg
    ```
    The control deck automatically detects the declarative contracts:
    - `project.toml`: Evaluates pre-launch quality gates and registers build cache bind mounts.
@@ -36,11 +36,11 @@ To accelerate bootstrapping, the engine includes ready-to-use, production-harden
 
 ## 🤖 The "Prompt-to-Fleet" Workflow (LLM as Fleet Architect)
 
-Because `agy-suite` configurations are 100% declarative, you can prompt any LLM (Claude, ChatGPT, Gemini, or Antigravity) to design a bespoke fleet for your exact tech stack:
+Because `Torqkage` configurations are 100% declarative, you can prompt any LLM (Claude, ChatGPT, Gemini, or Antigravity) to design a bespoke fleet for your exact tech stack:
 
 ```text
-"Act as an agy-suite Fleet Architect. I am building a project in <Language/Framework>.
-Based on the agy-suite declarative schemas, generate:
+"Act as an Torqkage Fleet Architect. I am building a project in <Language/Framework>.
+Based on the Torqkage declarative schemas, generate:
 1. project.toml: with gates for compilation, unit tests, and linting.
 2. tools.toml: declaring test runners and diagnostic tools with enforce_sandbox = true,
    strict regex parameter validation, and enums for mutually exclusive flags.

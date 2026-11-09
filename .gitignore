@@ -1,6 +1,6 @@
 # Build Artifacts
 # Note: In isolated agent workspaces (.workspaces/<agent>), `target` is a symlink to repo root target.
-# Jujutsu processes gitignore rules differently for symlinks; agy_common::is_workspace_clean explicitly filters `target`.
+# Jujutsu processes gitignore rules differently for symlinks; tkg_common::is_workspace_clean explicitly filters `target`.
 target
 target/
 Cargo.lock.tmp
@@ -33,12 +33,12 @@ mutants.out/
 *.swp
 *~
 
-# Multi-Agent Workspaces & Ephemeral State (.agy)
-/.agy/
+# Multi-Agent Workspaces & Ephemeral State (.tkg)
+/.tkg/
 
 # Plugin Binary Bundles
-plugins/agy-suite/bin/*
-!plugins/agy-suite/bin/cargo-fast
+plugins/torqkage/bin/*
+!plugins/torqkage/bin/cargo-fast
 
 # mdBook Build Output
 docs/book/

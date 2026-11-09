@@ -1,0 +1,424 @@
+# ==============================================================================
+# project.toml — Declarative Project & Ecosystem Configuration for Torqkage
+# ==============================================================================
+#
+# PURPOSE & ARCHITECTURAL ROLE:
+# ------------------------------
+# `project.toml` defines the declarative contract between your target codebase
+# and the Torqkage engine (tkg-mcp, tkg-hooks, tkg). It eliminates all
+# hardcoded language assumptions, allowing Torqkage to seamlessly support Rust,
+# Zig, Go, TypeScript, Python, C/C++, or custom polyglot environments.
+#
+# CONSUMERS & INTERACTIONS:
+# -------------------------
+# 1. tkg-mcp (Declarative MCP Server):
+#    - Mounts `sandbox.bind_mounts` into Bubblewrap jail sandboxes for isolated
+#      tool executions.
+#    - Enforces workspace bounds and path traversal guards using `workspace.containers`.
+#    - Scopes documentation queries (`query_project_spec`) to `docs.paths`.
+#    - Blocks access to sensitive files using `security.disabled_categories` and
+#      `security.extra_banned_patterns`.
+#
+# 2. tkg-hooks (Sub-Millisecond Lifecycle Hooks):
+#    - Evaluates `gates.<name>` during `subagent_admission` when `invoke_subagent`
+#      is called, blocking agent admission if compilation or tests fail.
+#    - Injects `docs.paths` and `docs.tool_name` into the agent's context during
+#      `SessionStart` (via `inject-wake`).
+#    - Excludes `workspace.ignored_paths` and `sandbox.bind_mounts` from WIP diff
+#      calculations and turn-by-turn change tracking (`detect-wip`).
+#
+# 3. tkg (Interactive Fleet TUI & Control Deck):
+#    - Injects `[environment]` variables into spawned agent subshells.
+#    - Validates quality gates before launching interactive tasks or automated runs.
+#    - Displays active project identity, language, and gating status in the header.
+#
+# DISCOVERY ORDER:
+# ----------------
+# The Torqkage engine checks for `project.toml` in the following order:
+#   1. `$TKG_PROJECT_CONFIG` (Explicit override)
+#   2. `<project_root>/.tkg/project.toml`     (Workspace override)
+#   3. `<project_root>/project.toml`          (Repository root)
+#   4. `<project_root>/plugins/torqkage/project.toml` (Co-located plugin repository root)
+#   5. `~/.tkg/project.toml` or `~/.config/tkg/project.toml` (User global configuration)
+#   6. Auto-inference from workspace structure (when no configuration file is present)
+#
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. PROJECT METADATA
+# ------------------------------------------------------------------------------
+[project]
+# The human-readable name of the project or repository.
+name = "torqkage"
+
+# Primary programming language or ecosystem:
+# Supported presets: "rust", "zig", "go", "typescript", "python", "c", "cpp"
+# Set to "generic" or any string for custom bespoke stacks.
+language = "rust"
+
+# Project release or development version.
+version = "0.1.3"
+
+
+# ------------------------------------------------------------------------------
+# 2. WORKSPACE LAYOUT & DIRECTORY STRUCTURE
+# ------------------------------------------------------------------------------
+[workspace]
+# Monorepo subcrate/subpackage container directories.
+# When specified, tools like `modify_code`, `write_file`, and scoped queries
+# understand that paths starting with `<container>/<subpackage>/...` are valid
+# subproject boundaries.
+#
+# Examples:
+#   - Rust monorepo:       containers = ["crates", "packages"]
+#   - TypeScript pnpm/nx:  containers = ["packages", "apps", "libs"]
+#   - Python workspace:    containers = ["packages", "services"]
+#   - Single-crate/flat:   containers = []
+containers = ["crates", "packages"]
+
+# Build cache, intermediate artifacts, and directories that should be IGNORED
+# by Jujutsu/Git diffs, WIP turn-by-turn tracking, and session handoffs.
+# Files inside these paths will not trigger dirty warnings or strike penalties.
+ignored_paths = [
+    "target",
+    ".tkg/state",
+    ".tkg/workspaces",
+]
+
+
+# ------------------------------------------------------------------------------
+# 3. SANDBOXING & BIND MOUNTS
+# ------------------------------------------------------------------------------
+[sandbox]
+# Directories that must be writable and bind-mounted inside the Bubblewrap (bwrap)
+# execution sandbox when running compilation, testing, or tool commands.
+# Ensures that compilation caches are preserved across tool calls while preventing
+# host filesystem escape.
+bind_mounts = [
+    "target",
+]
+
+
+# ------------------------------------------------------------------------------
+# 4. QUALITY & COMPILATION GATES
+# ------------------------------------------------------------------------------
+# Declarative gates evaluated by tkg-hooks (during subagent admission) and
+# tkg (prior to milestone validation or automated agent task execution).
+#
+# Each gate supports:
+#   - command:         Array of command tokens to execute.
+#   - timeout_seconds: Maximum wall-clock time in seconds before terminating (default: 30s).
+#   - failure_message: Human-readable explanation returned to the agent on failure.
+#   - error_regex:     (Optional) Regex pattern matching compiler error codes (e.g. "error[E").
+#   - explain_command: (Optional) Command tokens to query compiler error diagnostics
+#                      (e.g. ["rustc", "--explain"] or ["zig", "explain"]).
+
+# Fast syntax and type-check compilation gate
+[gates.compilation]
+command = ["cargo", "check", "--all-targets"]
+timeout_seconds = 30
+failure_message = "Project compilation failed (`cargo check --all-targets`). Fix type errors and syntax before proceeding."
+error_regex = "error[E"
+explain_command = ["rustc", "--explain"]
+
+# Test harness compilation gate (validates tests compile without running full suite)
+[gates.tests]
+command = ["cargo", "test", "--no-run"]
+timeout_seconds = 45
+failure_message = "Test suite compilation failed (`cargo test --no-run`). Ensure test functions and harness compile cleanly."
+error_regex = "error[E"
+explain_command = ["rustc", "--explain"]
+
+# Linter and static analysis gate
+[gates.linter]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+timeout_seconds = 30
+failure_message = "Linter check failed (`cargo clippy`). Adhere to all pedantic linter and style guidelines."
+error_regex = "error[E"
+
+# Declarative formatting gate (executes project formatter like cargo fmt, prettier, ruff, black)
+[gates.fmt]
+command = ["cargo", "fmt"]
+timeout_seconds = 15
+failure_message = "Declarative formatter execution failed."
+
+
+# ------------------------------------------------------------------------------
+# 5. ENVIRONMENT VARIABLES
+# ------------------------------------------------------------------------------
+# Key-value environment variables injected into the execution context of
+# commands run by tkg-mcp, tkg-hooks, and agent subshells spawned by tkg.
+[environment]
+# Enforce cargo target directory isolation if desired
+CARGO_TARGET_DIR = "./target"
+# Prevent cargo from emitting ANSI terminal escape sequences in tool output
+CARGO_TERM_COLOR = "never"
+RUST_BACKTRACE = "1"
+
+
+# ------------------------------------------------------------------------------
+# 6. LANGUAGE SYNTAX & CONTENT POLICIES
+# ------------------------------------------------------------------------------
+# Declarative syntax rules for comments and test blocks used by mutation filters
+[policies.syntax]
+line_comments = ["//"]
+block_comments = [{ start = "/*", end = "*/" }]
+test_attributes = ["test", "cfg(test", "tokio::test", "rstest"]
+test_prefixes = ["test_"]
+
+
+# ------------------------------------------------------------------------------
+# 7. DOCUMENTATION & SPECIFICATIONS
+# ------------------------------------------------------------------------------
+# Configures the project documentation paths made available to agents for
+# specification lookups and architecture verification.
+[docs]
+# List of directories or files containing specifications, architectural docs,
+# API contracts, or schemas.
+paths = [
+    "docs",
+    "ARCHITECTURE.md",
+    "README.md",
+]
+
+# The name of the MCP tool recommended to agents for querying these documents.
+# tkg-hooks will inject this recommendation into the agent's wake prompt.
+tool_name = "query_project_spec"
+
+# Context description explaining what information is stored in these paths.
+description = "Antigravity systems suite specification, RFCs, and architecture manual."
+
+
+# ------------------------------------------------------------------------------
+# 7. SECURITY & SENSITIVE FILE PROTECTION
+# ------------------------------------------------------------------------------
+# Declarative security policy enforced by tkg-mcp across all filesystem tools
+# (`read_project_file`, `write_file`, `modify_code`, `search_codebase`).
+#
+# By default, tkg-mcp blocks access to credentials, SSH keys, VCS internals,
+# shell profiles, and cryptographic key extensions.
+[security]
+# Categories to explicitly DISABLE (i.e. permit access to).
+# Available categories:
+#   - "generic_credentials"   (blocks: password, credential, secret, token, api_key)
+#   - "vcs_internals"         (blocks: .git, .jj, .hg, .svn)
+#   - "ssh_keys"              (blocks: id_rsa, id_ed25519, id_ecdsa, known_hosts)
+#   - "shell_profiles"        (blocks: .bashrc, .zshrc, .profile, .bash_profile)
+#   - "sensitive_extensions"  (blocks: .key, .pem, .pfx, .p12, .keystore, .pkcs12)
+#
+# Example to permit reading shell profiles or VCS config:
+#   disabled_categories = ["shell_profiles"]
+disabled_categories = []
+
+# Whitelist patterns that bypass generic credential or extension blocks.
+# Useful if your repository contains legitimate documentation or test fixtures
+# matching sensitive patterns (e.g. "tests/fixtures/fake_token.txt").
+allowed_patterns = []
+
+# Additional banned filename patterns or glob matches to block across all tools.
+# Example: extra_banned_patterns = ["secrets/*", "*.secret", "internal_keys/*"]
+extra_banned_patterns = []
+
+
+# ==============================================================================
+# ECOSYSTEM SCAFFOLD TEMPLATES & EXAMPLES (Commented out for reference)
+# ==============================================================================
+# Below are drop-in replacement templates for other programming languages.
+# To adapt Torqkage to a different project, replace the sections above with
+# the matching template below.
+#
+# ------------------------------------------------------------------------------
+# VARIATION A: Rust Single Crate (Non-Monorepo)
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-rust-crate"
+# language = "rust"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = ["target"]
+#
+# [sandbox]
+# bind_mounts = ["target"]
+#
+# [gates.compilation]
+# command = ["cargo", "check", "--all-targets"]
+# timeout_seconds = 30
+# failure_message = "Cargo check failed."
+# error_regex = "error[E"
+# explain_command = ["rustc", "--explain"]
+#
+# [gates.tests]
+# command = ["cargo", "test", "--no-run"]
+# timeout_seconds = 45
+# failure_message = "Cargo test compilation failed."
+# error_regex = "error[E"
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION B: Zig Build System
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-zig-project"
+# language = "zig"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = [".zig-cache", "zig-out"]
+#
+# [sandbox]
+# bind_mounts = [".zig-cache", "zig-out"]
+#
+# [gates.compilation]
+# command = ["zig", "build"]
+# timeout_seconds = 30
+# failure_message = "Zig project build failed (`zig build`)."
+#
+# [gates.tests]
+# command = ["zig", "build", "test", "--no-exec"]
+# timeout_seconds = 45
+# failure_message = "Zig test compilation failed (`zig build test --no-exec`)."
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION C: Go Modules
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-go-service"
+# language = "go"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = [".cache/go-build"]
+#
+# [sandbox]
+# bind_mounts = [".cache/go-build"]
+#
+# [gates.compilation]
+# command = ["go", "build", "./..."]
+# timeout_seconds = 30
+# failure_message = "Go build failed (`go build ./...`)."
+#
+# [gates.tests]
+# command = ["go", "test", "-run=^$", "./..."]
+# timeout_seconds = 45
+# failure_message = "Go test harness compilation failed (`go test -run=^$ ./...`)."
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION D: TypeScript / Node / Bun Monorepo (pnpm / Turborepo)
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-ts-monorepo"
+# language = "typescript"
+# version = "1.0.0"
+#
+# [workspace]
+# containers = ["packages", "apps"]
+# ignored_paths = [".turbo", "node_modules/.cache", "dist"]
+#
+# [sandbox]
+# bind_mounts = [".turbo", "node_modules/.cache"]
+#
+# [gates.compilation]
+# command = ["pnpm", "typecheck"]
+# timeout_seconds = 30
+# failure_message = "TypeScript typecheck failed (`pnpm typecheck`)."
+#
+# [gates.tests]
+# command = ["pnpm", "test", "--run"]
+# timeout_seconds = 60
+# failure_message = "Test suite failed (`pnpm test`)."
+#
+# [docs]
+# paths = ["docs", "ARCHITECTURE.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION E: Python (Poetry / Mypy / Pytest)
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-python-app"
+# language = "python"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = [".pytest_cache", ".mypy_cache", "__pycache__"]
+#
+# [sandbox]
+# bind_mounts = [".pytest_cache", ".mypy_cache"]
+#
+# [gates.compilation]
+# command = ["mypy", "."]
+# timeout_seconds = 30
+# failure_message = "Python static type check failed (`mypy .`)."
+#
+# [gates.tests]
+# command = ["pytest", "--collect-only"]
+# timeout_seconds = 30
+# failure_message = "Pytest harness collection failed."
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION F: C / Meson
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-c-project"
+# language = "c"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = ["build"]
+#
+# [sandbox]
+# bind_mounts = ["build"]
+#
+# [gates.compilation]
+# command = ["meson", "compile", "-C", "build"]
+# timeout_seconds = 30
+# failure_message = "Meson compile failed (`meson compile -C build`)."
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"
+#
+# ------------------------------------------------------------------------------
+# VARIATION G: C++ / CMake
+# ------------------------------------------------------------------------------
+# [project]
+# name = "my-cpp-project"
+# language = "cpp"
+# version = "0.1.0"
+#
+# [workspace]
+# containers = []
+# ignored_paths = ["build"]
+#
+# [sandbox]
+# bind_mounts = ["build"]
+#
+# [gates.compilation]
+# command = ["cmake", "--build", "build"]
+# timeout_seconds = 30
+# failure_message = "CMake build failed (`cmake --build build`)."
+#
+# [docs]
+# paths = ["docs", "README.md"]
+# tool_name = "query_project_spec"

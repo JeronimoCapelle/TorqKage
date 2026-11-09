@@ -1,6 +1,6 @@
 # Quickstart
 
-Get started with `agy-suite` in under 60 seconds.
+Get started with `Torqkage` in under 60 seconds.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Get started with `agy-suite` in under 60 seconds.
 Runs standalone without requiring you to clone the repository or install the Rust toolchain (fetches precompiled native binaries for your target architecture):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash
 ```
 
 ### Method 2: From Source
@@ -24,23 +24,23 @@ curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/agy-suite/main/insta
 Clone the repository and compile using the high-performance `perf` profile (or `--fast` with Cranelift and Mold for development):
 
 ```bash
-git clone https://github.com/JeronimoCapelle/agy-suite.git
-cd agy-suite
+git clone https://github.com/JeronimoCapelle/TorqKage.git
+cd Torqkage
 ./install.sh --perf
 ```
 
 The installer will:
-1. Compile `agy-ctrl`, `agy-mcp`, and `agy-hooks`.
-2. Bundle them into `~/.gemini/config/plugins/agy-suite`.
+1. Compile `tkg`, `tkg-mcp`, and `tkg-hooks`.
+2. Bundle them into `~/.gemini/config/plugins/torqkage`.
 3. Create symlinks in `~/.local/bin/`.
 4. Validate the plugin with `agy plugin validate`.
 
 ## Running the Flight Deck
 
-Launch `agy-ctrl` inside any Git or Jujutsu repository:
+Launch `tkg` inside any Git or Jujutsu repository:
 
 ```bash
-agy-ctrl
+tkg
 ```
 
 ### Key Controls
@@ -54,7 +54,7 @@ agy-ctrl
 | <kbd>Enter</kbd> / <kbd>r</kbd> | Launch or resume session with selected agent |
 | <kbd>n</kbd> | Force launch fresh, unresumed session |
 | <kbd>b</kbd> / <kbd>F8</kbd> | Toggle Bubblewrap OS container isolation for `agy` session |
-| <kbd>w</kbd> | Toggle Jujutsu isolated worktree (`.agy/workspaces/<agent>`) |
+| <kbd>w</kbd> | Toggle Jujutsu isolated worktree (`.tkg/workspaces/<agent>`) |
 | <kbd>p</kbd> | Cycle agent permission policy (Autonomous / Supervised / Plan) |
 | <kbd>c</kbd> / <kbd>Shift+K</kbd> | Reset compiler failure circuit breaker strike counter |
 | <kbd>g</kbd> | Toggle tool permission gate (`ALLOW` vs `ASK`) |

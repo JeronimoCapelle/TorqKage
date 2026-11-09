@@ -46,8 +46,8 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          bin: agy-ctrl,agy-mcp,agy-hooks
-          archive: agy-suite-$target
+          bin: tkg,tkg-mcp,tkg-hooks
+          archive: torqkage-$target
           target: ${{ matrix.target }}
           build_tool: ${{ matrix.build_tool }}
           profile: dist

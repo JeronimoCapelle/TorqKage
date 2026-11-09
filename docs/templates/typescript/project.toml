@@ -14,8 +14,8 @@ ignored_paths = [
     "dist",
     ".turbo",
     ".next",
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [sandbox]

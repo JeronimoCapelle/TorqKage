@@ -1,8 +1,8 @@
 # Project Configuration (`project.toml`)
 
-The `project.toml` file defines repository identity, compiler quality gates, workspace layout, Bubblewrap sandbox bind-mounts, environment variables, security guardrails, and documentation locations. It completely decouples language-specific build tools, compilers, test runners, and build caches from the `agy-suite` core engine.
+The `project.toml` file defines repository identity, compiler quality gates, workspace layout, Bubblewrap sandbox bind-mounts, environment variables, security guardrails, and documentation locations. It completely decouples language-specific build tools, compilers, test runners, and build caches from the `Torqkage` core engine.
 
-When `project.toml` is present in the repository, `agy-ctrl`, `agy-mcp`, and `agy-hooks` read its declarations to validate code changes, manage build caches, and protect sensitive repository paths.
+When `project.toml` is present in the repository, `tkg`, `tkg-mcp`, and `tkg-hooks` read its declarations to validate code changes, manage build caches, and protect sensitive repository paths.
 
 ---
 
@@ -116,7 +116,7 @@ filter = "comments_only"
 
 ### 3. Compiler & Quality Gates (`[gates.<id>]`)
 
-Gates are declarative validation commands executed by `agy-hooks` (during subagent admission or tool preconditions) and `agy-ctrl` (flight deck health checks).
+Gates are declarative validation commands executed by `tkg-hooks` (during subagent admission or tool preconditions) and `tkg` (flight deck health checks).
 
 | Field | Type | Default | Description & Valid Variants |
 | :--- | :--- | :--- | :--- |
@@ -151,7 +151,7 @@ CC = "clang"
 
 ### 6. Security & Sensitive File Protection (`[security]`)
 
-`agy-suite` includes an active security sentry that protects sensitive keys, credentials, and configuration files from being read, modified, or exfiltrated by agents.
+`Torqkage` includes an active security sentry that protects sensitive keys, credentials, and configuration files from being read, modified, or exfiltrated by agents.
 
 | Field | Type | Default | Description & Protected Targets |
 | :--- | :--- | :--- | :--- |
@@ -204,7 +204,7 @@ filter = "comments_only"
 
 ### 9. Execution Harness & Agent System Runner (`[runner]` / `[harness]`)
 
-`agy-suite` is harness-agnostic. While it defaults to Google Antigravity (`agy`), you can configure any agent system or CLI runner (such as `opencode`, Claude Code, or a custom wrapper):
+`Torqkage` is harness-agnostic. While it defaults to Google Antigravity (`agy`), you can configure any agent system or CLI runner (such as `opencode`, Claude Code, or a custom wrapper):
 
 ```toml
 [runner]
@@ -231,7 +231,7 @@ agent_dirs = ["agents", ".opencode/agents"] # Optional explicit agent discovery 
 
 ## Ecosystem Auto-Detection & Inference
 
-When `project.toml` is absent or specific fields are omitted, `agy-suite` automatically infers sane configuration defaults by inspecting manifest indicators on disk:
+When `project.toml` is absent or specific fields are omitted, `Torqkage` automatically infers sane configuration defaults by inspecting manifest indicators on disk:
 
 | Ecosystem Indicator | Inferred `language` | Inferred Containers | Inferred Ignored Paths | Inferred Sandbox Mounts |
 | :--- | :--- | :--- | :--- | :--- |
@@ -262,8 +262,8 @@ Ready-to-use production configuration templates are located in `docs/templates/`
 
 `project.toml` is resolved in the following priority order:
 
-1. `<workspace>/.agy/project.toml` *(Workspace-local override)*
+1. `<workspace>/.tkg/project.toml` *(Workspace-local override)*
 2. `<workspace>/project.toml` *(Repository root configuration)*
-3. `<workspace>/plugins/agy-suite/project.toml` *(In-tree plugin default)*
-4. `~/.gemini/config/plugins/agy-suite/project.toml` *(Global installed plugin fallback)*
+3. `<workspace>/plugins/TorqKage/project.toml` *(In-tree plugin default)*
+4. `~/.gemini/config/plugins/TorqKage/project.toml` *(Global installed plugin fallback)*
 5. Dynamic synthesis via ecosystem auto-detection.

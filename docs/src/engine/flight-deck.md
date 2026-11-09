@@ -1,6 +1,6 @@
-# Flight Control Deck (`agy-ctrl`)
+# Flight Control Deck (`tkg`)
 
-`agy-ctrl` is an offline Ratatui 0.30 terminal dashboard providing human operators with full control over the agent fleet, tool permissions, and session lifecycles.
+`tkg` is an offline Ratatui 0.30 terminal dashboard providing human operators with full control over the agent fleet, tool permissions, and session lifecycles.
 
 ## Primary Tabs
 
@@ -14,7 +14,7 @@
 
 ## Pre-Launch Gatekeeper
 
-When launching an agent from `agy-ctrl`, the pre-launch gatekeeper validates:
+When launching an agent from `tkg`, the pre-launch gatekeeper validates:
 1. **Unsaved UI Changes:** Warns if tool permissions were modified in the TUI without saving (<kbd>F2</kbd>).
 2. **VCS Conflicts:** Evaluates `jj` or `git` conflict status.
 3. **Compiler & Quality Checks:** Evaluates configured quality gates (e.g. `[gates.compilation]`, `[gates.tests]`) from `project.toml` based on the agent's declared `pre_launch_checks`.

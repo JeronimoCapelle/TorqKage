@@ -12,7 +12,7 @@ You have an open-source parser/compiler project and need to replace an old strin
 
 ## Step 1: Inception & Contract with `planner`
 
-1. Open `agy-ctrl` and select `planner`.
+1. Open `tkg` and select `planner`.
 2. Press <kbd>Enter</kbd> to launch.
 3. Prompt:
    ```text
@@ -25,7 +25,7 @@ You have an open-source parser/compiler project and need to replace an old strin
 
 ## Step 2: Adversarial Design Verification with `test-author`
 
-1. Return to `agy-ctrl`, select `test-author`.
+1. Return to `tkg`, select `test-author`.
 2. Prompt:
    ```text
    Write comprehensive unit and proptest harnesses for the proposed AstKind enum in
@@ -37,12 +37,12 @@ You have an open-source parser/compiler project and need to replace an old strin
 
 ## Step 3: Production Systems Implementation with `coder`
 
-1. Return to `agy-ctrl`, toggle isolated workspace (<kbd>w</kbd>), and launch `coder`.
+1. Return to `tkg`, toggle isolated workspace (<kbd>w</kbd>), and launch `coder`.
 2. Prompt:
    ```text
    Implement AstKind across src/ast.rs and src/parser.rs until cargo test passes.
    ```
-3. `coder` operates within `.agy/workspaces/coder` without touching your editor buffers:
+3. `coder` operates within `.tkg/workspaces/coder` without touching your editor buffers:
    * Rewrites AST structures.
    * Runs `cargo_check` iteratively.
    * If consecutive errors occur, the circuit breaker protects token spend.
@@ -52,7 +52,7 @@ You have an open-source parser/compiler project and need to replace an old strin
 
 ## Step 4: Deterministic Gatekeeping with `finisher`
 
-1. Select `finisher` in `agy-ctrl`.
+1. Select `finisher` in `tkg`.
 2. Prompt:
    ```text
    Run the pre-release gauntlet. Verify that clippy is clean under -D warnings,

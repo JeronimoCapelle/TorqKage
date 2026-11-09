@@ -4,7 +4,7 @@ The TypeScript starter kit (`docs/templates/typescript/`) targets Node.js, React
 
 ## Directory Structure
 ```
-.agy/
+.tkg/
 ├── project.toml       # tsc --noEmit, vitest, and eslint quality gates
 ├── tools.toml         # Sandboxed `vitest_run`, static `tsc_check`, and `eslint_check`
 ├── hooks.toml         # Circuit breaker and tool policy

@@ -11,8 +11,8 @@ version = "0.1.0"
 containers = ["cmd", "internal", "pkg"]
 ignored_paths = [
     ".cache/go-build",
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [sandbox]

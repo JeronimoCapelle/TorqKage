@@ -4,7 +4,7 @@ The QA Auditor & Fuzzer setup (`docs/templates/qa-tester/`) provides an adversar
 
 ## Directory Structure
 ```
-.agy/
+.tkg/
 ├── project.toml       # Tooling sanity gate
 ├── tools.toml         # Sandboxed fuzzing (`cargo fuzz`) and schema validator
 ├── hooks.toml         # Circuit breaker and tool policy

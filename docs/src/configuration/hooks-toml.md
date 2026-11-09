@@ -1,23 +1,23 @@
 # Hooks Configuration (`hooks.toml`)
 
-The `hooks.toml` configuration file defines the lifecycle execution pipeline, guard sentries, and context injection rules for `agy-hooks`. The `agy-hooks` engine evaluates native high-assurance Rust safety primitives in-memory (<1ms latency) alongside declarative custom shell assertions, completely decoupling safety policies from compiled code.
+The `hooks.toml` configuration file defines the lifecycle execution pipeline, guard sentries, and context injection rules for `tkg-hooks`. The `tkg-hooks` engine evaluates native high-assurance Rust safety primitives in-memory (<1ms latency) alongside declarative custom shell assertions, completely decoupling safety policies from compiled code.
 
 ---
 
 ## Architectural Role & Lifecycle Events
 
-`hooks.toml` governs how `agy-hooks` responds to events emitted by the Antigravity host environment:
+`hooks.toml` governs how `tkg-hooks` responds to events emitted by the Antigravity host environment:
 
-| Lifecycle Event | `agy-hooks` Command | Description & Purpose |
+| Lifecycle Event | `tkg-hooks` Command | Description & Purpose |
 | :--- | :--- | :--- |
-| `PreToolUse` | `agy-hooks pre-tool-use` | Evaluated before **any** tool call executes. Executes the pipeline to return `allow`, `deny`, or `ask`. |
-| `PreInvocation` | `agy-hooks detect-wip` | Evaluated before each agent turn. Injects turn-by-turn diff notices and modified file summaries. |
-| `SessionStart` | `agy-hooks inject-wake` | Evaluated on Turn 1. Injects session handoff notes, VCS state, documentation paths, and automated wake queries. |
-| `Stop` | `agy-hooks record-handoff` | Evaluated on session termination. Captures structured JSON and Markdown summaries into `.agy/state/`. |
+| `PreToolUse` | `tkg-hooks pre-tool-use` | Evaluated before **any** tool call executes. Executes the pipeline to return `allow`, `deny`, or `ask`. |
+| `PreInvocation` | `tkg-hooks detect-wip` | Evaluated before each agent turn. Injects turn-by-turn diff notices and modified file summaries. |
+| `SessionStart` | `tkg-hooks inject-wake` | Evaluated on Turn 1. Injects session handoff notes, VCS state, documentation paths, and automated wake queries. |
+| `Stop` | `tkg-hooks record-handoff` | Evaluated on session termination. Captures structured JSON and Markdown summaries into `.tkg/state/`. |
 
 ### Decision Outcomes
 
-When evaluating tool calls, `agy-hooks` produces one of three deterministic outcomes:
+When evaluating tool calls, `tkg-hooks` produces one of three deterministic outcomes:
 
 - `allow`: The operation is safe; execution proceeds immediately without disruption.
 - `deny`: The operation violates security policies, manifest boundaries, or circuit breaker thresholds; execution is aborted, and an explanatory rejection notice is returned to the agent prompt.
@@ -129,7 +129,7 @@ The `pipeline` array defines the sequential chain of native Rust guard primitive
 
 | Native Primitive | Description & Enforcement Role |
 | :--- | :--- |
-| `"circuit_breaker"` | Checks consecutive compiler failure strikes in `.agy/state/circuit_breaker.json`. Blocks mutating tools if strikes reach `max_strikes`. Non-mutating tools remain permitted. |
+| `"circuit_breaker"` | Checks consecutive compiler failure strikes in `.tkg/state/circuit_breaker.json`. Blocks mutating tools if strikes reach `max_strikes`. Non-mutating tools remain permitted. |
 | `"manifest_guard"` | Defends against build-time remote code execution (RCE) by blocking agent mutation of build manifests (`Cargo.toml`, `build.rs`, `package.json`, `build.zig`) without operator confirmation. |
 | `"path_policies"` | Enforces directory whitelists (`allowed_dirs`, `disallowed_dirs`), file boundaries, and fine-grained content filters (`comments_only`, `tests_only`, `delimited`) declared in agent manifests. |
 | `"subagent_admission"` | Intercepts `invoke_subagent`, parses the target agent's `pre_launch_checks`, and runs matching quality gates from `project.toml`. Denies spawn if gates fail. |
@@ -160,7 +160,7 @@ The circuit breaker prevents autonomous agents from entering infinite compile-fa
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `enabled` | Boolean | `true` | Enables or disables circuit breaker enforcement. |
-| `max_strikes` | Integer (usize) | `2` | Number of consecutive compiler failures before tripping. Set to `0` to disable strike counting.<br>When tripped:<br>• Non-mutating diagnostic tools (`read_project_file`, `query_project_spec`) remain **allowed**.<br>• Mutating tools (`modify_code`, `write_file`) are **denied** until the circuit is reset.<br>Resetting: Press `c` (or `Shift+K`) in `agy-ctrl` or achieve a clean compilation run. |
+| `max_strikes` | Integer (usize) | `2` | Number of consecutive compiler failures before tripping. Set to `0` to disable strike counting.<br>When tripped:<br>• Non-mutating diagnostic tools (`read_project_file`, `query_project_spec`) remain **allowed**.<br>• Mutating tools (`modify_code`, `write_file`) are **denied** until the circuit is reset.<br>Resetting: Press `c` (or `Shift+K`) in `tkg` or achieve a clean compilation run. |
 
 ---
 
@@ -172,7 +172,7 @@ Protects build scripts and configuration manifests from unauthorized agent tampe
 | :--- | :--- | :--- | :--- |
 | `enabled` | Boolean | `true` | Enables or disables manifest protection. |
 | `protected_patterns` | Array of strings | Standard build manifests | Filenames and glob patterns protected against mutation (e.g., `["Cargo.toml", "Cargo.lock", "build.rs", "CMakeLists.txt", "package.json", "build.zig", "go.mod"]`). |
-| `protected_tools` | Array of strings | `[]` | Explicit tool names to intercept. If empty (`[]`), `agy-hooks` dynamically inspects `tools.toml` and protects all tools flagged with `mutating = true`, plus built-in host tools (`write_file`, `edit_file`). Automatically detects file path parameters across all naming conventions (`path`, `Path`, `destination`, `file`). |
+| `protected_tools` | Array of strings | `[]` | Explicit tool names to intercept. If empty (`[]`), `tkg-hooks` dynamically inspects `tools.toml` and protects all tools flagged with `mutating = true`, plus built-in host tools (`write_file`, `edit_file`). Automatically detects file path parameters across all naming conventions (`path`, `Path`, `destination`, `file`). |
 
 ---
 
@@ -220,7 +220,7 @@ Evaluated on `Stop` when an agent finishes or exits:
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `enabled` | Boolean | `true` | Enables session handoff capture. |
-| `record_handoff` | Boolean | `true` | Writes structured handoff snapshots to `.agy/state/handoff.json` and human-readable summaries to `.agy/state/last_handoff.md`. |
+| `record_handoff` | Boolean | `true` | Writes structured handoff snapshots to `.tkg/state/handoff.json` and human-readable summaries to `.tkg/state/last_handoff.md`. |
 | `max_modified_files` | Integer (usize) | `10` | Maximum number of modified files recorded in the handoff ledger. |
 
 ---
@@ -229,7 +229,7 @@ Evaluated on `Stop` when an agent finishes or exits:
 
 `hooks.toml` is resolved in the following priority order:
 
-1. `<workspace>/.agy/hooks.toml` *(Workspace-local custom override)*
+1. `<workspace>/.tkg/hooks.toml` *(Workspace-local custom override)*
 2. `<workspace>/hooks.toml` *(Repository root configuration)*
-3. `<workspace>/plugins/agy-suite/hooks.toml` *(In-tree plugin bundle default)*
-4. `~/.gemini/config/plugins/agy-suite/hooks.toml` *(Installed plugin global fallback)*
+3. `<workspace>/plugins/TorqKage/hooks.toml` *(In-tree plugin bundle default)*
+4. `~/.gemini/config/plugins/TorqKage/hooks.toml` *(Installed plugin global fallback)*

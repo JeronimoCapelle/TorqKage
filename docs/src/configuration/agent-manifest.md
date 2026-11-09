@@ -1,8 +1,8 @@
 # Agent Manifests (`AGENT.md`)
 
-Agent manifests define persona identity, reasoning effort, permission boundaries, sandboxing policies, tool whitelists, admission prerequisites, and behavioral directives. In `agy-suite`, agent manifests are authored as Markdown documents with YAML frontmatter bounded by triple-dash (`---`) fences.
+Agent manifests define persona identity, reasoning effort, permission boundaries, sandboxing policies, tool whitelists, admission prerequisites, and behavioral directives. In `Torqkage`, agent manifests are authored as Markdown documents with YAML frontmatter bounded by triple-dash (`---`) fences.
 
-Manifest files reside in `plugins/agy-suite/agents/<name>.md`, `<workspace>/agents/<name>.md`, or custom locations, where `<name>` corresponds to the persona identifier (such as `coder`, `test-author`, `doc-author`, `finisher`, `planner`, or `copilot`).
+Manifest files reside in `plugins/TorqKage/agents/<name>.md`, `<workspace>/agents/<name>.md`, or custom locations, where `<name>` corresponds to the persona identifier (such as `coder`, `test-author`, `doc-author`, `finisher`, `planner`, or `copilot`).
 
 ---
 
@@ -59,8 +59,8 @@ tools:
   - ask_question
 
 mcpServers:
-  - name: agy-tools
-    command: agy-mcp
+  - name: tkg-tools
+    command: tkg-mcp
     args: ["--agent", "test-author"]
 
 mcp_tools:
@@ -117,13 +117,13 @@ mcp_tools:
 | `tools` | Array of strings | `[]` | Whitelist of host IDE built-in native tools exposed to the agent. Valid variants:<br>• `search_web`: External search engine access.<br>• `ask_question`: Interactive operator multiple-choice prompts.<br>• `invoke_subagent`: Subagent spawning engine.<br>• `read_file`: Built-in file reader.<br>• `write_file`: Built-in file writer.<br>• `edit_file`: Built-in block editor.<br>Aliases: `native_tools`. |
 | `inheritMcp` | Boolean | `true` | When `false`, the agent is isolated from host-level MCP servers and receives only the MCP servers declared explicitly in its manifest. Prevents accidental tool pollution. |
 | `mcpServers` | Array of objects | `[]` | Declarative list of isolated MCP server processes spawned specifically for this persona. Each entry defines:<br>• `name`: Server identifier.<br>• `command`: Binary executable name.<br>• `args`: Command-line arguments. |
-| `mcp_tools` | Array of strings | `[]` | Explicit whitelist of tool names exposed by `agy-mcp` to this persona. If specified, any MCP tool not in this list is hidden from the agent's schema catalog.<br>Aliases: `mcpTools`. |
+| `mcp_tools` | Array of strings | `[]` | Explicit whitelist of tool names exposed by `tkg-mcp` to this persona. If specified, any MCP tool not in this list is hidden from the agent's schema catalog.<br>Aliases: `mcpTools`. |
 
 ---
 
 ## Filesystem Confinement & Guard Boundaries
 
-The agent manifest provides declarative boundary guards enforced by `agy-hooks` during every tool call (`PreToolUse`):
+The agent manifest provides declarative boundary guards enforced by `tkg-hooks` during every tool call (`PreToolUse`):
 
 ```yaml
 allowed_dirs:
@@ -195,7 +195,7 @@ The content following the closing `---` fence defines the persona's cognitive di
 
 1. **Explicit Negative Constraints:** Clearly specify what the persona must *never* do (e.g., *"Never edit files in `tests/`"*, *"Never delete comments or docstrings"*).
 2. **Deterministic Completion Criteria:** State the exact condition required to conclude the task (e.g., *"Run `cargo check` and conclude only when exit code is 0 and compiler warnings are 0"*).
-3. **Workspace Invariant Awareness:** Remind the agent that it operates inside an ephemeral sparse workspace (`.agy/workspaces/<name>/`) and that relative paths are rooted to its worktree.
+3. **Workspace Invariant Awareness:** Remind the agent that it operates inside an ephemeral sparse workspace (`.tkg/workspaces/<name>/`) and that relative paths are rooted to its worktree.
 
 ---
 
@@ -204,12 +204,12 @@ The content following the closing `---` fence defines the persona's cognitive di
 Agent manifests are discovered using the following deterministic search order:
 
 1. `<workspace>/agents/<name>.md` *(Highest precedence: per-project custom personas)*
-2. `<workspace>/plugins/agy-suite/agents/<name>.md` *(Project plugin tree)*
+2. `<workspace>/plugins/TorqKage/agents/<name>.md` *(Project plugin tree)*
 3. `<workspace>/.agents/agents/<name>.md`
 4. `<workspace>/.agents/<name>.md`
 5. `<workspace>/.gemini/agents/<name>.md`
-6. `<workspace>/.agy/agents/<name>.md`
-7. `~/.gemini/config/plugins/agy-suite/agents/<name>.md` *(User global plugin install)*
+6. `<workspace>/.tkg/agents/<name>.md`
+7. `~/.gemini/config/plugins/TorqKage/agents/<name>.md` *(User global plugin install)*
 8. `~/.gemini/agents/<name>.md`
 9. `~/.agents/agents/<name>.md`
 10. `~/.agents/<name>.md` *(Lowest precedence)*
@@ -221,4 +221,4 @@ Agent manifests are discovered using the following deterministic search order:
 Google Antigravity natively supports interpreted Markdown skills (`SKILL.md`). In production systems engineering, this approach exhibits severe defects:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions burns 2,000–4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
-- **`agy-suite` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
+- **`Torqkage` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.

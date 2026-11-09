@@ -1,6 +1,6 @@
 # Example: Adding a Custom Declarative Tool
 
-Adding new capabilities to `agy-suite` requires **zero Rust recompilation**. Everything is defined declaratively in `tools.toml`.
+Adding new capabilities to `Torqkage` requires **zero Rust recompilation**. Everything is defined declaratively in `tools.toml`.
 
 ---
 
@@ -12,7 +12,7 @@ Suppose you want to give `perf-analyst` the ability to inspect binary size and i
 
 ## Step 1: Add Tool Definition to `tools.toml`
 
-Open `tools.toml` (or `plugins/agy-suite/tools.toml`) and declare the tool under `[tools]`:
+Open `tools.toml` (or `plugins/TorqKage/tools.toml`) and declare the tool under `[tools]`:
 
 ```toml
 [tools.cargo_bloat]
@@ -34,7 +34,7 @@ enforce_sandbox = true
 
 ## Step 2: Grant the Tool in the Agent Manifest
 
-Open `plugins/agy-suite/agents/perf-analyst.md` and add `cargo_bloat` to the `mcp_tools` YAML list:
+Open `plugins/TorqKage/agents/perf-analyst.md` and add `cargo_bloat` to the `mcp_tools` YAML list:
 
 ```yaml
 ---
@@ -53,9 +53,9 @@ mcp_tools:
 
 ## Step 3: Synchronize & Validate
 
-In `agy-ctrl`, press <kbd>i</kbd> to reinstall and validate the plugin bundle in-place:
+In `tkg`, press <kbd>i</kbd> to reinstall and validate the plugin bundle in-place:
 ```bash
-agy-ctrl  # In-deck reinstall via 'i'
+tkg  # In-deck reinstall via 'i'
 ```
 
 Alternatively, from the shell:

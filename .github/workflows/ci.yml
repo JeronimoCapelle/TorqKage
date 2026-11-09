@@ -91,7 +91,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "agy-suite-cache"
+          shared-key: "torqkage-cache"
 
       - name: Verify code formatting (rustfmt)
         run: cargo fmt --check

@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: File a reproducible bug report for agy-suite
+description: File a reproducible bug report for Torqkage
 title: "bug: "
 labels: ["bug", "triage"]
 body:
@@ -13,7 +13,7 @@ body:
     attributes:
       label: Bug Description
       description: A clear and concise description of what the bug is.
-      placeholder: When executing agy-ctrl with ...
+      placeholder: When executing tkg with ...
     validations:
       required: true
 
@@ -23,7 +23,7 @@ body:
       label: Steps to Reproduce
       description: Steps to reproduce the behavior.
       placeholder: |
-        1. Run `agy-ctrl` in repository X
+        1. Run `tkg` in repository X
         2. Select agent `copilot`
         3. Press `Enter` to resume
     validations:
@@ -51,10 +51,10 @@ body:
       label: Affected Component
       multiple: true
       options:
-        - agy-ctrl (Terminal Control Deck)
-        - agy-mcp (Declarative MCP Daemon)
-        - agy-hooks (Lifecycle Runner)
-        - agy-common (Shared Primitives)
+        - tkg (Terminal Control Deck)
+        - tkg-mcp (Declarative MCP Daemon)
+        - tkg-hooks (Lifecycle Runner)
+        - tkg-common (Shared Primitives)
         - Bubblewrap Sandboxing
         - Antigravity Plugin Integration
 

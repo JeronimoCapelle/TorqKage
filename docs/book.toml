@@ -2,13 +2,13 @@
 authors = ["Jerónimo Capelle"]
 language = "en"
 src = "src"
-title = "The agy-suite Engine Manual"
+title = "The Torqkage Engine Manual"
 description = "High-assurance systems programming toolkit, bounded declarative MCP daemon, and Ratatui control deck for Google Antigravity"
 
 [output.html]
-git-repository-url = "https://github.com/JeronimoCapelle/agy-suite"
-edit-url-template = "https://github.com/JeronimoCapelle/agy-suite/edit/main/docs/{path}"
-site-url = "/agy-suite/"
+git-repository-url = "https://github.com/JeronimoCapelle/TorqKage"
+edit-url-template = "https://github.com/JeronimoCapelle/TorqKage/edit/main/docs/{path}"
+site-url = "/TorqKage/"
 default-theme = "ayu"
 preferred-dark-theme = "ayu"
 

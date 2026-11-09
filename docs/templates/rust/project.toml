@@ -11,8 +11,8 @@ version = "0.1.0"
 containers = ["crates", "src"]
 ignored_paths = [
     "target",
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [sandbox]

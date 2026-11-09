@@ -1,0 +1,43 @@
+{
+  "session-handoff-recorder": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "[ -x ./bin/tkg-hooks ] && ./bin/tkg-hooks record-handoff || which tkg-hooks >/dev/null 2>&1 && tkg-hooks record-handoff || true",
+        "timeout": 10
+      }
+    ]
+  },
+  "session-handoff-injector": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "[ -x ./bin/tkg-hooks ] && ./bin/tkg-hooks inject-wake || which tkg-hooks >/dev/null 2>&1 && tkg-hooks inject-wake || true",
+        "timeout": 5
+      }
+    ]
+  },
+  "wip-change-detector": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "[ -x ./bin/tkg-hooks ] && ./bin/tkg-hooks detect-wip || which tkg-hooks >/dev/null 2>&1 && tkg-hooks detect-wip || true",
+        "timeout": 2
+      }
+    ]
+  },
+  "unified-tool-guard": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x ./bin/tkg-hooks ] && ./bin/tkg-hooks pre-tool-use || which tkg-hooks >/dev/null 2>&1 && tkg-hooks pre-tool-use || true",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

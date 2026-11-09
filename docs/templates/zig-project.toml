@@ -12,8 +12,8 @@ containers = ["packages", "libs"]
 ignored_paths = [
     ".zig-cache",
     "zig-out",
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [sandbox]

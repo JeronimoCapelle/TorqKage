@@ -1,4 +1,4 @@
-# VHS Tape: agy-suite interactive terminal control deck
+# VHS Tape: Torqkage interactive terminal control deck
 # Output configuration
 Output "assets/demo.gif"
 
@@ -19,14 +19,14 @@ Set Theme { "background": "#000000", "foreground": "#ffffff", "selectionBackgrou
 # Boot environment
 Hide
 Type "export TERM=xterm-256color" Enter
-Type "export PATH=$HOME/projects/rust/agy-suite/target/release:$PATH" Enter
-Type "cd $HOME/projects/rust/agy-suite" Enter
+Type "export PATH=$HOME/projects/rust/TorqKage/target/release:$PATH" Enter
+Type "cd $HOME/projects/rust/TorqKage" Enter
 Type "clear" Enter
 Show
 
-# 1. Launch agy-ctrl control deck
+# 1. Launch tkg control deck
 Sleep 500ms
-Type "agy-ctrl"
+Type "tkg"
 Sleep 400ms
 Enter
 Sleep 2s
@@ -35,7 +35,7 @@ Sleep 2s
 Type "b"
 Sleep 1.5s
 
-# 3. Toggle isolated workspace (.agy/workspaces/<agent>)
+# 3. Toggle isolated workspace (.tkg/workspaces/<agent>)
 Type "w"
 Sleep 1.5s
 

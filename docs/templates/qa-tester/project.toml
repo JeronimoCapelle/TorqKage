@@ -6,12 +6,12 @@ version = "0.1.0"
 [workspace]
 containers = ["tests", "fuzz", "specs"]
 ignored_paths = [
-    ".agy/state",
-    ".agy/workspaces",
+    ".tkg/state",
+    ".tkg/workspaces",
 ]
 
 [gates.consistency]
-command = ["agy-ctrl", "--help"]
+command = ["tkg", "--help"]
 timeout_seconds = 15
 failure_message = "Host tooling failed sanity check."
 

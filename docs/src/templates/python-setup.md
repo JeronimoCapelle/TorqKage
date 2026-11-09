@@ -4,7 +4,7 @@ The Python starter kit (`docs/templates/python/`) targets modern Python 3.12+ ap
 
 ## Directory Structure
 ```
-.agy/
+.tkg/
 ├── project.toml       # Type checking (mypy), tests (pytest), and formatting (ruff)
 ├── tools.toml         # Sandboxed `pytest_run`, static `mypy_check`, and mutating `ruff_fix`
 ├── hooks.toml         # 2-strike compiler circuit breaker and subagent admission

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# agy-suite Bundler & Installer
+# Torqkage Bundler & Installer
 #
-# Installs agy-suite into ~/.gemini/config/plugins/agy-suite and symlinks CLI tools
-# to ~/.local/bin/agy-ctrl, agy-mcp, and agy-hooks.
+# Installs Torqkage into ~/.gemini/config/plugins/torqkage and symlinks CLI tools
+# to ~/.local/bin/tkg, tkg-mcp, and tkg-hooks.
 #
 # By default, downloads precompiled, high-performance binaries (built with the
 # 'perf' profile: fat LTO, stripped, <1ms startup) from GitHub Releases, avoiding
@@ -12,9 +12,9 @@
 
 set -euo pipefail
 
-GITHUB_REPO="JeronimoCapelle/agy-suite"
+GITHUB_REPO="JeronimoCapelle/TorqKage"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd || pwd)"
-TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/agy-suite"
+TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/torqkage"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 
 # Options
@@ -36,8 +36,8 @@ Options:
   --perf                         Shortcut for '--profile perf'
   --fast                         Shortcut for '--profile fast' (uses cargo-fast if available)
   --version <tag>                Specific release version to download (default: latest)
-  --local-only                   Only stage into ./plugins/agy-suite/bin/ without global install
-  --no-symlinks                  Install to ~/.gemini/config/plugins/agy-suite but skip ~/.local/bin symlinks
+  --local-only                   Only stage into ./plugins/torqkage/bin/ without global install
+  --no-symlinks                  Install to ~/.gemini/config/plugins/torqkage but skip ~/.local/bin symlinks
   -h, --help                     Display this help message
 EOF
 }
@@ -152,10 +152,10 @@ install_bundle_to_system() {
     fi
 
     # Copy executables (unlink first to prevent ETXTBSY if active daemons/TUI are running)
-    rm -f "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" "${TARGET_PLUGIN_DIR}/bin/cargo-fast"
-    cp "${bin_source_dir}/agy-mcp" "${TARGET_PLUGIN_DIR}/bin/"
-    cp "${bin_source_dir}/agy-hooks" "${TARGET_PLUGIN_DIR}/bin/"
-    cp "${bin_source_dir}/agy-ctrl" "${TARGET_PLUGIN_DIR}/bin/"
+    rm -f "${TARGET_PLUGIN_DIR}/bin/tkg-mcp" "${TARGET_PLUGIN_DIR}/bin/tkg-hooks" "${TARGET_PLUGIN_DIR}/bin/tkg" "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${TARGET_PLUGIN_DIR}/bin/perfetto-mcp-rs" "${TARGET_PLUGIN_DIR}/bin/cargo-fast"
+    cp "${bin_source_dir}/tkg-mcp" "${TARGET_PLUGIN_DIR}/bin/"
+    cp "${bin_source_dir}/tkg-hooks" "${TARGET_PLUGIN_DIR}/bin/"
+    cp "${bin_source_dir}/tkg" "${TARGET_PLUGIN_DIR}/bin/"
     if [[ -f "${bin_source_dir}/cargo-fast" ]]; then
         cp "${bin_source_dir}/cargo-fast" "${TARGET_PLUGIN_DIR}/bin/"
     elif [[ -f "${plugin_manifest_dir}/bin/cargo-fast" ]]; then
@@ -177,9 +177,12 @@ install_bundle_to_system() {
     if [[ "${SKIP_SYMLINKS}" = false ]]; then
         echo "--> Configuring user CLI symlinks in ${LOCAL_BIN_DIR}..."
         mkdir -p "${LOCAL_BIN_DIR}"
-        ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-ctrl" "${LOCAL_BIN_DIR}/agy-ctrl"
-        ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-mcp" "${LOCAL_BIN_DIR}/agy-mcp"
-        ln -sf "${TARGET_PLUGIN_DIR}/bin/agy-hooks" "${LOCAL_BIN_DIR}/agy-hooks"
+        # Clean any legacy symlinks
+        rm -f "${LOCAL_BIN_DIR}/agy-ctrl" "${LOCAL_BIN_DIR}/agy-mcp" "${LOCAL_BIN_DIR}/agy-hooks"
+        # Link new binaries
+        ln -sf "${TARGET_PLUGIN_DIR}/bin/tkg" "${LOCAL_BIN_DIR}/tkg"
+        ln -sf "${TARGET_PLUGIN_DIR}/bin/tkg-mcp" "${LOCAL_BIN_DIR}/tkg-mcp"
+        ln -sf "${TARGET_PLUGIN_DIR}/bin/tkg-hooks" "${LOCAL_BIN_DIR}/tkg-hooks"
         if [[ -f "${TARGET_PLUGIN_DIR}/bin/graphtrail" ]]; then
             ln -sf "${TARGET_PLUGIN_DIR}/bin/graphtrail" "${LOCAL_BIN_DIR}/graphtrail"
         fi
@@ -200,36 +203,36 @@ install_bundle_to_system() {
     fi
 
     echo "================================================================================"
-    echo "                   AGY-SUITE INSTALLATION COMPLETE                              "
+    echo "                   TORQKAGE INSTALLATION COMPLETE                               "
     echo "================================================================================"
     echo "Plugin Bundle Location: ${TARGET_PLUGIN_DIR}"
-    echo "Binaries Installed:     agy-mcp, agy-hooks, agy-ctrl (Precompiled / High-Perf)"
+    echo "Binaries Installed:     tkg-mcp, tkg-hooks, tkg (Precompiled / High-Perf)"
     if [[ "${SKIP_SYMLINKS}" = false ]]; then
-    echo "User CLI Symlinks:     ${LOCAL_BIN_DIR}/agy-ctrl -> ${TARGET_PLUGIN_DIR}/bin/agy-ctrl"
-    echo "                       ${LOCAL_BIN_DIR}/agy-mcp -> ${TARGET_PLUGIN_DIR}/bin/agy-mcp"
-    echo "                       ${LOCAL_BIN_DIR}/agy-hooks -> ${TARGET_PLUGIN_DIR}/bin/agy-hooks"
+    echo "User CLI Symlinks:     ${LOCAL_BIN_DIR}/tkg -> ${TARGET_PLUGIN_DIR}/bin/tkg"
+    echo "                       ${LOCAL_BIN_DIR}/tkg-mcp -> ${TARGET_PLUGIN_DIR}/bin/tkg-mcp"
+    echo "                       ${LOCAL_BIN_DIR}/tkg-hooks -> ${TARGET_PLUGIN_DIR}/bin/tkg-hooks"
     fi
-    echo "Workspace State Path:  <project_root>/.agy/ (Cleanly isolated)"
+    echo "Workspace State Path:  <project_root>/.tkg/ (Cleanly isolated)"
     echo "================================================================================"
 }
 
 try_precompiled_install() {
     local target
     target="$(detect_target)"
-    echo "==> [agy-suite] Checking for precompiled binary release for '${target}' (tag: ${RELEASE_TAG})..."
+    echo "==> [Torqkage] Checking for precompiled binary release for '${target}' (tag: ${RELEASE_TAG})..."
 
     local download_url
     if [[ "${RELEASE_TAG}" == "latest" ]]; then
-        download_url="https://github.com/${GITHUB_REPO}/releases/latest/download/agy-suite-${target}.tar.gz"
+        download_url="https://github.com/${GITHUB_REPO}/releases/latest/download/torqkage-${target}.tar.gz"
     else
-        download_url="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/agy-suite-${target}.tar.gz"
+        download_url="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_TAG}/torqkage-${target}.tar.gz"
     fi
 
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "${tmp_dir}"' RETURN
 
-    local tar_path="${tmp_dir}/agy-suite.tar.gz"
+    local tar_path="${tmp_dir}/torqkage.tar.gz"
     echo "--> Downloading release archive from ${download_url}..."
     if ! curl -sSLf "${download_url}" -o "${tar_path}" 2>/dev/null; then
         echo "--> Notice: Precompiled release asset '${download_url}' not found."
@@ -240,15 +243,15 @@ try_precompiled_install() {
     tar -xzf "${tar_path}" -C "${tmp_dir}"
 
     local bin_dir="${tmp_dir}"
-    if [[ -d "${tmp_dir}/agy-suite-${target}" ]]; then
-        bin_dir="${tmp_dir}/agy-suite-${target}"
+    if [[ -d "${tmp_dir}/torqkage-${target}" ]]; then
+        bin_dir="${tmp_dir}/torqkage-${target}"
     fi
     if [[ -d "${bin_dir}/bin" ]]; then
         bin_dir="${bin_dir}/bin"
     fi
 
     # Verify binaries exist in extracted archive
-    for b in agy-ctrl agy-mcp agy-hooks; do
+    for b in tkg tkg-mcp tkg-hooks; do
         if [[ ! -f "${bin_dir}/${b}" ]]; then
             echo "--> Notice: Archive did not contain expected binary '${b}'."
             return 1
@@ -256,12 +259,12 @@ try_precompiled_install() {
     done
 
     # Determine plugin manifest location
-    local plugin_manifest_dir="${SCRIPT_DIR}/plugins/agy-suite"
+    local plugin_manifest_dir="${SCRIPT_DIR}/plugins/torqkage"
     if [[ ! -f "${plugin_manifest_dir}/plugin.json" ]]; then
         echo "--> Downloading plugin manifests and agent profiles from repository..."
         mkdir -p "${tmp_dir}/repo"
         curl -sSLf "https://github.com/${GITHUB_REPO}/archive/refs/heads/main.tar.gz" | tar -xz -C "${tmp_dir}/repo" --strip-components=1
-        plugin_manifest_dir="${tmp_dir}/repo/plugins/agy-suite"
+        plugin_manifest_dir="${tmp_dir}/repo/plugins/torqkage"
     fi
 
     install_bundle_to_system "${plugin_manifest_dir}" "${bin_dir}"
@@ -272,18 +275,18 @@ build_from_source_install() {
     local workspace_root="${SCRIPT_DIR}"
 
     # If executed standalone via 'curl ... | bash' without repository clone
-    if [[ ! -f "${workspace_root}/Cargo.toml" || ! -d "${workspace_root}/plugins/agy-suite" ]]; then
-        echo "==> [agy-suite] Remote source bootstrap requested (no local repository clone detected)..."
+    if [[ ! -f "${workspace_root}/Cargo.toml" || ! -d "${workspace_root}/plugins/torqkage" ]]; then
+        echo "==> [Torqkage] Remote source bootstrap requested (no local repository clone detected)..."
         if ! command -v git >/dev/null 2>&1; then
-            echo "Error: 'git' is required to shallow-clone agy-suite from source." >&2
+            echo "Error: 'git' is required to shallow-clone Torqkage from source." >&2
             exit 1
         fi
         local tmp_clone
         tmp_clone="$(mktemp -d)"
         trap 'rm -rf "${tmp_clone}"' RETURN
-        echo "--> Shallow cloning agy-suite into ${tmp_clone}/agy-suite..."
-        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${tmp_clone}/agy-suite"
-        workspace_root="${tmp_clone}/agy-suite"
+        echo "--> Shallow cloning Torqkage into ${tmp_clone}/TorqKage..."
+        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${tmp_clone}/TorqKage"
+        workspace_root="${tmp_clone}/TorqKage"
     fi
 
     if ! command -v cargo >/dev/null 2>&1; then
@@ -292,38 +295,38 @@ build_from_source_install() {
         exit 1
     fi
 
-    local plugin_dir="${workspace_root}/plugins/agy-suite"
-    echo "==> [agy-suite] Compiling binaries from source (Profile: ${PROFILE})..."
+    local plugin_dir="${workspace_root}/plugins/torqkage"
+    echo "==> [Torqkage] Compiling binaries from source (Profile: ${PROFILE})..."
 
     cd "${workspace_root}"
     local bin_source_dir
     case "${PROFILE}" in
         perf)
             echo "--> Building high-performance binaries with 'cargo build --profile perf' (fat LTO, stripped)..."
-            cargo build --profile perf -p agy-mcp -p agy-hooks -p agy-ctrl
+            cargo build --profile perf -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             bin_source_dir="${workspace_root}/target/perf"
             ;;
         release)
             echo "--> Building release binaries with standard cargo..."
-            cargo build --release -p agy-mcp -p agy-hooks -p agy-ctrl
+            cargo build --release -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             bin_source_dir="${workspace_root}/target/release"
             ;;
         fast)
-            if [[ -x "${workspace_root}/plugins/agy-suite/bin/cargo-fast" ]]; then
+            if [[ -x "${workspace_root}/plugins/torqkage/bin/cargo-fast" ]]; then
                 echo "--> Building fast profile with local cargo-fast..."
-                "${workspace_root}/plugins/agy-suite/bin/cargo-fast" build -p agy-mcp -p agy-hooks -p agy-ctrl
+                "${workspace_root}/plugins/torqkage/bin/cargo-fast" build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             elif command -v cargo-fast >/dev/null 2>&1; then
                 echo "--> Building fast profile with cargo-fast..."
-                cargo-fast build -p agy-mcp -p agy-hooks -p agy-ctrl
+                cargo-fast build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             else
                 echo "--> Notice: cargo-fast not found; building with 'cargo build --profile fast'..."
-                cargo build --profile fast -p agy-mcp -p agy-hooks -p agy-ctrl
+                cargo build --profile fast -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             fi
             bin_source_dir="${workspace_root}/target/fast"
             ;;
         dev|debug)
             echo "--> Building dev/debug binaries..."
-            cargo build -p agy-mcp -p agy-hooks -p agy-ctrl
+            cargo build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
             bin_source_dir="${workspace_root}/target/debug"
             ;;
         *)
@@ -333,20 +336,20 @@ build_from_source_install() {
     esac
 
     # Verify compiled binaries
-    for bin in agy-mcp agy-hooks agy-ctrl; do
+    for bin in tkg-mcp tkg-hooks tkg; do
         if [[ ! -f "${bin_source_dir}/${bin}" ]]; then
             echo "Error: Expected compiled binary '${bin_source_dir}/${bin}' not found!" >&2
             exit 1
         fi
     done
 
-    # Stage binaries into local workspace plugin bundle: ./plugins/agy-suite/bin/
+    # Stage binaries into local workspace plugin bundle: ./plugins/torqkage/bin/
     echo "--> Staging binaries into workspace plugin bundle: ${plugin_dir}/bin/..."
     mkdir -p "${plugin_dir}/bin"
-    rm -f "${plugin_dir}/bin/agy-mcp" "${plugin_dir}/bin/agy-hooks" "${plugin_dir}/bin/agy-ctrl"
-    cp "${bin_source_dir}/agy-mcp" "${plugin_dir}/bin/"
-    cp "${bin_source_dir}/agy-hooks" "${plugin_dir}/bin/"
-    cp "${bin_source_dir}/agy-ctrl" "${plugin_dir}/bin/"
+    rm -f "${plugin_dir}/bin/tkg-mcp" "${plugin_dir}/bin/tkg-hooks" "${plugin_dir}/bin/tkg"
+    cp "${bin_source_dir}/tkg-mcp" "${plugin_dir}/bin/"
+    cp "${bin_source_dir}/tkg-hooks" "${plugin_dir}/bin/"
+    cp "${bin_source_dir}/tkg" "${plugin_dir}/bin/"
     chmod +x "${plugin_dir}/bin"/*
 
     if [[ "${LOCAL_ONLY}" = true ]]; then
@@ -354,7 +357,7 @@ build_from_source_install() {
             echo "--> Validating local workspace bundle with 'agy plugin validate'..."
             agy plugin validate "${plugin_dir}"
         fi
-        echo "==> [agy-suite] Local workspace bundle complete (--local-only). Files staged in ${plugin_dir}/bin/."
+        echo "==> [Torqkage] Local workspace bundle complete (--local-only). Files staged in ${plugin_dir}/bin/."
         return 0
     fi
 
@@ -375,6 +378,6 @@ else
         exit 1
     fi
 
-    echo "==> [agy-suite] Precompiled release not available; falling back to building from source..."
+    echo "==> [Torqkage] Precompiled release not available; falling back to building from source..."
     build_from_source_install
 fi

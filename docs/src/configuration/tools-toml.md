@@ -1,6 +1,6 @@
 # Tools Configuration (`tools.toml`)
 
-The `tools.toml` configuration file defines declarative Model Context Protocol (MCP) tools exposed to AI agents by the `agy-mcp` server. It acts as a zero-code tool engine: instead of compiling new Rust logic for every CLI utility, static analysis check, or code modifier, tools are declared declaratively in TOML. The engine automatically synthesizes MCP-compliant JSON Schemas, validates incoming arguments against strict regular expressions, enforces path confinement, monitors safety policies, and optionally executes commands inside a Bubblewrap container when `enforce_sandbox = true` is declared.
+The `tools.toml` configuration file defines declarative Model Context Protocol (MCP) tools exposed to AI agents by the `tkg-mcp` server. It acts as a zero-code tool engine: instead of compiling new Rust logic for every CLI utility, static analysis check, or code modifier, tools are declared declaratively in TOML. The engine automatically synthesizes MCP-compliant JSON Schemas, validates incoming arguments against strict regular expressions, enforces path confinement, monitors safety policies, and optionally executes commands inside a Bubblewrap container when `enforce_sandbox = true` is declared.
 
 ---
 
@@ -66,7 +66,7 @@ The `action` field selects the underlying execution engine powering the tool. Th
 | `parameterized_command` | Dynamic CLI tool execution where user arguments are mapped to flags and validated against strict regular expressions. | `command` (Array of Strings), `args` (Array of `ToolArg`) |
 | `cli_manual` | Formats and renders man-page style help text for CLI utilities and engine tools. | Built-in |
 | `project_state` | Synthesizes active VCS revision, dirty file status, Jujutsu working copy commit, and quality gate health into an executive summary. | Built-in |
-| `workspace_ensure` | Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.agy/workspaces/<agent>/`). | `agent` (String) |
+| `workspace_ensure` | Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.tkg/workspaces/<agent>/`). | `agent` (String) |
 | `workspace_inspect` | Inspects working copy diffs and file modifications between subagent sparse workspaces and the main working tree. | `agent` (String) |
 | `workspace_merge` | Absorbs or merges changes from an isolated subagent workspace back into the active working copy. | `agent` (String) |
 
@@ -109,8 +109,8 @@ args = [
 
 | Setting | Type | Default | Description & Valid Variants |
 | :--- | :--- | :--- | :--- |
-| `mutating` | Boolean | `false` | Marks the tool as state-altering (modifying files, branches, or workspace state). Monitored by `manifest_guard` and `circuit_breaker` in `agy-hooks`. |
-| `tracks_circuit_breaker` | Boolean | `false` | When `true`, non-zero exit codes from this tool add a failure strike to `.agy/state/circuit_breaker.json`. Once strikes reach `max_strikes`, mutating tools are blocked. |
+| `mutating` | Boolean | `false` | Marks the tool as state-altering (modifying files, branches, or workspace state). Monitored by `manifest_guard` and `circuit_breaker` in `tkg-hooks`. |
+| `tracks_circuit_breaker` | Boolean | `false` | When `true`, non-zero exit codes from this tool add a failure strike to `.tkg/state/circuit_breaker.json`. Once strikes reach `max_strikes`, mutating tools are blocked. |
 | `require_permission_gate` | Boolean | `false` | When `true`, pauses execution and displays an interactive confirmation prompt (`[y/n]`) in the control deck or TUI before the tool executes. |
 
 ---
@@ -212,9 +212,9 @@ empty_fallback = "Verification passed: 0 errors, 0 warnings."
 
 ## Discovery & Precedence
 
-The `agy-mcp` daemon and `agy-hooks` engine discover `tools.toml` across the following locations:
+The `tkg-mcp` daemon and `tkg-hooks` engine discover `tools.toml` across the following locations:
 
-1. `<workspace>/.agy/tools.toml` *(Workspace-local custom override)*
+1. `<workspace>/.tkg/tools.toml` *(Workspace-local custom override)*
 2. `<workspace>/tools.toml` *(Per-repository project overrides)*
-3. `<workspace>/plugins/agy-suite/tools.toml` *(In-tree plugin bundle default)*
-4. `~/.gemini/config/plugins/agy-suite/tools.toml` *(Global user configuration)*
+3. `<workspace>/plugins/TorqKage/tools.toml` *(In-tree plugin bundle default)*
+4. `~/.gemini/config/plugins/TorqKage/tools.toml` *(Global user configuration)*

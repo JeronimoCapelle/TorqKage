@@ -39,6 +39,6 @@ body:
       options:
         - New Declarative MCP Tool
         - New Specialized Agent Archetype
-        - TUI Control Deck (`agy-ctrl`)
+        - TUI Control Deck (`tkg`)
         - Sandboxing & Security Gates
         - CI / Release Pipeline

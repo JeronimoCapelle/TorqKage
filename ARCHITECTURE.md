@@ -1,17 +1,17 @@
-# agy-suite: System Architecture & Invariant Manual
+# Torqkage: System Architecture & Invariant Manual
 
 **Document Version:** 1.0.0  
 **Status:** Canonical & Permanent Architecture Specification  
 **Authority:** Root repository manual for human developers and autonomous AI agents (`coder`, `planner`, `spec-checker`, `finisher`, `copilot`).
 
 > **Quickstart & Usage:** For installation, terminal workflows, and the interactive control deck guide, see [README.md](README.md).  
-> **Online Engine Manual:** For full documentation, guides, and tutorials, visit the [agy-suite Engine Manual](https://jeronimocapelle.github.io/agy-suite/).
+> **Online Engine Manual:** For full documentation, guides, and tutorials, visit the [Torqkage Engine Manual](https://jeronimocapelle.github.io/TorqKage/).
 
 ---
 
 ## 1. System Invariants & Non-Negotiable Directives
 
-All autonomous agents and human contributors operating within this repository or deploying `agy-suite` MUST adhere to the following invariants:
+All autonomous agents and human contributors operating within this repository or deploying `Torqkage` MUST adhere to the following invariants:
 
 1. **Manifest Integrity (Strict Prohibition):**
    - **NEVER** autonomously edit `Cargo.toml`, `Cargo.lock`, or `deny.toml`.
@@ -22,10 +22,10 @@ All autonomous agents and human contributors operating within this repository or
    - **Zero compiler warnings and zero clippy warnings** are tolerated across all workspace targets (`--all-targets`).
    - Every `#[allow(...)]` attribute requires an explicit `reason = "..."` explanation. Blanket crate-level lint suppressions are prohibited.
 3. **Robust Error Handling:**
-   - **Zero unhandled `unwrap()` or `expect()` calls** in production code. All errors must use typed enumerations (`thiserror`) or return descriptive `Result<T, String>` / `Result<T, AgyError>`.
+   - **Zero unhandled `unwrap()` or `expect()` calls** in production code. All errors must use typed enumerations (`thiserror`) or return descriptive `Result<T, String>` / `Result<T, TkgError>`.
 4. **Subprocess Supervision & Hang Immunity:**
    - **Never** invoke raw synchronous `Command::new(...).output()` without timeout bounding.
-   - All external processes must execute through `SubprocessSupervisor::run_supervised` with bounded deadlines (`agy-common::limits`) to prevent daemon or IDE freezes on lock contention or hanging processes.
+   - All external processes must execute through `SubprocessSupervisor::run_supervised` with bounded deadlines (`tkg-common::limits`) to prevent daemon or IDE freezes on lock contention or hanging processes.
 5. **Pure Safe Rust & Process Group Safety:**
    - The entire codebase compiles with `#![forbid(unsafe_code)]`. Zero raw `libc` pointers or `unsafe` blocks are permitted.
    - Process tree containment and group signals are managed through safe process group abstractions (`command-group` and safe signal delivery), guaranteeing elimination of orphaned compiler tasks when parent processes exit.
@@ -38,7 +38,7 @@ All autonomous agents and human contributors operating within this repository or
 
 ## 2. The Three Declarative Contracts
 
-`agy-suite` enforces a strict separation between **Platform Plumbing**, **Project Environment**, and **Agent Tooling**:
+`Torqkage` enforces a strict separation between **Platform Plumbing**, **Project Environment**, and **Agent Tooling**:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -59,19 +59,19 @@ All autonomous agents and human contributors operating within this repository or
 ```
 
 ### Hierarchy & Fallback Rules
-- Workspace configuration always takes precedence: `<workspace>/.agy/project.toml` $\to$ `<workspace>/project.toml` $\to$ `<workspace>/plugins/agy-suite/project.toml`.
-- When operating in an external repository without a `project.toml`, `agy-suite` falls back to a **blank, restrictive default configuration** rather than making language assumptions.
+- Workspace configuration always takes precedence: `<workspace>/.tkg/project.toml` $\to$ `<workspace>/project.toml` $\to$ `<workspace>/plugins/torqkage/project.toml`.
+- When operating in an external repository without a `project.toml`, `Torqkage` falls back to a **blank, restrictive default configuration** rather than making language assumptions.
 
 ### 2.1 Engine vs. Reference Fleet Separation
-`agy-suite` is fundamentally an **extensible, capability-governed engine and sandboxed MCP runtime**. The 10-agent fleet described in [Section 3](#3-agent-fleet-perimeters--blast-boundaries) represents the flagship reference implementation tailored for low-level systems engineering and Silicon Design Verification.
+`Torqkage` is fundamentally an **extensible, capability-governed engine and sandboxed MCP runtime**. The 10-agent fleet described in [Section 3](#3-agent-fleet-perimeters--blast-boundaries) represents the flagship reference implementation tailored for low-level systems engineering and Silicon Design Verification.
 
-Any developer or autonomous AI can define bespoke fleets and tool catalogs for different languages and domains (e.g. Go, Python, TypeScript, or custom DSLs) simply by declaring a `.agy/` directory with `project.toml`, `tools.toml`, `hooks.toml`, and agent Markdown profiles (`agents/*.md`). Pre-built ecosystem starter kits are maintained in `docs/templates/` and documented in the [Engine Manual](https://jeronimocapelle.github.io/agy-suite/templates/overview.html).
+Any developer or autonomous AI can define bespoke fleets and tool catalogs for different languages and domains (e.g. Go, Python, TypeScript, or custom DSLs) simply by declaring a `.tkg/` directory with `project.toml`, `tools.toml`, `hooks.toml`, and agent Markdown profiles (`agents/*.md`). Pre-built ecosystem starter kits are maintained in `docs/templates/` and documented in the [Engine Manual](https://jeronimocapelle.github.io/TorqKage/templates/overview.html).
 
 ---
 
 ## 3. Agent Fleet Perimeters & Blast Boundaries
 
-Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-Privilege Model**, with boundaries and pre-launch checks unified directly in each agent's Markdown frontmatter:
+Each agent in `plugins/torqkage/agents/` operates under the **Air-Gapped Least-Privilege Model**, with boundaries and pre-launch checks unified directly in each agent's Markdown frontmatter:
 
 | Agent Profile | Role & Responsibility | Permitted Directory & File Scope | Path & Content Policies | Mandatory Pre-Invocation Gates | Available Tooling & Operational Scope |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -82,12 +82,12 @@ Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-
 | **`planner.md`** | Architecture & Verification Strategy Rubber-Duck | `allowed_dirs = ["docs", ".scratchpad"]`<br>`allowed_files = ["ARCHITECTURE.md"]`<br>`disallowed_dirs = ["src", "tests", "benches"]` | Authoritative design documents & mandatory upfront verification plans | None | Read-only codebase queries, architecture editor, mandatory upfront verification strategy selection. Pre-injected with workspace crate topology. |
 | **`finisher.md`** | Adversarial release gatekeeper | Strictly read-only across workspace (`disallowed_dirs = ["*"]`) | Zero mutation; pre-release gauntlet scorecard enforcement | `fmt`, `compilation`, `tests`, `vcs_conflicts` | Semantic diff review, pre-injected wake diff & changelog preview, binary size audit (`cargo_size`), supply-chain audit (`cargo_deny`), mutation scoring, mandated proof checks. |
 | **`spec-checker.md`** | Spec-vs-code & ISA compliance auditor | Strictly read-only across workspace (`disallowed_dirs = ["*"]`) | Zero mutation; cross-references implementation against specs & ISA contracts | `vcs_conflicts` | Spec searches, ISA opcode checks, AST grep queries, active diff inspection (`inspect_workspace_diff`), clippy, cargo-deny, semver-checks. |
-| **`perf-analyst.md`** | Microarchitectural profiler & benchmark engineer | `allowed_dirs = ["benches", "docs", ".agy/artifacts"]`<br>`disallowed_dirs = ["src", "tests"]` | Microbenchmarking, execution traces, latency distributions | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat, section size & symbol mapping (`cargo-size`, `cargo-nm`). |
+| **`perf-analyst.md`** | Microarchitectural profiler & benchmark engineer | `allowed_dirs = ["benches", "docs", ".tkg/artifacts"]`<br>`disallowed_dirs = ["src", "tests"]` | Microbenchmarking, execution traces, latency distributions | `compilation`, `vcs_conflicts` | Profilers, Divan/Criterion benchmarks, flamegraphs, asm inspection, llvm-mca, hyperfine, bloat, section size & symbol mapping (`cargo-size`, `cargo-nm`). |
 | **`mini.md`** | Narrow symbolic math & calculation specialist | Strictly air-gapped (`disallowed_dirs = ["*"]`) | Ephemeral scratchpad only; zero disk mutations | None | `eval_symbolic_math` (Python/SymPy) inside isolated container only. |
 | **`sysadmin.md`** | High-reasoning Arch Linux system administrator | `allowed_dirs = ["*"]` (full system access) | Supervised shell; interactive operator confirmation (`ASK` / `[y/n]`) on all state-altering tools | None | Host troubleshooting, systemd, pacman inspection, `run_command`, `ask_question`. |
 
 ### Workspace Isolation
-- Each agent operates in its own sparse Jujutsu workspace at `.agy/workspaces/<agent>/`.
+- Each agent operates in its own sparse Jujutsu workspace at `.tkg/workspaces/<agent>/`.
 - Agent modifications remain cleanly isolated from the operator's active `@` commit and open editor buffers.
 - The shared build cache (e.g. `target/`) is symlinked to ensure compilation artifacts are shared without disk bloat.
 
@@ -95,7 +95,7 @@ Each agent in `plugins/agy-suite/agents/` operates under the **Air-Gapped Least-
 
 ## 4. The Four-Phase Fleet Lifecycle & Silicon Design Verification (DV) Framework
 
-In low-level systems engineering (such as RISC-V processor cores, kernel runtimes, and lock-free concurrency engines), **formal correctness** and **performance optimization** are distinct disciplines with opposing feedback loops. `agy-suite` organizes autonomous agents into four structured phases:
+In low-level systems engineering (such as RISC-V processor cores, kernel runtimes, and lock-free concurrency engines), **formal correctness** and **performance optimization** are distinct disciplines with opposing feedback loops. `Torqkage` organizes autonomous agents into four structured phases:
 
 ```
   PHASE 1: CONTRACT & AUDIT           PHASE 2: IMPLEMENTATION & DV          PHASE 3: AUDIT & PROFILING
@@ -145,7 +145,7 @@ In low-level systems engineering (such as RISC-V processor cores, kernel runtime
 
 ## 5. Subagent Admission & Quality Gatekeeping
 
-When `invoke_subagent` is called, `agy-hooks` evaluates the `subagent_admission` gate before the subagent can boot:
+When `invoke_subagent` is called, `tkg-hooks` evaluates the `subagent_admission` gate before the subagent can boot:
 1. Target agent's frontmatter `pre_launch_checks: [...]` is extracted.
 2. Gates are evaluated:
    - Built-in VCS conflict check (`vcs_conflicts` blocks invocation if merge conflict markers are detected).
@@ -163,7 +163,7 @@ To prevent autonomous agents from wasting 5–10 LLM turns and tens of thousands
    - **`planner`**: Injects workspace crate topology (`cargo tree --depth 0 --workspace`) so it immediately knows all member crates and paths.
    - **`spec-checker`**: Injects uncommitted file modifications (`git status --short`) pinpointing modified files awaiting spec auditing.
    - **`finisher`**: Injects active workspace diff summary (`jj diff --summary`), parent revision stats (`jj show @- --stat`), git status (`git status --short`), and recent unreleased Conventional Commits changelog (`git-cliff`).
-2. When any matched agent is invoked, `agy-hooks` intercepts `SessionStart` (Turn 1), executes the configured command under strict timeouts, bounds the output line count, and injects the live ground truth directly into the agent's wake prompt.
+2. When any matched agent is invoked, `tkg-hooks` intercepts `SessionStart` (Turn 1), executes the configured command under strict timeouts, bounds the output line count, and injects the live ground truth directly into the agent's wake prompt.
 3. The agent starts Turn 1 with immediate awareness of essential ground truth without firing a single MCP tool call.
 
 ---
@@ -189,7 +189,7 @@ Enforced across all tools (`read_project_file`, `write_file`, `modify_code`, `se
 ## 7. Directory Layout of the Repository
 
 ```
-agy-suite/
+TorqKage/
 ├── ARCHITECTURE.md     # Canonical system architecture and invariant manual (this file)
 ├── README.md           # Repository overview, visual workflow, and quickstart guide
 ├── Cargo.toml          # Workspace root manifest (strict pedantic lints, zero warnings)
@@ -197,19 +197,19 @@ agy-suite/
 ├── install.sh          # Self-contained bundle builder & Gemini plugin installer
 ├── .github/workflows/  # Continuous Integration (cargo check, cargo test, clippy -D warnings)
 ├── crates/             # Native 4-crate Rust workspace
-│   ├── agy-common/     # Core domain models, project config, supervisor, Jujutsu, state
-│   ├── agy-mcp/        # Declarative MCP server, tool execution engine, agent guards
-│   ├── agy-hooks/      # High-assurance lifecycle interceptors (<1ms native execution)
-│   └── agy-ctrl/       # Ratatui 0.30 TUI dashboard, fleet matrix, and session explorer
+│   ├── tkg-common/     # Core domain models, project config, supervisor, Jujutsu, state
+│   ├── tkg-mcp/        # Declarative MCP server, tool execution engine, agent guards
+│   ├── tkg-hooks/      # High-assurance lifecycle interceptors (<1ms native execution)
+│   └── tkg-ctrl/       # Ratatui 0.30 TUI dashboard (binary: tkg), fleet matrix, and session explorer
 └── plugins/
-    └── agy-suite/      # Self-contained Antigravity plugin distribution bundle
+    └── torqkage/       # Self-contained Antigravity plugin distribution bundle
         ├── plugin.json # Host manifest
         ├── hooks.json  # Host lifecycle hook bindings
         ├── project.toml# Declarative project contracts and multi-language scaffolds
         ├── hooks.toml  # Lifecycle interception pipeline and circuit breaker rules
         ├── tools.toml  # Declarative MCP tool catalog and agent perimeters
         ├── README.md   # Plugin documentation and customization cookbook
-        ├── bin/        # Native binaries and acceleration helpers (cargo-fast, agy-*)
+        ├── bin/        # Native binaries and acceleration helpers (cargo-fast, tkg*)
         └── agents/     # Fleet specifications (coder, copilot, doc-author, finisher, etc.)
 ```
 
@@ -222,52 +222,52 @@ agy-suite/
 ```mermaid
 flowchart TD
     subgraph Host ["Host & Human Interaction"]
-        Operator["Human Operator (Terminal)"] <-->|"Ratatui 0.30 TUI"| Ctrl["agy-ctrl (Control Deck)"]
-        Ctrl -.->|"rusqlite (in-process)"| SQLite[("~/.gemini/antigravity-cli/\nconversation_summaries.db")]
+        Operator["Human Operator (Terminal)"] <-->|"Ratatui 0.30 TUI"| Ctrl["tkg (Control Deck)"]
+        Ctrl -.->|"SQLite / Session Provider"| Sessions[("Conversation Histories &\nSummaries DB")]
     end
 
     subgraph RuntimeBridge ["Orchestration & Sandbox Bridge"]
-        Ctrl -->|"fork() / execvp('agy')\n(Raw mode suspended)"| AgyCLI["agy CLI Agent Runtime"]
-        Ctrl -.->|"jj workspace add .agy/workspaces/<agent>"| JJWorkspaces[".agy/workspaces/<agent>\n(Jujutsu Isolation)"]
+        Ctrl -->|"fork() / execvp(harness)\n(Raw mode suspended)"| HarnessCLI["Execution Harness Runtime"]
+        Ctrl -.->|"jj workspace add .tkg/workspaces/<agent>"| JJWorkspaces[".tkg/workspaces/<agent>\n(Jujutsu Isolation)"]
     end
 
-    subgraph PluginServices ["Antigravity Lifecycle & Plugin Services"]
-        AgyCLI <-->|"JSON-RPC 2.0 over stdio (pipes)"| MCPDaemon["agy-mcp (Tool Daemon)"]
-        AgyCLI <-->|"ProtoJSON on stdin / stdout\n(per lifecycle hook invocation)"| HooksRunner["agy-hooks (Ephemeral CLI)"]
+    subgraph PluginServices ["Lifecycle & Plugin Services"]
+        HarnessCLI <-->|"JSON-RPC 2.0 over stdio (pipes)"| MCPDaemon["tkg-mcp (Tool Daemon)"]
+        HarnessCLI <-->|"ProtoJSON on stdin / stdout\n(per lifecycle hook invocation)"| HooksRunner["tkg-hooks (Ephemeral CLI)"]
     end
 
     subgraph DeclarativeState ["Declarative Manifests & State"]
-        ToolsTOML["plugins/agy-suite/tools.toml\n(Tools, Templates, Guards)"] -.->|"Bootstrapped at startup"| MCPDaemon
+        ToolsTOML["plugins/torqkage/tools.toml\n(Tools, Templates, Guards)"] -.->|"Bootstrapped at startup"| MCPDaemon
         ToolsTOML -.->|"Queried for mutating & permission flags"| HooksRunner
-        AgentMD["plugins/agy-suite/agents/*.md\n(YAML frontmatter: mcp_tools, pre_launch_checks)"] -.->|"Dynamic Scoping"| MCPDaemon
+        AgentMD["plugins/torqkage/agents/*.md\n(YAML frontmatter: mcp_tools, pre_launch_checks)"] -.->|"Dynamic Scoping"| MCPDaemon
         AgentMD -.->|"Pre-Launch Quality Gates"| HooksRunner
         AgentMD -.->|"F2 Save & Validate"| Ctrl
     end
 
     subgraph ExecutionLayer ["Supervised Execution Layer"]
-        MCPDaemon -->|"SubprocessSupervisor\n(Process Group Isolation)"| Supervisor["agy-common::SubprocessSupervisor"]
+        MCPDaemon -->|"SubprocessSupervisor\n(Process Group Isolation)"| Supervisor["tkg-common::SubprocessSupervisor"]
         Supervisor -->|"bwrap --unshare-all (Optional)"| BwrapJail["Bubblewrap Sandbox"]
         BwrapJail --> NativeTools["Native Binaries (cargo, jj, ast-grep, etc.)"]
-        MCPDaemon <-->|".agy/state/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
-        HooksRunner <-->|".agy/state/handoff.json"| HandoffState[("Session Handoff Bridge")]
+        MCPDaemon <-->|".tkg/state/circuit_breaker.json"| CircuitBreaker[("Circuit Breaker Ledger")]
+        HooksRunner <-->|".tkg/state/handoff.json"| HandoffState[("Session Handoff Bridge")]
     end
 ```
 
 ### 8.1 The 4 Crates Architecture
-1. **`agy-common` (Systems Foundation):**
+1. **`tkg-common` (Systems Foundation):**
    - **`SubprocessSupervisor`:** Enforces process tree lifecycle containment via safe process group isolation (`command-group`) and safe signal delivery. Guaranteed elimination of orphaned compiler tasks when parent processes exit.
-   - **`JujutsuWorkspace`:** Dynamic management of isolated Jujutsu workspaces at `.agy/workspaces/<agent>/`, snapshotting, and atomic rebase/squash merging with rollback (`jj op restore`).
+   - **`JujutsuWorkspace`:** Dynamic management of isolated Jujutsu workspaces at `.tkg/workspaces/<agent>/`, snapshotting, and atomic rebase/squash merging with rollback (`jj op restore`).
    - **`ContentFilter`:** Language-agnostic syntactic path policies (`comments_only`, `tests_only`, `delimited`) preventing cross-boundary modifications during autonomous runs.
-   - **`AgyStatePaths`:** Canonical management of `.agy/` state directories, circuit breaker ledgers, and handoff bridges.
-2. **`agy-mcp` (Declarative Model Context Protocol Daemon):**
+   - **`TkgStatePaths`:** Canonical management of `.tkg/` state directories, circuit breaker ledgers, and handoff bridges.
+2. **`tkg-mcp` (Declarative Model Context Protocol Daemon):**
    - Implements native Model Context Protocol (MCP 2024-11-05) over stdio JSON-RPC.
    - Dynamically parses `tools.toml`, synthesizes strict JSON Schemas, validates parameters against regex constraints, and enforces agent perimeter allowlists.
    - Powered by 10 native action handlers: bounded file reading, atomic writing, `mpatch` fuzzy SEARCH/REPLACE block edits, in-process file search, parameterized CLI execution, compiler NDJSON diagnostic extraction, in-process manuals, project state inspection, and Jujutsu workspace lifecycle isolation.
-3. **`agy-hooks` (Featherweight Interception Runner):**
-   - Ultra-fast native CLI (<1ms startup, <500KB RSS) executing Antigravity lifecycle events: `detect-wip`, `check-conflicts`, `check-subagent`, `enforce-tool-policy`, `record-handoff`, and `inject-wake`.
+3. **`tkg-hooks` (Featherweight Interception Runner):**
+   - Ultra-fast native CLI (<1ms startup, <500KB RSS) executing lifecycle events: `detect-wip`, `check-conflicts`, `check-subagent`, `enforce-tool-policy`, `record-handoff`, and `inject-wake`.
    - Protects critical build manifests (`Cargo.toml`) via `manifest_guard` and tracks consecutive compiler failure strikes via `circuit_breaker`.
-4. **`agy-ctrl` (Interactive Ratatui 0.30 Terminal Deck):**
-   - Standalone terminal dashboard providing interactive Fleet Matrix navigation, declarative tool catalog inspection, real-time circuit breaker status with single-key reset (`c` / `Shift-K`), and SQLite session resumption.
+4. **`tkg-ctrl` (Interactive Ratatui 0.30 Terminal Deck — Binary: `tkg`):**
+   - Standalone terminal dashboard providing interactive Fleet Matrix navigation, declarative tool catalog inspection, real-time circuit breaker status with single-key reset (`c` / `Shift-K`), and session resumption across supported harnesses.
 
 ### 8.2 Bubblewrap Container-Grade Sandboxing
 - Untrusted execution (such as SymPy mathematical evaluation in `eval_symbolic_math`) is precision-jailed inside Bubblewrap (`bwrap --unshare-all`).
@@ -278,7 +278,7 @@ flowchart TD
 - Optional external tools (such as Tree-sitter AST code graph engines or systems trace visualizers) can be discovered via `$PATH` when installed on the host system.
 
 ### 8.4 Native MCP Access Points & Execution Guarantees
-The `agy-mcp` daemon replaces ambient shell access with 12 hardened native action handlers:
+The `tkg-mcp` daemon replaces ambient shell access with 12 hardened native action handlers:
 1. **`file_read`:** Bounded file reader with line-range slicing (`start_line`, `end_line`) and UTF-8-safe byte caps.
 2. **`file_write`:** Atomic writer enforcing directory perimeters, manifest protection, VCS conflict gates, and syntactic path policies.
 3. **`mpatch_edit`:** Precision fuzzy block patcher (`<<<< SEARCH / ==== / >>>> REPLACE`) eliminating destructive full-file rewrites while verifying manifest protections and VCS conflicts.
@@ -287,16 +287,16 @@ The `agy-mcp` daemon replaces ambient shell access with 12 hardened native actio
 6. **`parameterized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`), typed arguments (`enum`, `integer`, `boolean`, `path`), and Bubblewrap container jails (`enforce_sandbox = true`).
 7. **`cli_manual`:** In-process system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and compiler references directly into the agent's context.
 8. **`project_state`:** Synthesizes active VCS revision, dirty file status, Jujutsu working copy commit, quality gate health, and previous session handoff context into an executive summary.
-9. **`workspace_ensure`:** Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.agy/workspaces/<agent>/`).
+9. **`workspace_ensure`:** Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.tkg/workspaces/<agent>/`).
 10. **`workspace_inspect`:** Inspects working copy diffs and file modifications between subagent sparse workspaces and the main working tree.
 11. **`workspace_merge`:** Absorbs or merges changes from an isolated subagent workspace back into trunk with automatic conflict detection and rollback.
-12. **`set_active_agent`:** Dynamically switches the active agent persona in `.agy/state/active_agent.json` to update tool allowances and path policies on the fly for multi-agent workflows across any harness.
+12. **`set_active_agent`:** Dynamically switches the active agent persona in `.tkg/state/active_agent.json` to update tool allowances and path policies on the fly for multi-agent workflows across any harness.
 
 ---
 
 ## 9. Deep Systems Verification & Hardware Analysis Toolchain
 
-`agy-suite` incorporates a battle-tested systems engineering and silicon verification toolchain:
+`Torqkage` incorporates a battle-tested systems engineering and silicon verification toolchain:
 
 | Domain | Tools & Frameworks | Architectural Purpose |
 | :--- | :--- | :--- |
@@ -314,17 +314,17 @@ The `agy-mcp` daemon replaces ambient shell access with 12 hardened native actio
 ## 10. Zero-Skill Architecture & Sandboxing Continuum
 
 ### 10.1 The Zero-Skill Policy (`NO SKILL.md`)
-Google Antigravity natively supports markdown-based skills (`SKILL.md`) and unconfined bash wrappers. In production systems engineering, this approach exhibits severe defects:
+Interpreted markdown skills (`SKILL.md`) and unconfined bash wrappers exhibit severe defects in production:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions consumes 2,000 to 4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
-- **`agy-suite` Solution:** Completely bans interpreted markdown skills. All agent capabilities are declared as native, compiled MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
+- **`Torqkage` Solution:** Completely bans interpreted markdown skills. All agent capabilities are declared as native, compiled MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
 
 ### 10.2 Four-Tier Security Continuum
 ```
-[ Level 1: Operator Cockpit (agy-ctrl) ]
+[ Level 1: Operator Cockpit (tkg) ]
   └── Policy switches, model effort controls, interactive ASK gate enforcement
         │
-[ Level 2: Runtime Engine (agy --sandbox) ]
+[ Level 2: Runtime Engine (harness --sandbox) ]
   └── Host LLM & Web Search connectivity retained; local filesystem mutations constrained
         │
 [ Level 3: Precision Tool Isolation (bwrap --unshare-all) ]
@@ -347,6 +347,6 @@ When an implementing agent (`coder` or `test-author`) requires a third-party dep
 3. Once the operator approves, the dependency can be added to the manifest.
 
 ### 11.2 Jujutsu Workspace Isolation & Clean State Invariants
-- Each agent operates in its own sparse Jujutsu working copy at `.agy/workspaces/<agent>/`.
+- Each agent operates in its own sparse Jujutsu working copy at `.tkg/workspaces/<agent>/`.
 - Agent modifications remain cleanly isolated from the operator's active `@` commit and open editor buffers.
 - Merging and rebasing workspace revisions is governed by `copilot` and the `SubagentAdmissionGate` without mutating active work-in-progress.

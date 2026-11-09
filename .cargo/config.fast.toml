@@ -11,7 +11,7 @@
 #   cargo +nightly cranelift-build
 #   cargo +nightly cranelift-check
 # Or use the wrapper script which auto-detects nightly/cranelift/mold:
-#   ./plugins/agy-suite/bin/cargo-fast build
+#   ./plugins/torqkage/bin/cargo-fast build
 # Or:
 #   cargo +nightly --config .cargo/config.fast.toml build --profile fast
 # ==============================================================================

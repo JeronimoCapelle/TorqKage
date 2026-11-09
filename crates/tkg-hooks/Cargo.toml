@@ -1,0 +1,20 @@
+[package]
+name = "tkg-hooks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Ultra-fast ephemeral lifecycle hook CLI runner (<500KB, <1ms) for Torqkage"
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+tkg-common = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+
+[lints]
+workspace = true

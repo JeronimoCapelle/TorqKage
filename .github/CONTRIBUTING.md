@@ -1,6 +1,6 @@
-# Contributing to `agy-suite`
+# Contributing to `Torqkage`
 
-Thank you for your interest in contributing to `agy-suite`! This project provides high-assurance systems tooling, declarative MCP daemons, and terminal orchestrators for Google Antigravity.
+Thank you for your interest in contributing to `Torqkage`! This project provides high-assurance systems tooling, declarative MCP daemons, and terminal orchestrators for Google Antigravity.
 
 ---
 
@@ -22,14 +22,14 @@ We optimize compilation using Cranelift and the Mold linker:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/JeronimoCapelle/agy-suite.git
-cd agy-suite
+git clone https://github.com/JeronimoCapelle/TorqKage.git
+cd TorqKage
 
 # 2. Build with Cranelift + Mold (<6 seconds)
 ./install.sh --fast
 
 # 3. Launch the offline terminal control deck
-agy-ctrl
+tkg
 ```
 
 ### Pre-Submission Verification Gauntlet

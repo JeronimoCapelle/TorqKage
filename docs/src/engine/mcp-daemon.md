@@ -1,10 +1,10 @@
-# Declarative MCP Daemon (`agy-mcp`)
+# Declarative MCP Daemon (`tkg-mcp`)
 
-`agy-mcp` is a persistent JSON-RPC 2.0 stdio server providing declarative tool execution for Google Antigravity.
+`tkg-mcp` is a persistent JSON-RPC 2.0 stdio server providing declarative tool execution for Google Antigravity.
 
 ## Native Action Handlers
 
-Instead of shelling out to generic scripts, `agy-mcp` compiles high-assurance native action handlers:
+Instead of shelling out to generic scripts, `tkg-mcp` compiles high-assurance native action handlers:
 
 | Action | Description | Guards Enforced |
 | :--- | :--- | :--- |
@@ -19,13 +19,13 @@ Instead of shelling out to generic scripts, `agy-mcp` compiles high-assurance na
 
 ## Dynamic Agent Scoping
 
-`agy-mcp` dynamically discovers the calling agent via `.agy/state/active_agent` and evaluates its permissions against the `mcp_tools:` frontmatter defined in `plugins/agy-suite/agents/<name>.md`. If an unconfigured or unauthorized agent calls a tool, the daemon rejects execution with an explicit policy violation error.
+`tkg-mcp` dynamically discovers the calling agent via `.tkg/state/active_agent` and evaluates its permissions against the `mcp_tools:` frontmatter defined in `plugins/TorqKage/agents/<name>.md`. If an unconfigured or unauthorized agent calls a tool, the daemon rejects execution with an explicit policy violation error.
 
 ---
 
 ## The Meta-MCP Pattern vs. Traditional MCP Servers
 
-In the standard MCP ecosystem, every new tool requires writing, compiling, and running a bespoke Node.js or Python process. `agy-suite` replaces this sprawl with a single, high-performance Safe Rust daemon (`agy-mcp`). By declaring tools in `tools.toml`, developers gain instant access to:
+In the standard MCP ecosystem, every new tool requires writing, compiling, and running a bespoke Node.js or Python process. `Torqkage` replaces this sprawl with a single, high-performance Safe Rust daemon (`tkg-mcp`). By declaring tools in `tools.toml`, developers gain instant access to:
 - **Automatic JSON Schema Synthesis:** Generates strict type schemas from TOML declarations.
 - **Regex Argument Validation:** Intercepts shell injections before any subprocess is spawned.
 - **Bubblewrap Container Isolation:** Runs untrusted commands inside private namespaces (`CLONE_NEWNET`, private loopback only, zero outbound sockets).

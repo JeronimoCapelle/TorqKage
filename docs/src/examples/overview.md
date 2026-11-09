@@ -1,6 +1,6 @@
 # Real-World Workflows & Examples
 
-This section walks through hands-on examples of applying `agy-suite` to real-world software engineering workflows.
+This section walks through hands-on examples of applying `Torqkage` to real-world software engineering workflows.
 
 ---
 
@@ -13,4 +13,4 @@ This section walks through hands-on examples of applying `agy-suite` to real-wor
    Step-by-step guide to adding a new tool to `tools.toml` and granting it to an agent with custom Bubblewrap isolation.
 
 3. **[Isolated Subagent Worktrees](subagent-worktrees.md)**  
-   How `copilot` and `coder` spin up isolated Jujutsu worktrees (`.agy/workspaces/<agent>`) to modify code safely without polluting the main working copy `@`.
+   How `copilot` and `coder` spin up isolated Jujutsu worktrees (`.tkg/workspaces/<agent>`) to modify code safely without polluting the main working copy `@`.
