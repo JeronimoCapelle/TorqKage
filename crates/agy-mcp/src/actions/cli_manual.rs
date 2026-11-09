@@ -159,6 +159,7 @@ const fn action_name(action: &crate::models::ToolAction) -> &'static str {
         crate::models::ToolAction::WorkspaceEnsure => "workspace_ensure",
         crate::models::ToolAction::WorkspaceInspect => "workspace_inspect",
         crate::models::ToolAction::WorkspaceMerge => "workspace_merge",
+        crate::models::ToolAction::SetActiveAgent => "set_active_agent",
         crate::models::ToolAction::Unknown(_) => "custom",
     }
 }

@@ -92,22 +92,45 @@ pub(crate) fn is_binary_available(name: &str) -> bool {
 /// and dynamically validates all binaries declared across tools.toml and project.toml.
 #[must_use]
 pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
-    let plugin_path = std::env::var("HOME").map_or_else(
-        |_| PathBuf::from(".gemini/config/plugins/agy-suite"),
-        |h| PathBuf::from(h).join(".gemini/config/plugins/agy-suite"),
-    );
+    let project_cfg = agy_common::project::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    let harness_binary = runner.resolved_binary();
 
-    let plugin_installed = plugin_path.exists();
-    let is_symlink = plugin_path
-        .symlink_metadata()
-        .is_ok_and(|m| m.file_type().is_symlink());
+    let (plugin_path, plugin_installed, is_symlink) = match runner.harness_kind() {
+        agy_common::HarnessKind::Agy => {
+            let p = std::env::var("HOME").map_or_else(
+                |_| PathBuf::from(".gemini/config/plugins/agy-suite"),
+                |h| PathBuf::from(h).join(".gemini/config/plugins/agy-suite"),
+            );
+            let exists = p.exists();
+            let is_sym = p
+                .symlink_metadata()
+                .is_ok_and(|m| m.file_type().is_symlink());
+            (p, exists, is_sym)
+        },
+        agy_common::HarnessKind::OpenCode => {
+            let p = workspace_root.join("opencode.json");
+            let exists = p.is_file();
+            (p, exists, false)
+        },
+        agy_common::HarnessKind::Claude => {
+            let p = workspace_root.join("claude.json");
+            let exists = p.is_file();
+            (p, exists, false)
+        },
+        agy_common::HarnessKind::Custom => {
+            let p = workspace_root.join(".agy/state/mcp_servers.json");
+            let exists = p.is_file();
+            (p, exists, false)
+        },
+    };
 
     let mut binary_checks = vec![
         BinaryCheck {
-            name: "agy".to_owned(),
-            description: "Antigravity CLI harness for agent execution".to_owned(),
+            name: harness_binary.clone(),
+            description: format!("{} CLI harness for agent execution", runner.harness),
             required: true,
-            installed: is_binary_available("agy"),
+            installed: is_binary_available(&harness_binary),
         },
         BinaryCheck {
             name: "jj".to_owned(),
@@ -130,7 +153,7 @@ pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
     ];
 
     let mut checked_names = FastHashSet::default();
-    checked_names.insert("agy".to_owned());
+    checked_names.insert(harness_binary);
     checked_names.insert("jj".to_owned());
     checked_names.insert("git".to_owned());
     checked_names.insert("bwrap".to_owned());
@@ -315,6 +338,128 @@ pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String
     ))
 }
 
+/// Registers or installs the agy-suite configuration for the selected execution harness.
+pub(crate) fn register_harness_config(
+    workspace_root: &Path,
+    runner: &agy_common::ProjectRunnerConfig,
+) -> Result<String, String> {
+    match runner.harness_kind() {
+        agy_common::HarnessKind::Agy => install_plugin_interactive(workspace_root),
+        agy_common::HarnessKind::OpenCode => register_opencode_config(workspace_root),
+        agy_common::HarnessKind::Claude => register_claude_config(workspace_root),
+        agy_common::HarnessKind::Custom => register_custom_mcp_config(workspace_root),
+    }
+}
+
+/// Registers `agy-mcp` in `opencode.json` for `OpenCode` integration.
+pub(crate) fn register_opencode_config(workspace_root: &Path) -> Result<String, String> {
+    let config_path = workspace_root.join("opencode.json");
+    let mut config: serde_json::Value = if config_path.is_file() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read {}: {e}", config_path.display()))?;
+        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({
+            "$schema": "https://opencode.ai/schema.json"
+        })
+    };
+
+    if !config.is_object() {
+        config = serde_json::json!({});
+    }
+
+    if let Some(obj) = config.as_object_mut() {
+        let servers = obj
+            .entry("mcpServers")
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(s_obj) = servers.as_object_mut() {
+            s_obj.insert(
+                "agy-suite".to_owned(),
+                serde_json::json!({
+                    "command": "agy-mcp",
+                    "args": []
+                }),
+            );
+        }
+    }
+
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize opencode.json: {e}"))?;
+    std::fs::write(&config_path, serialized)
+        .map_err(|e| format!("Failed to write {}: {e}", config_path.display()))?;
+
+    Ok(format!(
+        "✔ Registered 'agy-mcp' in opencode.json at {}",
+        config_path.display()
+    ))
+}
+
+/// Registers `agy-mcp` in `claude.json` for Claude Code integration.
+pub(crate) fn register_claude_config(workspace_root: &Path) -> Result<String, String> {
+    let config_path = workspace_root.join("claude.json");
+    let mut config: serde_json::Value = if config_path.is_file() {
+        let content = std::fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read {}: {e}", config_path.display()))?;
+        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !config.is_object() {
+        config = serde_json::json!({});
+    }
+
+    if let Some(obj) = config.as_object_mut() {
+        let servers = obj
+            .entry("mcpServers")
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(s_obj) = servers.as_object_mut() {
+            s_obj.insert(
+                "agy-suite".to_owned(),
+                serde_json::json!({
+                    "command": "agy-mcp",
+                    "args": []
+                }),
+            );
+        }
+    }
+
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize claude.json: {e}"))?;
+    std::fs::write(&config_path, serialized)
+        .map_err(|e| format!("Failed to write {}: {e}", config_path.display()))?;
+
+    Ok(format!(
+        "✔ Registered 'agy-mcp' in claude.json at {}",
+        config_path.display()
+    ))
+}
+
+/// Generates a standalone MCP server configuration for custom harnesses.
+pub(crate) fn register_custom_mcp_config(workspace_root: &Path) -> Result<String, String> {
+    let state_dir = workspace_root.join(".agy/state");
+    std::fs::create_dir_all(&state_dir)
+        .map_err(|e| format!("Failed to create {}: {e}", state_dir.display()))?;
+    let config_path = state_dir.join("mcp_servers.json");
+    let config = serde_json::json!({
+        "mcpServers": {
+            "agy-suite": {
+                "command": "agy-mcp",
+                "args": []
+            }
+        }
+    });
+    let serialized = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize mcp_servers.json: {e}"))?;
+    std::fs::write(&config_path, serialized)
+        .map_err(|e| format!("Failed to write {}: {e}", config_path.display()))?;
+
+    Ok(format!(
+        "✔ Generated MCP server config at {}",
+        config_path.display()
+    ))
+}
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -367,6 +512,57 @@ mod tests {
         assert_eq!(resolved_ws, temp_ws.join("plugins/agy-suite"));
 
         drop(std::fs::remove_dir_all(&temp));
+        drop(std::fs::remove_dir_all(&temp_ws));
+    }
+
+    #[test]
+    fn test_register_harness_configs() {
+        let temp_ws = std::env::temp_dir().join(format!("agy_reg_test_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp_ws));
+        drop(std::fs::create_dir_all(&temp_ws));
+
+        // 1. OpenCode
+        let opencode_res = register_opencode_config(&temp_ws);
+        opencode_res.unwrap();
+        let oc_file = temp_ws.join("opencode.json");
+        assert!(oc_file.is_file());
+        let oc_content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&oc_file).unwrap()).unwrap();
+        assert_eq!(
+            oc_content
+                .pointer("/mcpServers/agy-suite/command")
+                .and_then(serde_json::Value::as_str),
+            Some("agy-mcp")
+        );
+
+        // 2. Claude
+        let claude_res = register_claude_config(&temp_ws);
+        claude_res.unwrap();
+        let cl_file = temp_ws.join("claude.json");
+        assert!(cl_file.is_file());
+        let cl_content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&cl_file).unwrap()).unwrap();
+        assert_eq!(
+            cl_content
+                .pointer("/mcpServers/agy-suite/command")
+                .and_then(serde_json::Value::as_str),
+            Some("agy-mcp")
+        );
+
+        // 3. Custom MCP
+        let custom_res = register_custom_mcp_config(&temp_ws);
+        custom_res.unwrap();
+        let custom_file = temp_ws.join(".agy/state/mcp_servers.json");
+        assert!(custom_file.is_file());
+        let custom_content: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&custom_file).unwrap()).unwrap();
+        assert_eq!(
+            custom_content
+                .pointer("/mcpServers/agy-suite/command")
+                .and_then(serde_json::Value::as_str),
+            Some("agy-mcp")
+        );
+
         drop(std::fs::remove_dir_all(&temp_ws));
     }
 }

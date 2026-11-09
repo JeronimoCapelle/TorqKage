@@ -20,6 +20,7 @@ pub enum ToolAction {
     WorkspaceEnsure,
     WorkspaceInspect,
     WorkspaceMerge,
+    SetActiveAgent,
     #[serde(untagged)]
     Unknown(String),
 }

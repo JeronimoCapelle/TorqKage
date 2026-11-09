@@ -278,18 +278,19 @@ flowchart TD
 - Optional external tools (such as Tree-sitter AST code graph engines or systems trace visualizers) can be discovered via `$PATH` when installed on the host system.
 
 ### 8.4 Native MCP Access Points & Execution Guarantees
-The `agy-mcp` daemon replaces ambient shell access with 11 hardened native action handlers:
+The `agy-mcp` daemon replaces ambient shell access with 12 hardened native action handlers:
 1. **`file_read`:** Bounded file reader with line-range slicing (`start_line`, `end_line`) and UTF-8-safe byte caps.
-2. **`file_write`:** Atomic writer enforcing directory perimeters and syntactic path policies.
-3. **`mpatch_edit`:** Precision fuzzy block patcher (`<<<< SEARCH / ==== / >>>> REPLACE`) eliminating destructive full-file rewrites.
+2. **`file_write`:** Atomic writer enforcing directory perimeters, manifest protection, VCS conflict gates, and syntactic path policies.
+3. **`mpatch_edit`:** Precision fuzzy block patcher (`<<<< SEARCH / ==== / >>>> REPLACE`) eliminating destructive full-file rewrites while verifying manifest protections and VCS conflicts.
 4. **`file_search`:** In-process fast regex/substring pattern search across repository files and project doc trees without external dependencies.
 5. **`static_command`:** Parameterless invocation of fixed audit binaries (`cargo check`, `cargo test`, `git status`).
 6. **`parameterized_command`:** Bounded execution with strict per-argument regex allowlists (`regex = "^[a-zA-Z0-9_\\-\\.]+$"`), typed arguments (`enum`, `integer`, `boolean`, `path`), and Bubblewrap container jails (`enforce_sandbox = true`).
 7. **`cli_manual`:** In-process system manual provider synthesizing `navi` cheat sheets, `tldr` summaries, manpage synopsis blocks, `--help` buffers, and compiler references directly into the agent's context.
-8. **`project_state`:** Synthesizes active VCS revision, dirty file status, Jujutsu working copy commit, and quality gate health into an executive summary.
+8. **`project_state`:** Synthesizes active VCS revision, dirty file status, Jujutsu working copy commit, quality gate health, and previous session handoff context into an executive summary.
 9. **`workspace_ensure`:** Provisions, switches to, or validates an isolated Jujutsu sparse workspace for a subagent (`.agy/workspaces/<agent>/`).
 10. **`workspace_inspect`:** Inspects working copy diffs and file modifications between subagent sparse workspaces and the main working tree.
 11. **`workspace_merge`:** Absorbs or merges changes from an isolated subagent workspace back into trunk with automatic conflict detection and rollback.
+12. **`set_active_agent`:** Dynamically switches the active agent persona in `.agy/state/active_agent.json` to update tool allowances and path policies on the fly for multi-agent workflows across any harness.
 
 ---
 

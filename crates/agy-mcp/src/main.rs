@@ -101,37 +101,45 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf, Option<String>) {
     });
 
     let config_path = custom_config.unwrap_or_else(|| {
-        let candidate = workspace_root.join("tools.toml");
-        if candidate.is_file() {
-            candidate
-        } else {
-            let candidate_plugin = workspace_root.join("plugins/agy-suite/tools.toml");
-            if candidate_plugin.is_file() {
-                eprintln!(
-                    "[agy-mcp] Notice: Using in-tree plugin configuration: {}",
-                    candidate_plugin.display()
-                );
-                candidate_plugin
-            } else if let Ok(home) = std::env::var("HOME") {
-                let home_candidate =
-                    PathBuf::from(home).join(".gemini/config/plugins/agy-suite/tools.toml");
-                if home_candidate.is_file() {
-                    eprintln!(
-                        "[agy-mcp] Notice: Using installed plugin configuration: {}",
-                        home_candidate.display()
-                    );
-                    home_candidate
-                } else {
-                    eprintln!(
-                        "[agy-mcp] Advisory: No tools.toml found in workspace or plugins; defaulting to {}",
-                        candidate.display()
-                    );
-                    candidate
-                }
-            } else {
-                candidate
+        let candidates = [
+            workspace_root.join("tools.toml"),
+            workspace_root.join(".agy/tools.toml"),
+            workspace_root.join("plugins/agy-suite/tools.toml"),
+            workspace_root.join(".opencode/tools.toml"),
+            workspace_root.join(".claude/tools.toml"),
+        ];
+
+        for c in &candidates {
+            if c.is_file() {
+                return c.clone();
             }
         }
+
+        if let Ok(home) = std::env::var("HOME") {
+            let home_p = PathBuf::from(home);
+            let home_candidates = [
+                home_p.join(".gemini/config/plugins/agy-suite/tools.toml"),
+                home_p.join(".local/share/opencode/plugins/agy-suite/tools.toml"),
+                home_p.join(".claude/plugins/agy-suite/tools.toml"),
+            ];
+
+            for hc in &home_candidates {
+                if hc.is_file() {
+                    eprintln!(
+                        "[agy-mcp] Notice: Using installed plugin configuration: {}",
+                        hc.display()
+                    );
+                    return hc.clone();
+                }
+            }
+        }
+
+        let fallback = workspace_root.join("tools.toml");
+        eprintln!(
+            "[agy-mcp] Advisory: No tools.toml found in workspace or plugins; defaulting to {}",
+            fallback.display()
+        );
+        fallback
     });
 
     let agent_name = agent_scope::resolve_agent_scope(&args, &workspace_root);

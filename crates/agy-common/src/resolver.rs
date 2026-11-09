@@ -97,6 +97,9 @@ impl WorkspaceResolver {
                 cwd_str.contains("/.gemini/config/plugins/")
                     || cwd_str.contains("/.antigravity/plugins/")
                     || cwd_str.contains("/.gemini/plugins/")
+                    || cwd_str.contains("/.opencode/plugins/")
+                    || cwd_str.contains("/.local/share/opencode/plugins/")
+                    || cwd_str.contains("/.claude/plugins/")
             },
             |plugin_root| {
                 Path::new(&plugin_root)

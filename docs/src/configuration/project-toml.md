@@ -214,6 +214,7 @@ agent_flag = "--agent"           # Flag used to dispatch to an agent persona
 sandbox_flag = "--sandbox"       # Optional sandbox flag passed to harness
 resume_flag = "--session"        # Flag used to resume prior conversation sessions
 extra_args = ["--verbose"]       # Additional CLI arguments passed on launch
+agent_dirs = ["agents", ".opencode/agents"] # Optional explicit agent discovery search paths
 ```
 
 | Field | Type | Default | Description |
@@ -224,6 +225,7 @@ extra_args = ["--verbose"]       # Additional CLI arguments passed on launch
 | `sandbox_flag` | String | `"--sandbox"` (for `agy`), `None` (for others) | Optional CLI flag to pass when Bubblewrap sandboxing is toggled. |
 | `resume_flag` | String | `"--conversation"` (for `agy`), `"--session"` (for `opencode`), `"--resume"` (for others) | CLI flag passed when resuming an existing session. |
 | `extra_args` | Array of strings | `[]` | Additional flags or arguments appended to the harness command. |
+| `agent_dirs` | Array of strings | `[]` | Explicit directories to discover agent markdown definitions before searching standard workspace paths. |
 
 ---
 

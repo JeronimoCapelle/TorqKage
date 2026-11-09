@@ -403,39 +403,71 @@ fn append_to_active_list(manifest: &mut AgentFrontmatter, list_kind: ActiveListK
     target.push(item.to_owned());
 }
 
-/// Returns the ordered list of candidate directories where agent manifests are located.
-///
-/// Precedence:
-/// 1. `<workspace>/agents`
-/// 2. `<workspace>/plugins/agy-suite/agents`
-/// 3. `<workspace>/.agents/agents`
-/// 4. `<workspace>/.agents`
-/// 5. `<workspace>/.gemini/agents`
-/// 6. `<workspace>/.agy/agents`
-/// 7. `~/.gemini/config/plugins/agy-suite/agents`
-/// 8. `~/.gemini/agents`
-/// 9. `~/.agents/agents`
-/// 10. `~/.agents`
+/// Returns the ordered list of candidate directories where agent manifests are located,
+/// honoring configured `agent_dirs` and execution harness preferences.
 #[must_use]
-pub fn candidate_agent_directories(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut dirs = vec![
-        workspace_root.join("agents"),
-        workspace_root.join("plugins/agy-suite/agents"),
-        workspace_root.join(".agents/agents"),
-        workspace_root.join(".agents"),
-        workspace_root.join(".gemini/agents"),
-        workspace_root.join(".agy/agents"),
-    ];
+pub fn candidate_agent_directories_with_config(
+    workspace_root: &Path,
+    runner: &crate::project::ProjectRunnerConfig,
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
 
+    // 1. Explicit runner configured directories
+    for dir_str in &runner.agent_dirs {
+        let p = Path::new(dir_str);
+        if p.is_absolute() {
+            dirs.push(p.to_path_buf());
+        } else {
+            dirs.push(workspace_root.join(p));
+        }
+    }
+
+    // 2. Standard workspace locations
+    dirs.push(workspace_root.join("agents"));
+    dirs.push(workspace_root.join(".agy/agents"));
+    dirs.push(workspace_root.join("plugins/agy-suite/agents"));
+    dirs.push(workspace_root.join(".agents/agents"));
+    dirs.push(workspace_root.join(".agents"));
+
+    // 3. Harness-specific workspace paths
+    match runner.harness_kind() {
+        crate::project::HarnessKind::OpenCode => {
+            dirs.push(workspace_root.join(".opencode/agents"));
+            dirs.push(workspace_root.join(".opencode"));
+        },
+        crate::project::HarnessKind::Claude => {
+            dirs.push(workspace_root.join(".claude/agents"));
+            dirs.push(workspace_root.join(".claude"));
+        },
+        crate::project::HarnessKind::Agy => {
+            dirs.push(workspace_root.join(".gemini/agents"));
+        },
+        crate::project::HarnessKind::Custom => {},
+    }
+
+    // 4. User home locations
     if let Ok(home) = std::env::var("HOME") {
         let home_p = PathBuf::from(home);
-        dirs.push(home_p.join(".gemini/config/plugins/agy-suite/agents"));
-        dirs.push(home_p.join(".gemini/agents"));
+        if runner.harness_kind() == crate::project::HarnessKind::Agy {
+            dirs.push(home_p.join(".gemini/config/plugins/agy-suite/agents"));
+            dirs.push(home_p.join(".gemini/agents"));
+        } else if runner.harness_kind() == crate::project::HarnessKind::OpenCode {
+            dirs.push(home_p.join(".local/share/opencode/agents"));
+            dirs.push(home_p.join(".opencode/agents"));
+        }
         dirs.push(home_p.join(".agents/agents"));
         dirs.push(home_p.join(".agents"));
     }
 
     dirs
+}
+
+/// Returns the ordered list of candidate directories where agent manifests are located.
+#[must_use]
+pub fn candidate_agent_directories(workspace_root: &Path) -> Vec<PathBuf> {
+    let project_cfg = crate::project::ProjectConfig::detect_or_load(workspace_root);
+    let runner = project_cfg.resolved_runner();
+    candidate_agent_directories_with_config(workspace_root, &runner)
 }
 
 /// Discovers an agent markdown file across candidate locations by its name.
@@ -597,5 +629,24 @@ Directives";
         let md = "---\nname: test\npre_launch_checks: []\n---\nbody";
         let checks = AgentFrontmatter::extract_pre_launch_checks(md);
         assert!(checks.is_empty());
+    }
+
+    #[test]
+    fn test_candidate_agent_directories_with_config() {
+        let ws = Path::new("/workspace");
+        let runner_opencode = crate::project::ProjectRunnerConfig {
+            harness: "opencode".to_owned(),
+            agent_dirs: vec!["custom_agents".to_owned()],
+            ..Default::default()
+        };
+        let dirs = candidate_agent_directories_with_config(ws, &runner_opencode);
+        // Explicit agent_dirs first
+        assert_eq!(dirs[0], PathBuf::from("/workspace/custom_agents"));
+        // Standard locations
+        assert!(dirs.contains(&PathBuf::from("/workspace/agents")));
+        // Harness-specific locations
+        assert!(dirs.contains(&PathBuf::from("/workspace/.opencode/agents")));
+        // Does not include .gemini paths in workspace
+        assert!(!dirs.contains(&PathBuf::from("/workspace/.gemini/agents")));
     }
 }

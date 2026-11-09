@@ -8,7 +8,8 @@ use mpatch::{ApplyOptions, patch_content_str};
 use crate::{
     guards::{
         check_agent_guard, check_agent_path_policies, check_dangerous_files_with_security,
-        check_enforce_boundaries, resolve_safe_path, resolve_scoped_path_str,
+        check_enforce_boundaries, check_manifest_protection, check_vcs_conflicts,
+        resolve_safe_path, resolve_scoped_path_str,
     },
     models::{AgentGuard, ToolDefinition},
 };
@@ -24,6 +25,8 @@ pub(crate) fn execute(
     agent_name: Option<&str>,
     agent_guards: &BTreeMap<String, AgentGuard>,
 ) -> Result<String, String> {
+    check_vcs_conflicts(workspace_root)?;
+
     let raw_path = arguments
         .get("path")
         .and_then(serde_json::Value::as_str)
@@ -59,6 +62,12 @@ pub(crate) fn execute(
         &safe_path,
         tool.enforce_dir.as_deref(),
         tool.enforce_file_target.as_deref(),
+    )?;
+
+    check_manifest_protection(
+        &safe_path,
+        agent_name,
+        agent_name.and_then(|name| agent_guards.get(name)),
     )?;
 
     check_agent_guard(workspace_root, &safe_path, agent_name, agent_guards)?;

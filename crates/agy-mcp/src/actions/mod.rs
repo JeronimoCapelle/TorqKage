@@ -148,22 +148,52 @@ pub(crate) fn dispatch_action(
         validate_declared_arguments(tool, arguments)?;
     }
 
+    let dynamic_agent = arguments
+        .get("_agent")
+        .or_else(|| arguments.get("calling_agent"))
+        .or_else(|| arguments.get("agent_scope"))
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| {
+            if tool.args.iter().any(|a| a.name == "agent") {
+                None
+            } else {
+                arguments.get("agent").and_then(serde_json::Value::as_str)
+            }
+        });
+
+    let effective_agent = dynamic_agent.or(agent_name);
+
     let execution_result = match tool.action {
         ToolAction::FileRead => {
-            let content =
-                file_read::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content = file_read::execute(
+                tool,
+                workspace_root,
+                arguments,
+                effective_agent,
+                agent_guards,
+            )?;
             Ok((content, false))
         },
 
         ToolAction::FileWrite => {
-            let content =
-                file_write::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content = file_write::execute(
+                tool,
+                workspace_root,
+                arguments,
+                effective_agent,
+                agent_guards,
+            )?;
             Ok((content, false))
         },
 
         ToolAction::MpatchEdit => {
-            let content =
-                mpatch_edit::execute(tool, workspace_root, arguments, agent_name, agent_guards)?;
+            let content = mpatch_edit::execute(
+                tool,
+                workspace_root,
+                arguments,
+                effective_agent,
+                agent_guards,
+            )?;
             Ok((content, false))
         },
 
@@ -188,13 +218,44 @@ pub(crate) fn dispatch_action(
 
         ToolAction::WorkspaceMerge => workspace_merge::execute(workspace_root, arguments),
 
+        ToolAction::SetActiveAgent => {
+            let target_agent = arguments
+                .get("agent")
+                .or_else(|| arguments.get("name"))
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| "Missing required parameter 'agent'".to_owned())?;
+
+            let paths = agy_common::AgyStatePaths::new(workspace_root);
+            if let Some(parent) = paths.active_agent_file().parent() {
+                drop(std::fs::create_dir_all(parent));
+            }
+            let payload = serde_json::json!({
+                "agent": target_agent,
+            });
+            std::fs::write(
+                paths.active_agent_file(),
+                serde_json::to_string_pretty(&payload).unwrap_or_default(),
+            )
+            .map_err(|e| format!("Failed to update active_agent.json: {e}"))?;
+
+            let txt_path = paths.state_dir().join("active_agent");
+            drop(std::fs::write(txt_path, target_agent));
+
+            Ok((
+                format!(
+                    "Active agent persona successfully switched to '{target_agent}'. Tool allowances and path policies dynamically updated."
+                ),
+                false,
+            ))
+        },
+
         ToolAction::Unknown(_) => Err(format!(
             "Unknown or unsupported tool action for tool '{}'",
             tool.name
         )),
     };
 
-    update_circuit_breaker(tool, workspace_root, agent_name, execution_result)
+    update_circuit_breaker(tool, workspace_root, effective_agent, execution_result)
 }
 
 const fn is_compiler_verification_tool(tool: &ToolDefinition) -> bool {
@@ -346,6 +407,10 @@ fn validate_declared_arguments(
 }
 
 fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> Result<(), String> {
+    if tool.mutating() {
+        crate::guards::check_vcs_conflicts(workspace_root)?;
+    }
+
     let required_gates = tool.required_gates();
     if !required_gates.is_empty() {
         let gate_names: Vec<&str> = required_gates.iter().map(String::as_str).collect();
@@ -505,6 +570,45 @@ mod tests {
         // In a directory with no Cargo.toml and no git, pre-flight guards pass gracefully
         let res = evaluate_pre_flight_guards(&tool, &temp_dir);
         res.unwrap();
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_dispatch_action_set_active_agent() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_set_agent_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let tool = ToolDefinition {
+            name: "set_active_agent".to_owned(),
+            action: ToolAction::SetActiveAgent,
+            ..Default::default()
+        };
+
+        let args = serde_json::json!({ "agent": "doc-author" });
+        let guards = BTreeMap::new();
+        let tools = vec![tool.clone()];
+
+        let (out, is_err) =
+            dispatch_action(&tool, &temp_dir, &args, None, &guards, &tools).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("doc-author"));
+
+        let paths = agy_common::AgyStatePaths::new(&temp_dir);
+        assert!(paths.active_agent_file().is_file());
+        let saved_json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(paths.active_agent_file()).unwrap())
+                .unwrap();
+        assert_eq!(
+            saved_json.get("agent").and_then(serde_json::Value::as_str),
+            Some("doc-author")
+        );
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

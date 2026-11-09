@@ -5,7 +5,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use agy_common::ProjectSecurityConfig;
+use agy_common::{GateCheck, ProjectSecurityConfig};
 
 use crate::models::{AgentGuard, ToolDefinition};
 
@@ -394,9 +394,101 @@ pub(crate) fn check_agent_path_policies(
     )
 }
 
+/// Verifies whether the workspace contains unresolved VCS conflict markers.
+///
+/// # Errors
+/// Returns an error if conflict markers (e.g. `<<<<<<<`) are detected in the repository.
+pub(crate) fn check_vcs_conflicts(workspace_root: &Path) -> Result<(), String> {
+    match agy_common::VcsConflictCheck.execute(workspace_root) {
+        agy_common::GateCheckStatus::Passed => Ok(()),
+        agy_common::GateCheckStatus::Failed(reason) => Err(format!(
+            "Security gate blocked mutation: Unresolved merge conflicts detected: {reason}"
+        )),
+        agy_common::GateCheckStatus::Warning(warn) => Err(format!(
+            "Security gate blocked mutation: Potential merge conflicts detected: {warn}"
+        )),
+    }
+}
+
+/// Verifies that unauthorized agents do not mutate protected build manifests.
+///
+/// Neutralizes procedural-macro / `build.rs` execution sandbox escape vectors.
+///
+/// # Errors
+/// Returns an error if the agent is not permitted to mutate protected build files.
+pub(crate) fn check_manifest_protection(
+    target_path: &Path,
+    agent_name: Option<&str>,
+    guard: Option<&AgentGuard>,
+) -> Result<(), String> {
+    let file_name = target_path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .unwrap_or("");
+
+    let is_protected = matches!(
+        file_name,
+        "Cargo.toml"
+            | "Cargo.lock"
+            | "build.rs"
+            | "package.json"
+            | "package-lock.json"
+            | "pnpm-lock.yaml"
+            | "yarn.lock"
+            | "CMakeLists.txt"
+            | "build.zig"
+            | "go.mod"
+            | "go.sum"
+            | "pyproject.toml"
+            | "requirements.txt"
+            | "setup.py"
+            | "pom.xml"
+            | "build.gradle"
+            | "Gemfile"
+    );
+
+    if !is_protected {
+        return Ok(());
+    }
+
+    if let Some(g) = guard {
+        if g.allowed_files.iter().any(|f| f == file_name || f == "*") {
+            return Ok(());
+        }
+        if let Some(name) = agent_name
+            && name != "coder"
+            && !g.allowed_files.iter().any(|f| f == file_name)
+        {
+            return Err(format!(
+                "Manifest protection violation: Agent '{name}' is not authorized to mutate build manifest '{file_name}'"
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 const COMMON_ROOT_DIRS: &[&str] = &[
-    "src", "lib", "pkg", "app", "cmd", "tests", "test", "spec", "benches", "examples", "docs",
-    "doc", "include", "scripts", "bin", ".git", ".jj", ".agy",
+    "src",
+    "lib",
+    "pkg",
+    "app",
+    "cmd",
+    "tests",
+    "test",
+    "spec",
+    "benches",
+    "examples",
+    "docs",
+    "doc",
+    "include",
+    "scripts",
+    "bin",
+    ".git",
+    ".jj",
+    ".agy",
+    ".opencode",
+    ".claude",
 ];
 
 /// Helper attempting to resolve a scoped path within declared monorepo subcrate containers.
@@ -1376,5 +1468,35 @@ mod tests {
     fn test_strip_ansi() {
         let raw = "\u{1b}[2m\u{1b}[0m\u{1b}[38;2;84;142;200mcrate\u{1b}[0m::\u{1b}[38;2;84;142;200mserver\u{1b}[0m";
         assert_eq!(strip_ansi(raw), "crate::server");
+    }
+
+    #[test]
+    fn test_check_manifest_protection() {
+        let cargo_toml = Path::new("Cargo.toml");
+        let src_file = Path::new("src/main.rs");
+
+        // Normal source files are not protected
+        assert!(check_manifest_protection(src_file, Some("reviewer"), None).is_ok());
+
+        // Manifest file without guard: coder is allowed
+        assert!(check_manifest_protection(cargo_toml, Some("coder"), None).is_ok());
+
+        // Manifest file with unauthorized agent: blocked
+        let guard = AgentGuard {
+            allowed_files: vec!["README.md".to_owned()],
+            ..Default::default()
+        };
+        let err = check_manifest_protection(cargo_toml, Some("reviewer"), Some(&guard));
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("Manifest protection violation"));
+
+        // Manifest file with explicit wildcard or explicit allowance: allowed
+        let allowed_guard = AgentGuard {
+            allowed_files: vec!["Cargo.toml".to_owned()],
+            ..Default::default()
+        };
+        assert!(
+            check_manifest_protection(cargo_toml, Some("reviewer"), Some(&allowed_guard)).is_ok()
+        );
     }
 }

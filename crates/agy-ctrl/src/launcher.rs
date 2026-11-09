@@ -590,6 +590,7 @@ mod tests {
             sandbox_flag: None,
             resume_flag: None,
             extra_args: vec!["--debug".to_owned()],
+            agent_dirs: Vec::new(),
         };
 
         let cmd = build_harness_command(Path::new("."), &runner, "coder", true, None);
@@ -616,6 +617,7 @@ mod tests {
             sandbox_flag: None,
             resume_flag: None,
             extra_args: Vec::new(),
+            agent_dirs: Vec::new(),
         };
 
         let cmd = build_harness_command(Path::new("."), &runner, "reviewer", false, None);

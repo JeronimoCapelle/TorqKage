@@ -25,7 +25,11 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
         out.push('\n');
     }
     if let Some(h) = handoff {
-        out.push_str("- Last Handoff: ");
+        if h.contains('\n') {
+            out.push_str("\n### Last Session Handoff:\n");
+        } else {
+            out.push_str("- Last Handoff: ");
+        }
         out.push_str(&h);
         out.push('\n');
     }
@@ -117,13 +121,21 @@ fn query_vcs_status(root: &Path) -> String {
 
 fn read_last_handoff(root: &Path) -> Option<String> {
     let paths = AgyStatePaths::new(root);
+    let json_handoff = paths.handoff_json_file();
+    if json_handoff.exists()
+        && let Ok(content) = std::fs::read_to_string(&json_handoff)
+        && let Ok(handoff) = serde_json::from_str::<agy_common::PipelineHandoff>(&content)
+    {
+        return Some(handoff.to_injection_message());
+    }
+
     let handoff_path = paths.handoff_md_file();
     if handoff_path.exists()
         && let Ok(content) = std::fs::read_to_string(&handoff_path)
     {
-        let first_line = content.lines().next().unwrap_or("").trim();
-        if !first_line.is_empty() {
-            return Some(first_line.to_owned());
+        let trimmed = content.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_owned());
         }
     }
     None
@@ -164,6 +176,37 @@ mod tests {
         assert!(output.contains(
             "- Documentation & Specs: docs, specs/rv32.md (search via 'search_spec_docs')"
         ));
+
+        drop(std::fs::remove_dir_all(&temp));
+    }
+
+    #[test]
+    fn test_project_state_includes_handoff_context() {
+        let temp = std::env::temp_dir().join(format!("agy_state_handoff_{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&temp));
+        let paths = AgyStatePaths::new(&temp);
+        std::fs::create_dir_all(paths.state_dir()).expect("create state dir");
+
+        let handoff = agy_common::PipelineHandoff::new(
+            "architect",
+            Some("coder".to_owned()),
+            "Completed architectural blueprint for RISC-V decoder",
+            vec!["src/decoder.rs".to_owned()],
+            vec!["specs/rv32.md".to_owned()],
+            "ReadyForImplementation",
+        );
+        let handoff_json = serde_json::to_string_pretty(&handoff).expect("serialize handoff");
+        std::fs::write(paths.handoff_json_file(), handoff_json).expect("write handoff.json");
+
+        let (output, is_error) = execute(&temp);
+        assert!(!is_error);
+        assert!(output.contains("### Last Session Handoff:"));
+        assert!(
+            output.contains(
+                "[PIPELINE CONTEXT HANDOFF]: Work handed off from 'architect' to 'coder'"
+            )
+        );
+        assert!(output.contains("Completed architectural blueprint for RISC-V decoder"));
 
         drop(std::fs::remove_dir_all(&temp));
     }

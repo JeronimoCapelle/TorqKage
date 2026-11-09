@@ -1146,3 +1146,20 @@ command = [
 output_capture = "both"
 truncate_lines = 150
 timeout_seconds = 300
+
+[tools.set_active_agent]
+description = "Dynamically switches the active agent persona in .agy/state/active_agent.json to update tool allowances and file policies"
+action = "set_active_agent"
+category = "workflow"
+args = [
+    { name = "agent", required = true, regex = "^[a-zA-Z0-9_-]+$", description = "Name of the agent persona to switch into" }
+]
+truncate_lines = 10
+timeout_seconds = 5
+
+[tools.read_session_handoff]
+description = "Reads previous agent handoff instructions, modified files, deliverables, and session continuity notes"
+action = "project_state"
+category = "workflow"
+truncate_lines = 100
+timeout_seconds = 10

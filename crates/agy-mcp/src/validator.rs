@@ -93,7 +93,8 @@ pub(crate) fn validate_tools(tools: &[ToolDefinition]) -> ValidationReport {
             | ToolAction::ProjectState
             | ToolAction::WorkspaceEnsure
             | ToolAction::WorkspaceInspect
-            | ToolAction::WorkspaceMerge => {
+            | ToolAction::WorkspaceMerge
+            | ToolAction::SetActiveAgent => {
                 // In-process native actions are always verified
                 report.verified_tools = report.verified_tools.saturating_add(1);
             },

@@ -296,6 +296,10 @@ pub struct ProjectRunnerConfig {
     /// Additional fixed arguments to append to the command invocation.
     #[serde(default)]
     pub extra_args: Vec<String>,
+
+    /// Optional explicit agent manifest discovery directories.
+    #[serde(default)]
+    pub agent_dirs: Vec<String>,
 }
 
 fn default_harness() -> String {
@@ -311,6 +315,7 @@ impl Default for ProjectRunnerConfig {
             sandbox_flag: None,
             resume_flag: None,
             extra_args: Vec::new(),
+            agent_dirs: Vec::new(),
         }
     }
 }
@@ -899,6 +904,9 @@ fn parse_runner_section(config: &mut ProjectConfig, val: &toml::Value) {
                     },
                     ("extra_args" | "extraArgs" | "args", toml::Value::Array(arr)) => {
                         config.runner.extra_args = extract_string_array(arr);
+                    },
+                    ("agent_dirs" | "agentDirs" | "agents", toml::Value::Array(arr)) => {
+                        config.runner.agent_dirs = extract_string_array(arr);
                     },
                     _ => {},
                 }
