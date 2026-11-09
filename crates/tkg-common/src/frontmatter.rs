@@ -2,103 +2,118 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::FastHashSet;
 
+fn default_effort() -> String {
+    "medium".to_owned()
+}
+
+fn default_permission_mode() -> String {
+    "acceptEdits".to_owned()
+}
+
+fn default_command_execution_policy() -> String {
+    "off".to_owned()
+}
+
+const fn default_inherit_mcp() -> bool {
+    true
+}
+
 /// Parsed metadata and body directives from an agent markdown document.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentFrontmatter {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub description: String,
+    #[serde(default = "default_effort")]
     pub effort: String,
+    #[serde(
+        default = "default_permission_mode",
+        rename = "permissionMode",
+        alias = "permission_mode"
+    )]
     pub permission_mode: String,
+    #[serde(
+        default = "default_command_execution_policy",
+        rename = "commandExecutionPolicy",
+        alias = "command_execution_policy"
+    )]
     pub command_execution_policy: String,
+    #[serde(default, rename = "mainAgent", alias = "main_agent")]
     pub main_agent: bool,
+    #[serde(default)]
     pub subagent: bool,
+    #[serde(
+        default = "default_inherit_mcp",
+        rename = "inheritMcp",
+        alias = "inherit_mcp"
+    )]
     pub inherit_mcp: bool,
+    #[serde(default, alias = "allowedSubagents")]
     pub allowed_subagents: Vec<String>,
+    #[serde(default, alias = "preLaunchChecks", alias = "gatekeeper_checks")]
     pub pre_launch_checks: Vec<String>,
+    #[serde(default, rename = "tools", alias = "native_tools")]
     pub native_tools: Vec<String>,
+    #[serde(default, alias = "mcpTools")]
     pub mcp_tools: Vec<String>,
+    #[serde(default, alias = "allowedDirs")]
     pub allowed_dirs: Vec<String>,
+    #[serde(default, alias = "disallowedDirs")]
     pub disallowed_dirs: Vec<String>,
+    #[serde(default, alias = "allowedFiles")]
     pub allowed_files: Vec<String>,
+    #[serde(default, alias = "disallowedFiles")]
     pub disallowed_files: Vec<String>,
+    #[serde(default, alias = "pathPolicies")]
     pub path_policies: Vec<crate::content_filter::PathPolicy>,
+    #[serde(skip)]
     pub directives: String,
+}
+
+impl Default for AgentFrontmatter {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            effort: default_effort(),
+            permission_mode: default_permission_mode(),
+            command_execution_policy: default_command_execution_policy(),
+            main_agent: false,
+            subagent: false,
+            inherit_mcp: true,
+            allowed_subagents: Vec::new(),
+            pre_launch_checks: Vec::new(),
+            native_tools: Vec::new(),
+            mcp_tools: Vec::new(),
+            allowed_dirs: Vec::new(),
+            disallowed_dirs: Vec::new(),
+            allowed_files: Vec::new(),
+            disallowed_files: Vec::new(),
+            path_policies: Vec::new(),
+            directives: String::new(),
+        }
+    }
 }
 
 impl AgentFrontmatter {
     /// Parses an agent Markdown file content string into an `AgentFrontmatter`.
     ///
     /// # Errors
-    /// Returns an error if the opening or closing `---` fences are missing.
+    /// Returns an error if the opening or closing `---` fences are missing or YAML syntax is invalid.
     pub fn parse(content: &str) -> Result<Self, String> {
         let (frontmatter, directives) = parse_fenced_block(content)?;
-        let mut manifest = Self {
-            effort: "medium".to_owned(),
-            permission_mode: "acceptEdits".to_owned(),
-            command_execution_policy: "off".to_owned(),
-            inherit_mcp: true,
-            directives,
-            ..Default::default()
+        let mut manifest: Self = if frontmatter.trim().is_empty() {
+            Self::default()
+        } else {
+            serde_norway::from_str(frontmatter)
+                .map_err(|err| format!("Failed to parse agent YAML frontmatter: {err}"))?
         };
-
-        let mut current_list = None;
-        let mut in_path_policies = false;
-
-        for line in frontmatter.lines() {
-            let trimmed_line = line.trim();
-            if trimmed_line.is_empty() || trimmed_line.starts_with('#') {
-                continue;
-            }
-
-            // Top-level key detection resets active sub-sections
-            let is_top_level =
-                !line.starts_with(char::is_whitespace) && !trimmed_line.starts_with('-');
-            if is_top_level {
-                in_path_policies = false;
-                current_list = None;
-            }
-
-            if in_path_policies {
-                if let Some(item) = trimmed_line.strip_prefix('-') {
-                    if let Some(pol) = parse_path_policy_inline(item) {
-                        manifest.path_policies.push(pol);
-                    }
-                    continue;
-                }
-                if let Some(last) = manifest.path_policies.last_mut()
-                    && apply_path_policy_subfield(last, trimmed_line)
-                {
-                    continue;
-                }
-            }
-
-            // List item handling
-            if let Some(item) = trimmed_line.strip_prefix('-') {
-                let val = item.trim().trim_matches(['"', '\'']);
-                if let Some(active) = current_list
-                    && !val.is_empty()
-                    && !val.starts_with("name:")
-                    && !val.starts_with("command:")
-                {
-                    append_to_active_list(&mut manifest, active, val);
-                }
-                continue;
-            }
-
-            // Reset current list if on a new key
-            current_list = None;
-            if apply_scalar_field(&mut manifest, trimmed_line) {
-                continue;
-            }
-            if let Some(active) =
-                select_active_list(&mut manifest, trimmed_line, &mut in_path_policies)
-            {
-                current_list = Some(active);
-            }
-        }
-
+        manifest.directives = directives;
         Ok(manifest)
     }
 
@@ -148,15 +163,6 @@ impl AgentFrontmatter {
     }
 }
 
-fn parse_inline_yaml_list(s: &str) -> Vec<String> {
-    let trimmed = s.trim().trim_matches(['[', ']']);
-    trimmed
-        .split(',')
-        .map(|item| item.trim().trim_matches(['"', '\'']).to_owned())
-        .filter(|item| !item.is_empty())
-        .collect()
-}
-
 fn parse_fenced_block(content: &str) -> Result<(&str, String), String> {
     let trimmed = content.trim_start();
     let rest = trimmed
@@ -174,233 +180,6 @@ fn parse_fenced_block(content: &str) -> Result<(&str, String), String> {
         .trim_start()
         .to_owned();
     Ok((frontmatter, directives))
-}
-
-fn parse_filter_kind(val: &str) -> crate::content_filter::ContentFilterKind {
-    match val {
-        "tests_only" | "tests" => crate::content_filter::ContentFilterKind::TestsOnly,
-        "delimited" => crate::content_filter::ContentFilterKind::Delimited,
-        _ => crate::content_filter::ContentFilterKind::CommentsOnly,
-    }
-}
-
-fn parse_path_policy_inline(item: &str) -> Option<crate::content_filter::PathPolicy> {
-    let item_trim = item.trim();
-    if item_trim.starts_with('{')
-        && item_trim.ends_with('}')
-        && let Ok(pol) = serde_json::from_str::<crate::content_filter::PathPolicy>(item_trim)
-    {
-        return Some(pol);
-    }
-
-    let mut path = String::new();
-    let mut filter = crate::content_filter::ContentFilterKind::CommentsOnly;
-    let mut start_marker = None;
-    let mut end_marker = None;
-
-    for part in item_trim.split(',') {
-        let part = part.trim();
-        if let Some(p) = part.strip_prefix("path:") {
-            p.trim().trim_matches(['"', '\'']).clone_into(&mut path);
-        } else if let Some(f) = part.strip_prefix("filter:") {
-            filter = parse_filter_kind(f.trim().trim_matches(['"', '\'']));
-        } else if let Some(m) = part.strip_prefix("start_marker:") {
-            start_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
-        } else if let Some(m) = part.strip_prefix("end_marker:") {
-            end_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
-        }
-    }
-
-    if path.is_empty() {
-        None
-    } else {
-        Some(crate::content_filter::PathPolicy {
-            path,
-            filter,
-            start_marker,
-            end_marker,
-            ..Default::default()
-        })
-    }
-}
-
-fn apply_path_policy_subfield(
-    policy: &mut crate::content_filter::PathPolicy,
-    trimmed_line: &str,
-) -> bool {
-    if let Some(f) = trimmed_line.strip_prefix("filter:") {
-        policy.filter = parse_filter_kind(f.trim().trim_matches(['"', '\'']));
-        true
-    } else if let Some(p) = trimmed_line.strip_prefix("path:") {
-        p.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut policy.path);
-        true
-    } else if let Some(m) = trimmed_line.strip_prefix("start_marker:") {
-        policy.start_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
-        true
-    } else if let Some(m) = trimmed_line.strip_prefix("end_marker:") {
-        policy.end_marker = Some(m.trim().trim_matches(['"', '\'']).to_owned());
-        true
-    } else if let Some(items) = trimmed_line.strip_prefix("line_comments:") {
-        policy.line_comments = parse_inline_yaml_list(items);
-        true
-    } else if let Some(items) = trimmed_line.strip_prefix("test_attributes:") {
-        policy.test_attributes = parse_inline_yaml_list(items);
-        true
-    } else if let Some(items) = trimmed_line.strip_prefix("test_prefixes:") {
-        policy.test_prefixes = parse_inline_yaml_list(items);
-        true
-    } else {
-        false
-    }
-}
-
-fn apply_scalar_field(manifest: &mut AgentFrontmatter, trimmed_line: &str) -> bool {
-    if let Some(val) = trimmed_line.strip_prefix("name:") {
-        val.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut manifest.name);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("description:") {
-        val.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut manifest.description);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("effort:") {
-        val.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut manifest.effort);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("permissionMode:") {
-        val.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut manifest.permission_mode);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("commandExecutionPolicy:") {
-        val.trim()
-            .trim_matches(['"', '\''])
-            .clone_into(&mut manifest.command_execution_policy);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("mainAgent:") {
-        manifest.main_agent = val.trim().parse::<bool>().unwrap_or(false);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("subagent:") {
-        manifest.subagent = val.trim().parse::<bool>().unwrap_or(false);
-        true
-    } else if let Some(val) = trimmed_line.strip_prefix("inheritMcp:") {
-        manifest.inherit_mcp = val.trim().parse::<bool>().unwrap_or(true);
-        true
-    } else {
-        false
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum ActiveListKind {
-    AllowedSubagents,
-    PreLaunchChecks,
-    NativeTools,
-    McpTools,
-    AllowedDirs,
-    DisallowedDirs,
-    AllowedFiles,
-    DisallowedFiles,
-}
-
-fn select_active_list(
-    manifest: &mut AgentFrontmatter,
-    trimmed_line: &str,
-    in_path_policies: &mut bool,
-) -> Option<ActiveListKind> {
-    if trimmed_line.starts_with("allowed_subagents:") {
-        Some(ActiveListKind::AllowedSubagents)
-    } else if trimmed_line.starts_with("pre_launch_checks:")
-        || trimmed_line.starts_with("preLaunchChecks:")
-        || trimmed_line.starts_with("gatekeeper_checks:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.pre_launch_checks.clear();
-            None
-        } else {
-            Some(ActiveListKind::PreLaunchChecks)
-        }
-    } else if trimmed_line.starts_with("tools:") {
-        if trimmed_line.ends_with("[]") {
-            manifest.native_tools.clear();
-            None
-        } else {
-            Some(ActiveListKind::NativeTools)
-        }
-    } else if trimmed_line.starts_with("mcp_tools:") || trimmed_line.starts_with("mcpTools:") {
-        if trimmed_line.ends_with("[]") {
-            manifest.mcp_tools.clear();
-            None
-        } else {
-            Some(ActiveListKind::McpTools)
-        }
-    } else if trimmed_line.starts_with("allowed_dirs:") || trimmed_line.starts_with("allowedDirs:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.allowed_dirs.clear();
-            None
-        } else {
-            Some(ActiveListKind::AllowedDirs)
-        }
-    } else if trimmed_line.starts_with("disallowed_dirs:")
-        || trimmed_line.starts_with("disallowedDirs:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.disallowed_dirs.clear();
-            None
-        } else {
-            Some(ActiveListKind::DisallowedDirs)
-        }
-    } else if trimmed_line.starts_with("allowed_files:")
-        || trimmed_line.starts_with("allowedFiles:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.allowed_files.clear();
-            None
-        } else {
-            Some(ActiveListKind::AllowedFiles)
-        }
-    } else if trimmed_line.starts_with("disallowed_files:")
-        || trimmed_line.starts_with("disallowedFiles:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.disallowed_files.clear();
-            None
-        } else {
-            Some(ActiveListKind::DisallowedFiles)
-        }
-    } else if trimmed_line.starts_with("path_policies:")
-        || trimmed_line.starts_with("pathPolicies:")
-    {
-        if trimmed_line.ends_with("[]") {
-            manifest.path_policies.clear();
-            *in_path_policies = false;
-        } else {
-            *in_path_policies = true;
-        }
-        None
-    } else {
-        None
-    }
-}
-
-fn append_to_active_list(manifest: &mut AgentFrontmatter, list_kind: ActiveListKind, item: &str) {
-    let target = match list_kind {
-        ActiveListKind::AllowedSubagents => &mut manifest.allowed_subagents,
-        ActiveListKind::PreLaunchChecks => &mut manifest.pre_launch_checks,
-        ActiveListKind::NativeTools => &mut manifest.native_tools,
-        ActiveListKind::McpTools => &mut manifest.mcp_tools,
-        ActiveListKind::AllowedDirs => &mut manifest.allowed_dirs,
-        ActiveListKind::DisallowedDirs => &mut manifest.disallowed_dirs,
-        ActiveListKind::AllowedFiles => &mut manifest.allowed_files,
-        ActiveListKind::DisallowedFiles => &mut manifest.disallowed_files,
-    };
-    target.push(item.to_owned());
 }
 
 /// Returns the ordered list of candidate directories where agent manifests are located,

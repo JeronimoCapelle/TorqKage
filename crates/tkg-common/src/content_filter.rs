@@ -16,12 +16,15 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 /// Policy filter kind specifying the allowed modification domain.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentFilterKind {
     /// Allows comments, docstrings, doctests, and formatting whitespace.
+    #[default]
+    #[serde(alias = "comments")]
     CommentsOnly,
     /// Allows unit test modules, test items, test functions, and test blocks.
+    #[serde(alias = "tests")]
     TestsOnly,
     /// Allows modifications strictly delimited by configured start and end markers.
     Delimited,
@@ -47,6 +50,7 @@ impl BlockCommentDelimiters {
 
 /// Declarative language syntax rules for comments and test blocks.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "RawSyntaxConfig")]
 pub struct SyntaxConfig {
     /// Line comment prefixes (e.g. `["//"]` for C/Rust/Go/Zig, `["#"]` for Python/Shell, `["--"]` for Lua/SQL).
     #[serde(default)]
@@ -60,6 +64,50 @@ pub struct SyntaxConfig {
     /// Function or item name prefixes that identify test definitions (e.g. `["test_"]` for Python, `["Test"]` for Go).
     #[serde(default)]
     pub test_prefixes: Vec<String>,
+}
+
+#[derive(Deserialize, Default)]
+struct RawSyntaxConfig {
+    #[serde(default)]
+    line_comments: Vec<String>,
+    #[serde(default)]
+    line_comment: Option<String>,
+    #[serde(default)]
+    block_comments: Vec<BlockCommentDelimiters>,
+    #[serde(default)]
+    test_attributes: Vec<String>,
+    #[serde(default)]
+    test_attribute: Option<String>,
+    #[serde(default)]
+    test_prefixes: Vec<String>,
+    #[serde(default)]
+    test_prefix: Option<String>,
+}
+
+impl From<RawSyntaxConfig> for SyntaxConfig {
+    fn from(mut raw: RawSyntaxConfig) -> Self {
+        if raw.line_comments.is_empty()
+            && let Some(lc) = raw.line_comment
+        {
+            raw.line_comments.push(lc);
+        }
+        if raw.test_attributes.is_empty()
+            && let Some(ta) = raw.test_attribute
+        {
+            raw.test_attributes.push(ta);
+        }
+        if raw.test_prefixes.is_empty()
+            && let Some(tp) = raw.test_prefix
+        {
+            raw.test_prefixes.push(tp);
+        }
+        Self {
+            line_comments: raw.line_comments,
+            block_comments: raw.block_comments,
+            test_attributes: raw.test_attributes,
+            test_prefixes: raw.test_prefixes,
+        }
+    }
 }
 
 impl SyntaxConfig {
@@ -78,7 +126,8 @@ impl SyntaxConfig {
 }
 
 /// Declarative path policy binding a workspace path pattern to a content filter.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(from = "RawPathPolicy")]
 pub struct PathPolicy {
     /// Relative path or directory pattern (e.g. `"src"`, `"src/lib.rs"`).
     pub path: String,
@@ -104,17 +153,56 @@ pub struct PathPolicy {
     pub test_prefixes: Vec<String>,
 }
 
-impl Default for PathPolicy {
-    fn default() -> Self {
+#[derive(Deserialize, Default)]
+struct RawPathPolicy {
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    filter: ContentFilterKind,
+    #[serde(default)]
+    start_marker: Option<String>,
+    #[serde(default)]
+    end_marker: Option<String>,
+    #[serde(default)]
+    line_comments: Vec<String>,
+    #[serde(default)]
+    line_comment: Option<String>,
+    #[serde(default)]
+    block_comments: Vec<BlockCommentDelimiters>,
+    #[serde(default)]
+    block_comment_start: Option<String>,
+    #[serde(default)]
+    block_comment_end: Option<String>,
+    #[serde(default)]
+    test_attributes: Vec<String>,
+    #[serde(default)]
+    test_prefixes: Vec<String>,
+}
+
+impl From<RawPathPolicy> for PathPolicy {
+    fn from(mut raw: RawPathPolicy) -> Self {
+        if raw.line_comments.is_empty()
+            && let Some(lc) = raw.line_comment
+        {
+            raw.line_comments.push(lc);
+        }
+        if raw.block_comments.is_empty()
+            && (raw.block_comment_start.is_some() || raw.block_comment_end.is_some())
+        {
+            raw.block_comments.push(BlockCommentDelimiters::new(
+                raw.block_comment_start.unwrap_or_default(),
+                raw.block_comment_end.unwrap_or_default(),
+            ));
+        }
         Self {
-            path: String::new(),
-            filter: ContentFilterKind::CommentsOnly,
-            start_marker: None,
-            end_marker: None,
-            line_comments: Vec::new(),
-            block_comments: Vec::new(),
-            test_attributes: Vec::new(),
-            test_prefixes: Vec::new(),
+            path: raw.path,
+            filter: raw.filter,
+            start_marker: raw.start_marker,
+            end_marker: raw.end_marker,
+            line_comments: raw.line_comments,
+            block_comments: raw.block_comments,
+            test_attributes: raw.test_attributes,
+            test_prefixes: raw.test_prefixes,
         }
     }
 }
@@ -933,27 +1021,52 @@ pub fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
     let p = pattern.trim().replace('\\', "/");
     let target = path_str.trim().replace('\\', "/");
 
-    if p == "*" || p.is_empty() {
+    if p == "*" || p.is_empty() || target == p {
         return true;
     }
 
-    // Directory wildcard e.g. "src/auth/**" or "src/auth/*"
+    // Directory wildcard e.g. "src/auth/**" or "src/auth/*" matching directory itself or children
     if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
         let prefix = prefix.trim_end_matches('/');
-        return target == prefix || target.starts_with(&format!("{prefix}/"));
+        if target == prefix || target.starts_with(&format!("{prefix}/")) {
+            return true;
+        }
     }
 
-    // Suffix wildcard e.g. "*.pem" or "*_secret.json"
-    if let Some(suffix) = p.strip_prefix('*') {
-        return target.ends_with(suffix);
+    // Direct filename / component match for exact names without wildcards
+    if !p.contains('/')
+        && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
+        && filename == p
+    {
+        return true;
     }
 
-    // Prefix wildcard e.g. ".env*"
-    if let Some(prefix) = p.strip_suffix('*') {
-        return target.starts_with(prefix);
+    // Full glob matching via globset (e.g. "src/**/*.rs", "*.{pem,key}", "tests/*_test.rs")
+    if p.contains(['*', '?', '[', '{'])
+        && let Ok(glob) = globset::GlobBuilder::new(&p)
+            .literal_separator(true)
+            .build()
+    {
+        let matcher = glob.compile_matcher();
+        if !p.contains('/')
+            && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
+            && matcher.is_match(filename)
+        {
+            return true;
+        }
+        if matcher.is_match(&target) {
+            return true;
+        }
     }
 
-    target == p
+    // Prefix wildcard fallback (e.g. ".env*")
+    if let Some(prefix) = p.strip_suffix('*')
+        && target.starts_with(prefix)
+    {
+        return true;
+    }
+
+    false
 }
 
 /// Returns an error if the agent is restricted and the target path violates the agent's guard boundaries.

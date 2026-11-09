@@ -760,387 +760,288 @@ impl ProjectConfig {
 }
 
 /// Parses a TOML string into a structured `ProjectConfig`.
-/// Uses the official `toml` parser crate for robust syntax and structure deserialization.
+/// Uses the official `toml` parser crate with `serde` deserialization.
 ///
 /// # Errors
 /// Returns an error message if the content fails syntax validation.
 pub fn parse_project_toml(content: &str) -> Result<ProjectConfig, String> {
-    let table: toml::Table = toml::from_str(content).map_err(|err| err.to_string())?;
-    let mut config = ProjectConfig::default();
+    let raw: RawProjectToml = toml::from_str(content).map_err(|err| err.to_string())?;
+    Ok(raw.into_project_config())
+}
 
-    for (section, val) in &table {
-        match section.as_str() {
-            "project" => parse_project_section(&mut config, val),
-            "workspace" => parse_workspace_section(&mut config, val),
-            "gates" => parse_gates_section(&mut config, val),
-            "sandbox" => parse_sandbox_section(&mut config, val),
-            "environment" => parse_environment_section(&mut config, val),
-            "security" => parse_security_section(&mut config, val),
-            "extra_banned_files" => {
-                if let toml::Value::Array(arr) = val {
-                    let items = extract_string_array(arr);
-                    config.security.extra_banned_patterns.extend(items.clone());
-                    config.extra_banned_files = items;
-                }
-            },
-            "docs" | "docs_paths" => parse_docs_section(&mut config, val),
-            "policies" => parse_policies_section(&mut config, val),
-            "path_policies" => parse_path_policies_section(&mut config, val),
-            "runner" => parse_runner_section(&mut config, val),
-            "harness" => {
-                parse_runner_section(&mut config, val);
-                config.harness = Some(config.runner.clone());
-            },
-            _ => {},
+#[derive(Deserialize, Default)]
+#[serde(untagged)]
+enum StringOrVec {
+    #[default]
+    Empty,
+    Single(String),
+    Multiple(Vec<String>),
+}
+
+impl StringOrVec {
+    fn into_vec(self) -> Vec<String> {
+        match self {
+            Self::Empty => Vec::new(),
+            Self::Single(s) => vec![s],
+            Self::Multiple(v) => v,
         }
     }
 
-    Ok(config)
-}
-
-fn parse_runner_section(config: &mut ProjectConfig, val: &toml::Value) {
-    match val {
-        toml::Value::Table(tbl) => {
-            for (k, v) in tbl {
-                match (k.as_str(), v) {
-                    ("harness" | "name" | "type", toml::Value::String(s)) => {
-                        config.runner.harness.clone_from(s);
-                    },
-                    ("command" | "cmd", toml::Value::Array(arr)) => {
-                        config.runner.command = Some(extract_string_array(arr));
-                    },
-                    ("command" | "cmd", toml::Value::String(s)) => {
-                        config.runner.command = Some(vec![s.clone()]);
-                    },
-                    ("agent_flag" | "agentFlag", toml::Value::String(s)) => {
-                        config.runner.agent_flag = Some(s.clone());
-                    },
-                    ("sandbox_flag" | "sandboxFlag", toml::Value::String(s)) => {
-                        config.runner.sandbox_flag = Some(s.clone());
-                    },
-                    (
-                        "resume_flag" | "resumeFlag" | "session_flag" | "sessionFlag",
-                        toml::Value::String(s),
-                    ) => {
-                        config.runner.resume_flag = Some(s.clone());
-                    },
-                    ("extra_args" | "extraArgs" | "args", toml::Value::Array(arr)) => {
-                        config.runner.extra_args = extract_string_array(arr);
-                    },
-                    ("agent_dirs" | "agentDirs" | "agents", toml::Value::Array(arr)) => {
-                        config.runner.agent_dirs = extract_string_array(arr);
-                    },
-                    _ => {},
-                }
-            }
-        },
-        toml::Value::String(s) => {
-            config.runner.harness.clone_from(s);
-        },
-        _ => {},
+    fn into_option_vec(self) -> Option<Vec<String>> {
+        match self {
+            Self::Empty => None,
+            Self::Single(s) => Some(vec![s]),
+            Self::Multiple(v) => Some(v),
+        }
     }
 }
 
-fn extract_string_array(arr: &[toml::Value]) -> Vec<String> {
-    arr.iter()
-        .filter_map(|x| x.as_str().map(ToOwned::to_owned))
-        .collect()
+#[derive(Deserialize, Default)]
+struct RawProjectMeta {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default, alias = "docs_paths", alias = "paths")]
+    docs: StringOrVec,
 }
 
-fn parse_project_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val {
-        for (k, v) in tbl {
-            if let Some(s) = v.as_str() {
-                match k.as_str() {
-                    "name" => config.project.name = Some(s.to_owned()),
-                    "language" => config.project.language = Some(s.to_owned()),
-                    "version" => config.project.version = Some(s.to_owned()),
-                    "docs" | "docs_paths" => config.docs.paths = vec![s.to_owned()],
-                    _ => {},
+#[derive(Deserialize, Default)]
+struct RawSecuritySection {
+    #[serde(default)]
+    disabled_categories: Vec<String>,
+    #[serde(default, alias = "extra_banned_files")]
+    extra_banned_patterns: Vec<String>,
+    #[serde(default)]
+    allowed_patterns: Vec<String>,
+    #[serde(default)]
+    block_generic_credentials: Option<bool>,
+    #[serde(default)]
+    block_vcs_internals: Option<bool>,
+    #[serde(default)]
+    block_ssh_keys: Option<bool>,
+    #[serde(default)]
+    block_shell_profiles: Option<bool>,
+    #[serde(default)]
+    block_sensitive_extensions: Option<bool>,
+}
+
+impl RawSecuritySection {
+    fn into_security_config(self) -> ProjectSecurityConfig {
+        let mut cfg = ProjectSecurityConfig {
+            disabled_categories: self.disabled_categories,
+            extra_banned_patterns: self.extra_banned_patterns,
+            allowed_patterns: self.allowed_patterns,
+        };
+        if let Some(b) = self.block_generic_credentials {
+            cfg.set_category_blocked(SecurityCategory::GenericCredentials, b);
+        }
+        if let Some(b) = self.block_vcs_internals {
+            cfg.set_category_blocked(SecurityCategory::VcsInternals, b);
+        }
+        if let Some(b) = self.block_ssh_keys {
+            cfg.set_category_blocked(SecurityCategory::SshKeys, b);
+        }
+        if let Some(b) = self.block_shell_profiles {
+            cfg.set_category_blocked(SecurityCategory::ShellProfiles, b);
+        }
+        if let Some(b) = self.block_sensitive_extensions {
+            cfg.set_category_blocked(SecurityCategory::SensitiveExtensions, b);
+        }
+        cfg
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct RawDocsTable {
+    #[serde(default, alias = "dirs", alias = "path")]
+    paths: StringOrVec,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    tool_name: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(untagged)]
+enum RawDocsSection {
+    #[default]
+    Empty,
+    List(Vec<String>),
+    Single(String),
+    Table(RawDocsTable),
+}
+
+impl RawDocsSection {
+    fn into_docs_config(self, fallback_paths: Vec<String>) -> ProjectDocsConfig {
+        match self {
+            Self::Empty => ProjectDocsConfig {
+                paths: fallback_paths,
+                description: None,
+                tool_name: None,
+            },
+            Self::Table(t) => {
+                let paths = t.paths.into_vec();
+                ProjectDocsConfig {
+                    paths: if paths.is_empty() {
+                        fallback_paths
+                    } else {
+                        paths
+                    },
+                    description: t.description,
+                    tool_name: t.tool_name,
                 }
-            } else if let toml::Value::Array(arr) = v
-                && (k == "docs" || k == "docs_paths" || k == "paths")
+            },
+            Self::List(paths) => ProjectDocsConfig {
+                paths,
+                description: None,
+                tool_name: None,
+            },
+            Self::Single(s) => ProjectDocsConfig {
+                paths: vec![s],
+                description: None,
+                tool_name: None,
+            },
+        }
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct RawRunnerTable {
+    #[serde(default = "default_harness", alias = "name", alias = "type")]
+    harness: String,
+    #[serde(default, alias = "cmd")]
+    command: StringOrVec,
+    #[serde(default, alias = "agentFlag")]
+    agent_flag: Option<String>,
+    #[serde(default, alias = "sandboxFlag")]
+    sandbox_flag: Option<String>,
+    #[serde(
+        default,
+        alias = "resumeFlag",
+        alias = "session_flag",
+        alias = "sessionFlag"
+    )]
+    resume_flag: Option<String>,
+    #[serde(default, alias = "extraArgs", alias = "args")]
+    extra_args: Vec<String>,
+    #[serde(default, alias = "agentDirs", alias = "agents")]
+    agent_dirs: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RawRunnerSection {
+    Name(String),
+    Table(RawRunnerTable),
+}
+
+impl RawRunnerSection {
+    fn into_runner_config(self) -> ProjectRunnerConfig {
+        match self {
+            Self::Table(t) => ProjectRunnerConfig {
+                harness: t.harness,
+                command: t.command.into_option_vec(),
+                agent_flag: t.agent_flag,
+                sandbox_flag: t.sandbox_flag,
+                resume_flag: t.resume_flag,
+                extra_args: t.extra_args,
+                agent_dirs: t.agent_dirs,
+            },
+            Self::Name(harness) => ProjectRunnerConfig {
+                harness,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct RawProjectToml {
+    #[serde(default)]
+    project: RawProjectMeta,
+    #[serde(default)]
+    workspace: ProjectWorkspaceConfig,
+    #[serde(default)]
+    gates: BTreeMap<String, GateDefinition>,
+    #[serde(default)]
+    sandbox: ProjectSandboxConfig,
+    #[serde(default)]
+    environment: toml::Table,
+    #[serde(default)]
+    security: RawSecuritySection,
+    #[serde(default)]
+    extra_banned_files: Vec<String>,
+    #[serde(default, alias = "docs_paths")]
+    docs: RawDocsSection,
+    #[serde(default)]
+    policies: ProjectPolicyConfig,
+    #[serde(default)]
+    path_policies: Vec<crate::content_filter::PathPolicy>,
+    #[serde(default)]
+    runner: Option<RawRunnerSection>,
+    #[serde(default)]
+    harness: Option<RawRunnerSection>,
+}
+
+impl RawProjectToml {
+    fn into_project_config(self) -> ProjectConfig {
+        let project_docs = self.project.docs.into_vec();
+        let project = ProjectMeta {
+            name: self.project.name,
+            language: self.project.language,
+            version: self.project.version,
+        };
+        let docs = self.docs.into_docs_config(project_docs);
+        let mut security = self.security.into_security_config();
+        let mut extra_banned_files = self.extra_banned_files;
+        let mut environment = BTreeMap::new();
+
+        for (k, v) in self.environment {
+            if (k == "extra_banned_files" || k == "extra_banned_patterns")
+                && let Some(arr) = v.as_array()
             {
-                config.docs.paths = extract_string_array(arr);
-            }
-        }
-    }
-}
-
-fn parse_workspace_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val {
-        for (k, v) in tbl {
-            if let toml::Value::Array(arr) = v {
-                let strings = extract_string_array(arr);
-                match k.as_str() {
-                    "containers" => config.workspace.containers = strings,
-                    "ignored_paths" => config.workspace.ignored_paths = strings,
-                    _ => {},
-                }
-            }
-        }
-    }
-}
-
-fn parse_gates_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val {
-        for (gate_name, gate_val) in tbl {
-            if let toml::Value::Table(gate_tbl) = gate_val {
-                let mut gate = GateDefinition {
-                    command: Vec::new(),
-                    timeout_seconds: DEFAULT_GATE_TIMEOUT_SECS,
-                    failure_message: None,
-                    error_regex: None,
-                    explain_command: None,
-                };
-                for (gk, gv) in gate_tbl {
-                    match gk.as_str() {
-                        "command" => {
-                            if let toml::Value::Array(arr) = gv {
-                                gate.command = extract_string_array(arr);
-                            }
-                        },
-                        "timeout_seconds" => {
-                            if let Some(n) = gv.as_integer()
-                                && let Ok(u) = u64::try_from(n)
-                            {
-                                gate.timeout_seconds = u;
-                            }
-                        },
-                        "failure_message" => {
-                            gate.failure_message = gv.as_str().map(ToOwned::to_owned);
-                        },
-                        "error_regex" => {
-                            gate.error_regex = gv.as_str().map(ToOwned::to_owned);
-                        },
-                        "explain_command" => {
-                            if let toml::Value::Array(arr) = gv {
-                                gate.explain_command = Some(extract_string_array(arr));
-                            }
-                        },
-                        _ => {},
-                    }
-                }
-                config.gates.insert(gate_name.clone(), gate);
-            }
-        }
-    }
-}
-
-fn parse_sandbox_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val
-        && let Some(toml::Value::Array(arr)) = tbl.get("bind_mounts")
-    {
-        config.sandbox.bind_mounts = extract_string_array(arr);
-    }
-}
-
-fn parse_environment_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val {
-        for (k, v) in tbl {
-            if k == "extra_banned_files" || k == "extra_banned_patterns" {
-                if let toml::Value::Array(arr) = v {
-                    let items = extract_string_array(arr);
-                    config.security.extra_banned_patterns.extend(items.clone());
-                    config.extra_banned_files = items;
-                }
+                let items: Vec<String> = arr
+                    .iter()
+                    .filter_map(|x| x.as_str().map(ToOwned::to_owned))
+                    .collect();
+                security.extra_banned_patterns.extend(items.clone());
+                extra_banned_files = items;
             } else if let Some(s) = v.as_str() {
-                config.environment.insert(k.clone(), s.to_owned());
+                environment.insert(k, s.to_owned());
             }
         }
-    }
-}
 
-fn parse_security_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val {
-        for (k, v) in tbl {
-            match (k.as_str(), v) {
-                ("block_generic_credentials", toml::Value::Boolean(b)) => {
-                    config
-                        .security
-                        .set_category_blocked(SecurityCategory::GenericCredentials, *b);
-                },
-                ("block_vcs_internals", toml::Value::Boolean(b)) => {
-                    config
-                        .security
-                        .set_category_blocked(SecurityCategory::VcsInternals, *b);
-                },
-                ("block_ssh_keys", toml::Value::Boolean(b)) => {
-                    config
-                        .security
-                        .set_category_blocked(SecurityCategory::SshKeys, *b);
-                },
-                ("block_shell_profiles", toml::Value::Boolean(b)) => {
-                    config
-                        .security
-                        .set_category_blocked(SecurityCategory::ShellProfiles, *b);
-                },
-                ("block_sensitive_extensions", toml::Value::Boolean(b)) => {
-                    config
-                        .security
-                        .set_category_blocked(SecurityCategory::SensitiveExtensions, *b);
-                },
-                ("extra_banned_patterns" | "extra_banned_files", toml::Value::Array(arr)) => {
-                    config.security.extra_banned_patterns = extract_string_array(arr);
-                },
-                ("allowed_patterns", toml::Value::Array(arr)) => {
-                    config.security.allowed_patterns = extract_string_array(arr);
-                },
-                ("disabled_categories", toml::Value::Array(arr)) => {
-                    config.security.disabled_categories = extract_string_array(arr);
-                },
-                _ => {},
-            }
-        }
-    }
-}
-
-fn parse_docs_section(config: &mut ProjectConfig, val: &toml::Value) {
-    match val {
-        toml::Value::Table(tbl) => {
-            for (k, v) in tbl {
-                match (k.as_str(), v) {
-                    ("description", toml::Value::String(s)) => {
-                        config.docs.description = Some(s.clone());
-                    },
-                    ("path", toml::Value::String(s)) => config.docs.paths = vec![s.clone()],
-                    ("paths" | "dirs", toml::Value::Array(arr)) => {
-                        config.docs.paths = extract_string_array(arr);
-                    },
-                    ("tool_name", toml::Value::String(s)) => {
-                        config.docs.tool_name = Some(s.clone());
-                    },
-                    _ => {},
-                }
-            }
-        },
-        toml::Value::Array(arr) => {
-            config.docs.paths = extract_string_array(arr);
-        },
-        toml::Value::String(s) => {
-            config.docs.paths = vec![s.clone()];
-        },
-        _ => {},
-    }
-}
-
-fn parse_block_comments_array(
-    arr: &[toml::Value],
-) -> Vec<crate::content_filter::BlockCommentDelimiters> {
-    let mut blocks = Vec::new();
-    for item in arr {
-        if let toml::Value::Table(b_tbl) = item {
-            let start = b_tbl.get("start").and_then(toml::Value::as_str);
-            let end = b_tbl.get("end").and_then(toml::Value::as_str);
-            if let (Some(s), Some(e)) = (start, end) {
-                blocks.push(crate::content_filter::BlockCommentDelimiters::new(s, e));
-            }
-        }
-    }
-    blocks
-}
-
-fn parse_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Table(tbl) = val
-        && let Some(toml::Value::Table(syntax_tbl)) = tbl.get("syntax")
-    {
-        let mut syntax = crate::content_filter::SyntaxConfig::default();
-        for (sk, sv) in syntax_tbl {
-            if let toml::Value::Array(arr) = sv {
-                let strings = extract_string_array(arr);
-                match sk.as_str() {
-                    "line_comments" => syntax.line_comments = strings,
-                    "test_attributes" => syntax.test_attributes = strings,
-                    "test_prefixes" => syntax.test_prefixes = strings,
-                    "block_comments" => {
-                        syntax.block_comments = parse_block_comments_array(arr);
-                    },
-                    _ => {},
-                }
-            } else if let toml::Value::String(s) = sv {
-                match sk.as_str() {
-                    "line_comment" => syntax.line_comments = vec![s.clone()],
-                    "test_attribute" => syntax.test_attributes = vec![s.clone()],
-                    "test_prefix" => syntax.test_prefixes = vec![s.clone()],
-                    _ => {},
+        if !extra_banned_files.is_empty() {
+            for item in &extra_banned_files {
+                if !security.extra_banned_patterns.contains(item) {
+                    security.extra_banned_patterns.push(item.clone());
                 }
             }
         }
-        config.policies.syntax = Some(syntax);
-    }
-}
 
-fn parse_path_policies_section(config: &mut ProjectConfig, val: &toml::Value) {
-    if let toml::Value::Array(arr) = val {
-        for item in arr {
-            if let toml::Value::Table(p_tbl) = item {
-                let mut policy = crate::content_filter::PathPolicy::default();
-                for (pk, pv) in p_tbl {
-                    match (pk.as_str(), pv) {
-                        ("path", toml::Value::String(s)) => policy.path.clone_from(s),
-                        ("filter", toml::Value::String(s)) => match s.as_str() {
-                            "comments_only" | "comments" => {
-                                policy.filter =
-                                    crate::content_filter::ContentFilterKind::CommentsOnly;
-                            },
-                            "tests_only" | "tests" => {
-                                policy.filter = crate::content_filter::ContentFilterKind::TestsOnly;
-                            },
-                            "delimited" => {
-                                policy.filter = crate::content_filter::ContentFilterKind::Delimited;
-                            },
-                            _ => {},
-                        },
-                        ("start_marker", toml::Value::String(s)) => {
-                            policy.start_marker = Some(s.clone());
-                        },
-                        ("end_marker", toml::Value::String(s)) => {
-                            policy.end_marker = Some(s.clone());
-                        },
-                        ("line_comment", toml::Value::String(s)) => {
-                            policy.line_comments = vec![s.clone()];
-                        },
-                        ("block_comment_start", toml::Value::String(s)) => {
-                            if let Some(bc) = policy.block_comments.last_mut() {
-                                s.clone_into(&mut bc.start);
-                            } else {
-                                policy.block_comments.push(
-                                    crate::content_filter::BlockCommentDelimiters::new(
-                                        s.as_str(),
-                                        "",
-                                    ),
-                                );
-                            }
-                        },
-                        ("block_comment_end", toml::Value::String(s)) => {
-                            if let Some(bc) = policy.block_comments.last_mut() {
-                                s.clone_into(&mut bc.end);
-                            } else {
-                                policy.block_comments.push(
-                                    crate::content_filter::BlockCommentDelimiters::new(
-                                        "",
-                                        s.as_str(),
-                                    ),
-                                );
-                            }
-                        },
-                        ("line_comments", toml::Value::Array(p_arr)) => {
-                            policy.line_comments = extract_string_array(p_arr);
-                        },
-                        ("block_comments", toml::Value::Array(p_arr)) => {
-                            policy.block_comments = parse_block_comments_array(p_arr);
-                        },
-                        ("test_attributes", toml::Value::Array(p_arr)) => {
-                            policy.test_attributes = extract_string_array(p_arr);
-                        },
-                        ("test_prefixes", toml::Value::Array(p_arr)) => {
-                            policy.test_prefixes = extract_string_array(p_arr);
-                        },
-                        _ => {},
-                    }
-                }
-                config.path_policies.push(policy);
-            }
+        let harness = self.harness.map(RawRunnerSection::into_runner_config);
+        let runner = self
+            .runner
+            .map(RawRunnerSection::into_runner_config)
+            .or_else(|| harness.clone())
+            .unwrap_or_default();
+
+        ProjectConfig {
+            project,
+            workspace: self.workspace,
+            gates: self.gates,
+            sandbox: self.sandbox,
+            environment,
+            security,
+            extra_banned_files,
+            docs,
+            policies: self.policies,
+            path_policies: self.path_policies,
+            runner,
+            harness,
         }
     }
 }

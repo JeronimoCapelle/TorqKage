@@ -93,18 +93,7 @@ pub(crate) fn execute(
         Some(&project),
     )?;
 
-    if let Some(parent) = safe_path.parent()
-        && !parent.exists()
-    {
-        std::fs::create_dir_all(parent).map_err(|err| {
-            format!(
-                "Failed to create parent directory '{}': {err}",
-                parent.display()
-            )
-        })?;
-    }
-
-    std::fs::write(&safe_path, content.as_bytes())
+    tkg_common::atomic_write(&safe_path, content.as_bytes())
         .map_err(|err| format!("Failed to write file '{}': {err}", safe_path.display()))?;
 
     let bytes = content.len();

@@ -237,6 +237,15 @@ impl ToolDefinition {
     pub fn primary_binary(&self) -> Option<&str> {
         self.command.first().map(String::as_str)
     }
+
+    /// Evaluates whether this resolved tool requires the specified gate (case-insensitive).
+    #[must_use]
+    pub fn requires_gate(&self, gate_name: &str) -> bool {
+        self.preconditions
+            .require_gates
+            .iter()
+            .any(|g| g.eq_ignore_ascii_case(gate_name))
+    }
 }
 
 fn resolve_fallback<T: Clone>(
@@ -308,7 +317,10 @@ fn resolve_preconditions(
     for source in sources.into_iter().flatten() {
         if let Some(ref source_gates) = source.require_gates {
             for g in source_gates {
-                if !gates.contains(g) {
+                if !gates
+                    .iter()
+                    .any(|existing: &String| existing.eq_ignore_ascii_case(g))
+                {
                     gates.push(g.clone());
                 }
             }
@@ -316,13 +328,10 @@ fn resolve_preconditions(
     }
 
     let mut skip_set = Vec::new();
-    if let Some(b) = base
-        && let Some(ref base_skips) = b.skip_gates
-    {
-        skip_set.extend(base_skips.clone());
-    }
-    if let Some(ref raw_skips) = raw.skip_gates {
-        skip_set.extend(raw_skips.clone());
+    for source in sources.into_iter().flatten() {
+        if let Some(ref skips) = source.skip_gates {
+            skip_set.extend(skips.clone());
+        }
     }
 
     if skip_set
@@ -433,7 +442,8 @@ pub fn resolve(config: &RawToolsConfig) -> Vec<ToolDefinition> {
         let category_name = raw_tool
             .category
             .as_deref()
-            .or_else(|| base?.category.as_deref());
+            .or_else(|| base?.category.as_deref())
+            .map(|c| c.strip_prefix("categories.").unwrap_or(c));
         let category = category_name.and_then(|cat| config.categories.get(cat));
         resolved.push(merge_tool_with_category(
             name.clone(),
@@ -443,6 +453,52 @@ pub fn resolve(config: &RawToolsConfig) -> Vec<ToolDefinition> {
         ));
     }
     resolved
+}
+
+impl RawToolsConfig {
+    /// Parses a `tools.toml` content string into a `RawToolsConfig`, returning an empty config on parse error.
+    #[must_use]
+    pub fn from_toml_str(content: &str) -> Self {
+        toml::from_str(content).unwrap_or_default()
+    }
+
+    /// Loads and merges `tools.toml` configurations across all candidate directories for `root`.
+    #[must_use]
+    pub fn load_merged(root: &std::path::Path) -> Self {
+        let ws_root =
+            crate::WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
+        let runner = crate::harness::runner_for(root);
+        let mut candidates = crate::harness::config_file_candidates(root, &runner, "tools.toml");
+        for extra in crate::harness::config_file_candidates(&ws_root, &runner, "tools.toml") {
+            if !candidates.contains(&extra) {
+                candidates.push(extra);
+            }
+        }
+
+        let mut merged = Self::default();
+        // Load in reverse order so higher-priority candidates overwrite lower-priority ones
+        for path in candidates.into_iter().rev() {
+            if path.is_file()
+                && let Ok(content) = std::fs::read_to_string(&path)
+                && let Ok(parsed) = toml::from_str::<Self>(&content)
+            {
+                merged.tools.extend(parsed.tools);
+                merged.base_tools.extend(parsed.base_tools);
+                merged.categories.extend(parsed.categories);
+            }
+        }
+        merged
+    }
+
+    /// Loads, merges, and resolves all tool definitions indexed by tool name.
+    #[must_use]
+    pub fn load_resolved_map(root: &std::path::Path) -> crate::FastHashMap<String, ToolDefinition> {
+        let raw = Self::load_merged(root);
+        resolve(&raw)
+            .into_iter()
+            .map(|t| (t.name.clone(), t))
+            .collect()
+    }
 }
 
 #[cfg(test)]

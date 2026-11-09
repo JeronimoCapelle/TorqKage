@@ -22,6 +22,9 @@ regex = { workspace = true }
 anstream = { workspace = true }
 globset = { workspace = true }
 ignore = { workspace = true }
+grep-regex = { workspace = true }
+grep-searcher = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

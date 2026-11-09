@@ -2,7 +2,8 @@
 
 use std::path::Path;
 
-use regex::{Regex, RegexBuilder};
+use grep_regex::{RegexMatcher, RegexMatcherBuilder};
+use grep_searcher::{BinaryDetection, SearcherBuilder, sinks::UTF8};
 use tkg_common::{ProjectConfig, ProjectSecurityConfig};
 
 use crate::{
@@ -12,71 +13,31 @@ use crate::{
 
 const MAX_SEARCH_MATCHES: usize = 500;
 
-#[derive(Debug)]
-enum SearchMatcher {
-    Regex(Regex),
-    Literal {
-        pattern: String,
-        case_sensitive: bool,
-    },
-}
+fn build_search_matcher(
+    pattern: &str,
+    is_regex_opt: Option<bool>,
+    case_sensitive: bool,
+) -> Result<RegexMatcher, String> {
+    let mut builder = RegexMatcherBuilder::new();
+    builder.case_insensitive(!case_sensitive).multi_line(true);
 
-impl SearchMatcher {
-    fn literal(pattern: &str, case_sensitive: bool) -> Self {
-        let stored_pattern = if case_sensitive {
-            pattern.to_owned()
-        } else {
-            pattern.to_lowercase()
-        };
-        Self::Literal {
-            pattern: stored_pattern,
-            case_sensitive,
-        }
-    }
-
-    fn from_args(
-        pattern: &str,
-        is_regex_opt: Option<bool>,
-        case_sensitive: bool,
-    ) -> Result<Self, String> {
-        match is_regex_opt {
-            Some(true) => {
-                let re = RegexBuilder::new(pattern)
-                    .case_insensitive(!case_sensitive)
-                    .multi_line(true)
-                    .build()
-                    .map_err(|err| format!("Invalid regex pattern '{pattern}': {err}"))?;
-                Ok(Self::Regex(re))
-            },
-            Some(false) => Ok(Self::literal(pattern, case_sensitive)),
-            None => {
-                // Auto-compile as regex if valid; gracefully fallback to literal if regex syntax fails.
-                RegexBuilder::new(pattern)
-                    .case_insensitive(!case_sensitive)
-                    .multi_line(true)
-                    .build()
-                    .map_or_else(
-                        |_| Ok(Self::literal(pattern, case_sensitive)),
-                        |re| Ok(Self::Regex(re)),
-                    )
-            },
-        }
-    }
-
-    fn is_match(&self, line: &str) -> bool {
-        match self {
-            Self::Regex(re) => re.is_match(line),
-            Self::Literal {
-                pattern,
-                case_sensitive,
-            } => {
-                if *case_sensitive {
-                    line.contains(pattern)
-                } else {
-                    line.to_lowercase().contains(pattern)
-                }
-            },
-        }
+    match is_regex_opt {
+        Some(true) => builder
+            .build(pattern)
+            .map_err(|err| format!("Invalid regex pattern '{pattern}': {err}")),
+        Some(false) => builder
+            .fixed_strings(true)
+            .build(pattern)
+            .map_err(|err| format!("Invalid search literal '{pattern}': {err}")),
+        None => {
+            // Auto-compile as regex if valid; gracefully fallback to literal if regex syntax fails.
+            builder.build(pattern).or_else(|_| {
+                builder
+                    .fixed_strings(true)
+                    .build(pattern)
+                    .map_err(|err| format!("Invalid search pattern '{pattern}': {err}"))
+            })
+        },
     }
 }
 
@@ -114,7 +75,7 @@ pub(crate) fn execute(
         .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
 
-    let matcher = SearchMatcher::from_args(pattern, is_regex_opt, case_sensitive)?;
+    let matcher = build_search_matcher(pattern, is_regex_opt, case_sensitive)?;
 
     let project = ProjectConfig::detect_or_load(workspace_root);
     let mut collected_matches = Vec::new();
@@ -256,7 +217,7 @@ fn resolve_search_targets(
 fn search_single_file(
     file_path: &Path,
     workspace_root: &Path,
-    matcher: &SearchMatcher,
+    matcher: &RegexMatcher,
     security: &ProjectSecurityConfig,
     collected_matches: &mut Vec<String>,
 ) {
@@ -264,23 +225,26 @@ fn search_single_file(
         return;
     }
 
-    if let Ok(content) = std::fs::read_to_string(file_path) {
-        let rel_path = file_path
-            .strip_prefix(workspace_root)
-            .unwrap_or(file_path)
-            .display()
-            .to_string();
+    let rel_path = file_path
+        .strip_prefix(workspace_root)
+        .unwrap_or(file_path)
+        .display()
+        .to_string();
 
-        for (idx, line) in content.lines().enumerate() {
-            if matcher.is_match(line) {
-                let line_num = idx.saturating_add(1);
-                collected_matches.push(format!("{rel_path}:{line_num}: {line}"));
-                if collected_matches.len() >= MAX_SEARCH_MATCHES {
-                    return;
-                }
-            }
-        }
-    }
+    let mut searcher = SearcherBuilder::new()
+        .binary_detection(BinaryDetection::quit(b'\x00'))
+        .line_number(true)
+        .build();
+
+    drop(searcher.search_path(
+        matcher,
+        file_path,
+        UTF8(|line_num, line| {
+            let trimmed = line.trim_end_matches(['\r', '\n']);
+            collected_matches.push(format!("{rel_path}:{line_num}: {trimmed}"));
+            Ok(collected_matches.len() < MAX_SEARCH_MATCHES)
+        }),
+    ));
 }
 
 fn is_path_ignored(rel_str: &str, ignored_paths: &[String]) -> bool {
@@ -304,7 +268,7 @@ fn is_path_ignored(rel_str: &str, ignored_paths: &[String]) -> bool {
 fn walk_and_search(
     dir: &Path,
     workspace_root: &Path,
-    matcher: &SearchMatcher,
+    matcher: &RegexMatcher,
     security: &ProjectSecurityConfig,
     ignored_paths: &[String],
     collected_matches: &mut Vec<String>,

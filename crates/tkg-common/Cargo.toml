@@ -13,12 +13,15 @@ categories.workspace = true
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_norway = { workspace = true }
 thiserror = { workspace = true }
 command-group = { workspace = true }
 nix = { workspace = true, features = ["signal", "process"] }
 jiff = { workspace = true }
 rustc-hash = { workspace = true }
 toml = { workspace = true }
+globset = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

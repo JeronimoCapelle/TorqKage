@@ -5,67 +5,9 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use tkg_common::{GateCheck, ProjectSecurityConfig};
+use tkg_common::{GateCheck, ProjectSecurityConfig, path_matches_pattern};
 
 use crate::models::{AgentGuard, ToolDefinition};
-
-/// Helper checking if a path matches a wildcard pattern or glob-like expression.
-#[must_use]
-pub(crate) fn path_matches_pattern(path_str: &str, pattern: &str) -> bool {
-    let p = pattern.trim().replace('\\', "/");
-    let target = path_str.trim().replace('\\', "/");
-
-    if p == "*" || p.is_empty() {
-        return true;
-    }
-
-    if target == p {
-        return true;
-    }
-
-    // Directory wildcard e.g. "src/auth/password/**" matching directory itself
-    if let Some(prefix) = p.strip_suffix("/**").or_else(|| p.strip_suffix("/*")) {
-        let prefix = prefix.trim_end_matches('/');
-        if target == prefix || target.starts_with(&format!("{prefix}/")) {
-            return true;
-        }
-    }
-
-    // Direct filename / component match for exact names without wildcards
-    if !p.contains('/')
-        && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
-        && filename == p
-    {
-        return true;
-    }
-
-    // Glob matching (e.g. "src/**/*.rs", "*.{pem,key}", "tests/*_test.rs")
-    if p.contains(['*', '?', '[', '{'])
-        && let Ok(glob) = globset::GlobBuilder::new(&p)
-            .literal_separator(true)
-            .build()
-    {
-        let matcher = glob.compile_matcher();
-        if !p.contains('/')
-            && let Some(filename) = Path::new(&target).file_name().and_then(|f| f.to_str())
-            && matcher.is_match(filename)
-        {
-            return true;
-        }
-        if matcher.is_match(&target) {
-            return true;
-        }
-    }
-
-    // Prefix wildcard fallback (e.g. ".env*")
-    if let Some(prefix) = p.strip_suffix('*')
-        && target.starts_with(prefix)
-    {
-        return true;
-    }
-
-    false
-}
 
 /// Inspects a target path against dangerous files, secrets, and repository internals,
 /// guided by optional per-project security configuration.
@@ -766,15 +708,8 @@ pub(crate) fn truncate_output(
 }
 
 /// Strips raw ANSI terminal styling sequences (e.g. colors, bold, cursor codes).
-#[allow(
-    clippy::expect_used,
-    reason = "Static regex pattern is compile-time verified"
-)]
 pub(crate) fn strip_ansi(input: &str) -> String {
-    static ANSI_RE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\([a-zA-Z]").expect("valid ANSI regex")
-    });
-    ANSI_RE.replace_all(input, "").into_owned()
+    anstream::adapter::strip_str(input).to_string()
 }
 
 #[cfg(test)]

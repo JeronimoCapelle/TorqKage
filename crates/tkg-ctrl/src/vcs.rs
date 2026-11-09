@@ -1,6 +1,6 @@
 //! VCS snapshotting, atomic serialization, and declarative contract validation engine.
 
-use std::{fmt::Write, fs, path::Path, process::Command};
+use std::{fmt::Write, path::Path, process::Command};
 
 use tkg_common::{DEFAULT_TOOL_TIMEOUT_SECS, DEFAULT_VCS_QUERY_TIMEOUT_SECS, SubprocessSupervisor};
 
@@ -12,7 +12,7 @@ pub(crate) fn save_agent_to_disk(
     harness: &dyn tkg_common::Harness,
 ) -> Result<(), String> {
     let content = agent.serialize_for_harness(harness);
-    fs::write(&agent.file_path, content)
+    tkg_common::atomic_write(&agent.file_path, content.as_bytes())
         .map_err(|e| format!("Failed to write {}: {e}", agent.file_path.display()))
 }
 

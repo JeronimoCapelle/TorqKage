@@ -191,6 +191,28 @@ pub fn resolve_active_agent(workspace_root: &Path) -> Option<String> {
     None
 }
 
+/// Writes `content` to `path` atomically by creating a temporary file in the same parent directory,
+/// writing all bytes, and performing an atomic POSIX `rename(2)` via [`tempfile::NamedTempFile::persist`].
+///
+/// # Errors
+/// Returns `std::io::Error` if parent directory creation, temporary file write, or atomic rename fails.
+pub fn atomic_write(path: &Path, content: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    if !parent.exists() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    tmp.write_all(content)?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

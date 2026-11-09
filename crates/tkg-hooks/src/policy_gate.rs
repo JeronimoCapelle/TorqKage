@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use tkg_common::{
     CircuitBreakerLedger, FastHashMap, PreToolResponse, PreToolUseInput, WorkspaceResolver,
+    tools::{RawToolsConfig, ToolDefinition, resolve},
 };
 
 use crate::stdin;
@@ -43,7 +44,7 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
         ledger.max_strikes = hooks_cfg.circuit_breaker.max_strikes;
     }
     if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
-        && tools_cfg.is_tool_attribute(tool_name, "mutating")
+        && tools_cfg.is_mutating(tool_name)
     {
         return PreToolResponse::ask(format!(
             "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive gate/verification failures):\n\
@@ -59,14 +60,14 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     }
 
     // 1. Check if tool is explicitly declared as requiring permission in tools.toml
-    if tools_cfg.is_tool_attribute(tool_name, "require_permission_gate") {
+    if tools_cfg.requires_permission_gate(tool_name) {
         return PreToolResponse::ask(format!(
             "Policy Gate: Tool '{tool_name}' requires interactive operator confirmation before execution."
         ));
     }
 
     // 2. Mutating tools that alter source code or repository manifests
-    if tools_cfg.is_tool_attribute(tool_name, "mutating") {
+    if tools_cfg.is_mutating(tool_name) {
         return PreToolResponse::ask(format!(
             "Policy Gate: Tool '{tool_name}' applies automated filesystem or code modifications. Confirm execution?"
         ));
@@ -76,139 +77,63 @@ pub(crate) fn evaluate_policy(input: &PreToolUseInput, root: &Path) -> PreToolRe
     PreToolResponse::allow()
 }
 
-/// Raw representation of a tool, base tool, or category entry parsed from `tools.toml`.
-#[derive(Debug, Default, Clone)]
-pub(crate) struct ParsedToolEntry {
-    pub(crate) inherit: Option<String>,
-    pub(crate) category: Option<String>,
-    pub(crate) mutating: Option<bool>,
-    pub(crate) tracks_circuit_breaker: Option<bool>,
-    pub(crate) require_permission_gate: Option<bool>,
-    pub(crate) require_gates: Vec<String>,
-    pub(crate) skip_gates: Vec<String>,
-}
-
-/// Lightweight container for tools, base tools, and category templates parsed from `tools.toml`.
+/// Resolved map of tool definitions loaded from `tools.toml` via [`tkg_common::tools`].
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ParsedToolsConfig {
-    pub(crate) tools: FastHashMap<String, ParsedToolEntry>,
-    pub(crate) base_tools: FastHashMap<String, ParsedToolEntry>,
-    pub(crate) categories: FastHashMap<String, ParsedToolEntry>,
-}
-
-fn parse_tool_entry(table: &toml::Table) -> ParsedToolEntry {
-    let inherit = table
-        .get("inherit")
-        .and_then(toml::Value::as_str)
-        .map(|s| s.strip_prefix("base_tools.").unwrap_or(s).to_owned());
-    let category = table
-        .get("category")
-        .and_then(toml::Value::as_str)
-        .map(|s| s.strip_prefix("categories.").unwrap_or(s).to_owned());
-    let mutating = table.get("mutating").and_then(toml::Value::as_bool);
-    let tracks_circuit_breaker = table
-        .get("tracks_circuit_breaker")
-        .and_then(toml::Value::as_bool);
-    let require_permission_gate = table
-        .get("require_permission_gate")
-        .and_then(toml::Value::as_bool);
-    let require_gates = table
-        .get("require_gates")
-        .and_then(toml::Value::as_array)
-        .map_or_default(|arr| {
-            arr.iter()
-                .filter_map(toml::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect()
-        });
-    let skip_gates = table
-        .get("skip_gates")
-        .and_then(toml::Value::as_array)
-        .map_or_default(|arr| {
-            arr.iter()
-                .filter_map(toml::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect()
-        });
-
-    ParsedToolEntry {
-        inherit,
-        category,
-        mutating,
-        tracks_circuit_breaker,
-        require_permission_gate,
-        require_gates,
-        skip_gates,
-    }
+    pub(crate) tools: FastHashMap<String, ToolDefinition>,
 }
 
 impl ParsedToolsConfig {
-    /// Parses a `tools.toml` content string into structured tool and category definitions.
+    /// Parses and resolves a `tools.toml` content string into structured tool definitions.
     #[must_use]
+    #[allow(dead_code, reason = "Used by unit tests to parse inline TOML configs")]
     pub(crate) fn from_str(content: &str) -> Self {
-        let Ok(table) = content.parse::<toml::Table>() else {
-            return Self::default();
-        };
+        let raw = RawToolsConfig::from_toml_str(content);
+        let tools = resolve(&raw)
+            .into_iter()
+            .map(|t| (t.name.clone(), t))
+            .collect();
+        Self { tools }
+    }
 
-        let mut config = Self::default();
-
-        if let Some(tools_table) = table.get("tools").and_then(toml::Value::as_table) {
-            for (name, val) in tools_table {
-                if let Some(t) = val.as_table() {
-                    config.tools.insert(name.clone(), parse_tool_entry(t));
-                }
-            }
+    /// Loads, merges, and resolves `tools.toml` configuration across candidate locations.
+    #[must_use]
+    pub(crate) fn load(root: &Path) -> Self {
+        Self {
+            tools: RawToolsConfig::load_resolved_map(root),
         }
+    }
 
-        if let Some(base_table) = table.get("base_tools").and_then(toml::Value::as_table) {
-            for (name, val) in base_table {
-                if let Some(t) = val.as_table() {
-                    config.base_tools.insert(name.clone(), parse_tool_entry(t));
-                }
-            }
-        }
+    /// Checks whether a tool is mutating.
+    #[must_use]
+    pub(crate) fn is_mutating(&self, tool_name: &str) -> bool {
+        self.tools
+            .get(tool_name)
+            .is_some_and(ToolDefinition::mutating)
+    }
 
-        if let Some(cat_table) = table.get("categories").and_then(toml::Value::as_table) {
-            for (name, val) in cat_table {
-                if let Some(t) = val.as_table() {
-                    config.categories.insert(name.clone(), parse_tool_entry(t));
-                }
-            }
-        }
-
-        config
+    /// Checks whether a tool requires interactive permission confirmation.
+    #[must_use]
+    pub(crate) fn requires_permission_gate(&self, tool_name: &str) -> bool {
+        self.tools
+            .get(tool_name)
+            .is_some_and(ToolDefinition::require_permission_gate)
     }
 
     /// Checks if a tool resolves a boolean attribute to true across concrete, base, and category tiers.
     #[must_use]
+    #[allow(
+        dead_code,
+        reason = "Compatibility helper for attribute queries and unit tests"
+    )]
     pub(crate) fn is_tool_attribute(&self, tool_name: &str, attr: &str) -> bool {
         let Some(tool) = self.tools.get(tool_name) else {
             return false;
         };
-
-        let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
-        let cat_name = tool
-            .category
-            .as_deref()
-            .or_else(|| base?.category.as_deref());
-        let category = cat_name.and_then(|c| self.categories.get(c));
-
         match attr {
-            "mutating" => tool
-                .mutating
-                .or_else(|| base?.mutating)
-                .or_else(|| category?.mutating)
-                .unwrap_or(false),
-            "tracks_circuit_breaker" => tool
-                .tracks_circuit_breaker
-                .or_else(|| base?.tracks_circuit_breaker)
-                .or_else(|| category?.tracks_circuit_breaker)
-                .unwrap_or(false),
-            "require_permission_gate" => tool
-                .require_permission_gate
-                .or_else(|| base?.require_permission_gate)
-                .or_else(|| category?.require_permission_gate)
-                .unwrap_or(false),
+            "mutating" => tool.mutating(),
+            "tracks_circuit_breaker" => tool.tracks_circuit_breaker(),
+            "require_permission_gate" => tool.require_permission_gate(),
             _ => false,
         }
     }
@@ -216,110 +141,29 @@ impl ParsedToolsConfig {
     /// Evaluates whether a tool requires a specific gate after category inheritance and skip filtering.
     #[must_use]
     pub(crate) fn tool_requires_gate(&self, tool_name: &str, gate_name: &str) -> bool {
-        let Some(tool) = self.tools.get(tool_name) else {
-            return false;
-        };
-
-        let base = tool.inherit.as_deref().and_then(|b| self.base_tools.get(b));
-        let cat_name = tool
-            .category
-            .as_deref()
-            .or_else(|| base?.category.as_deref());
-        let category = cat_name.and_then(|c| self.categories.get(c));
-
-        let mut gates = Vec::new();
-        if let Some(cat) = category {
-            for g in &cat.require_gates {
-                if !gates
-                    .iter()
-                    .any(|existing: &String| existing.eq_ignore_ascii_case(g))
-                {
-                    gates.push(g.clone());
-                }
-            }
-        }
-        if let Some(b) = base {
-            for g in &b.require_gates {
-                if !gates
-                    .iter()
-                    .any(|existing: &String| existing.eq_ignore_ascii_case(g))
-                {
-                    gates.push(g.clone());
-                }
-            }
-        }
-        for g in &tool.require_gates {
-            if !gates
-                .iter()
-                .any(|existing: &String| existing.eq_ignore_ascii_case(g))
-            {
-                gates.push(g.clone());
-            }
-        }
-
-        let mut skip_gates = Vec::new();
-        if let Some(cat) = category {
-            skip_gates.extend(cat.skip_gates.clone());
-        }
-        if let Some(b) = base {
-            skip_gates.extend(b.skip_gates.clone());
-        }
-        skip_gates.extend(tool.skip_gates.clone());
-
-        if skip_gates
-            .iter()
-            .any(|s| s == "*" || s.eq_ignore_ascii_case("all"))
-        {
-            return false;
-        }
-
-        gates.retain(|g| !skip_gates.iter().any(|s| s.eq_ignore_ascii_case(g)));
-
-        gates.iter().any(|g| g.eq_ignore_ascii_case(gate_name))
-    }
-
-    /// Loads and merges `tools.toml` configuration by searching candidate locations.
-    #[must_use]
-    pub(crate) fn load(root: &Path) -> Self {
-        let ws_root =
-            WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
-        let runner = tkg_common::harness::runner_for(root);
-        let mut candidates =
-            tkg_common::harness::config_file_candidates(root, &runner, "tools.toml");
-        for extra in tkg_common::harness::config_file_candidates(&ws_root, &runner, "tools.toml") {
-            if !candidates.contains(&extra) {
-                candidates.push(extra);
-            }
-        }
-
-        let mut merged = Self::default();
-        // Load in reverse order so higher-priority candidates overwrite lower-priority ones
-        for path in candidates.into_iter().rev() {
-            if path.is_file()
-                && let Ok(content) = std::fs::read_to_string(&path)
-            {
-                let parsed = Self::from_str(&content);
-                merged.tools.extend(parsed.tools);
-                merged.base_tools.extend(parsed.base_tools);
-                merged.categories.extend(parsed.categories);
-            }
-        }
-        merged
+        self.tools
+            .get(tool_name)
+            .is_some_and(|t| t.requires_gate(gate_name))
     }
 }
 
 /// Checks whether a tool is declared as a mutating tool in declarative configuration.
 pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
-    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "mutating")
+    ParsedToolsConfig::load(root).is_mutating(tool_name)
 }
 
 /// Inspects tools.toml (if present) for `require_permission_gate = true`.
+#[allow(dead_code, reason = "Direct query helper for tool gate inspection")]
 pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
-    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "require_permission_gate")
+    ParsedToolsConfig::load(root).requires_permission_gate(tool_name)
 }
 
 /// Evaluates whether a tool requires a specific gate before execution.
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "Direct query helper for gate evaluation and tests"
+)]
 pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) -> bool {
     ParsedToolsConfig::load(root).tool_requires_gate(tool_name, gate_name)
 }

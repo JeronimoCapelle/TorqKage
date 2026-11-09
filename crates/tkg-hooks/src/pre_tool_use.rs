@@ -44,6 +44,7 @@ pub(crate) fn evaluate_pre_tool_use(
     };
 
     let tool_name = tc.name.as_str();
+    let tools_cfg = policy_gate::ParsedToolsConfig::load(root);
 
     // 1. Evaluate native pipeline primitives in declared sequence
     for stage in &config.pre_tool_use.pipeline {
@@ -55,7 +56,7 @@ pub(crate) fn evaluate_pre_tool_use(
                         ledger.max_strikes = config.circuit_breaker.max_strikes;
                     }
                     if (ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes)
-                        && policy_gate::is_mutating_tool(tool_name, root)
+                        && tools_cfg.is_mutating(tool_name)
                     {
                         return PreToolResponse::ask(format!(
                             "🛑 CIRCUIT BREAKER TRIPPED ({} consecutive gate/verification failures):\n\
@@ -90,19 +91,19 @@ pub(crate) fn evaluate_pre_tool_use(
                 }
             },
             "vcs_conflicts" => {
-                if policy_gate::tool_requires_gate(tool_name, root, "vcs_conflicts")
+                if tools_cfg.tool_requires_gate(tool_name, "vcs_conflicts")
                     && let Some(reason) = conflicts::detect_conflicts(root)
                 {
                     return PreToolResponse::deny(reason);
                 }
             },
             "tool_policy" => {
-                if policy_gate::is_tool_gated_in_config(tool_name, root) {
+                if tools_cfg.requires_permission_gate(tool_name) {
                     return PreToolResponse::ask(format!(
                         "Policy Gate: Tool '{tool_name}' requires interactive operator confirmation before execution."
                     ));
                 }
-                if policy_gate::is_mutating_tool(tool_name, root) {
+                if tools_cfg.is_mutating(tool_name) {
                     return PreToolResponse::ask(format!(
                         "Policy Gate: Tool '{tool_name}' applies automated filesystem or code modifications. Confirm execution?"
                     ));
@@ -116,7 +117,7 @@ pub(crate) fn evaluate_pre_tool_use(
 
     // 2. Evaluate declarative custom checks
     for check in &config.pre_tool_use.custom_checks {
-        let matches = policy_gate::tool_requires_gate(tool_name, root, &check.name)
+        let matches = tools_cfg.tool_requires_gate(tool_name, &check.name)
             || (!check.matcher.is_empty() && matches_pattern(tool_name, &check.matcher));
 
         if matches && let Some(resp) = execute_custom_check(check, root) {

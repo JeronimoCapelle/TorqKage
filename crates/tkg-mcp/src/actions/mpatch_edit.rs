@@ -129,7 +129,7 @@ pub(crate) fn execute(
         Some(&project),
     )?;
 
-    std::fs::write(&safe_path, new_content.as_bytes()).map_err(|err| {
+    tkg_common::atomic_write(&safe_path, new_content.as_bytes()).map_err(|err| {
         format!(
             "Failed to write patched file '{}': {err}",
             safe_path.display()

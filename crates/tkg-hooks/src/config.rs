@@ -2,46 +2,96 @@
 
 use std::path::Path;
 
+use serde::Deserialize;
 use tkg_common::models::HookDecision;
 
+const fn default_true() -> bool {
+    true
+}
+
+fn default_matcher() -> String {
+    "*".to_owned()
+}
+
+fn default_custom_check_reason() -> String {
+    "Declarative check condition failed".to_owned()
+}
+
+fn deserialize_custom_decision<'de, D>(deserializer: D) -> Result<HookDecision, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    if opt.is_some_and(|d| d.eq_ignore_ascii_case("ask")) {
+        Ok(HookDecision::Ask)
+    } else {
+        Ok(HookDecision::Deny)
+    }
+}
+
+const fn default_deny() -> HookDecision {
+    HookDecision::Deny
+}
+
 /// Custom declarative check declared in `hooks.toml`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct CustomCheck {
+    #[serde(default)]
     pub(crate) name: String,
+    #[serde(default = "default_matcher")]
     pub(crate) matcher: String,
+    #[serde(default)]
     pub(crate) command: Vec<String>,
+    #[serde(default)]
     pub(crate) fail_if_output_contains: Option<String>,
+    #[serde(
+        default = "default_deny",
+        deserialize_with = "deserialize_custom_decision"
+    )]
     pub(crate) decision: HookDecision,
+    #[serde(default = "default_custom_check_reason")]
     pub(crate) reason: String,
 }
 
+fn default_pipeline() -> Vec<String> {
+    vec![
+        "circuit_breaker".to_owned(),
+        "manifest_guard".to_owned(),
+        "path_policies".to_owned(),
+        "subagent_admission".to_owned(),
+        "vcs_conflicts".to_owned(),
+        "tool_policy".to_owned(),
+    ]
+}
+
 /// Pre-tool-use pipeline configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct PreToolUseConfig {
+    #[serde(default = "default_pipeline")]
     pub(crate) pipeline: Vec<String>,
+    #[serde(default)]
     pub(crate) custom_checks: Vec<CustomCheck>,
 }
 
 impl Default for PreToolUseConfig {
     fn default() -> Self {
         Self {
-            pipeline: vec![
-                "circuit_breaker".to_owned(),
-                "manifest_guard".to_owned(),
-                "path_policies".to_owned(),
-                "subagent_admission".to_owned(),
-                "vcs_conflicts".to_owned(),
-                "tool_policy".to_owned(),
-            ],
+            pipeline: default_pipeline(),
             custom_checks: Vec::new(),
         }
     }
 }
 
+const fn default_max_strikes() -> usize {
+    tkg_common::CircuitBreakerLedger::DEFAULT_MAX_STRIKES
+}
+
 /// Circuit breaker configuration from `hooks.toml`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct CircuitBreakerConfig {
+    #[serde(default = "default_true")]
     pub(crate) enabled: bool,
+    #[serde(default = "default_max_strikes")]
     pub(crate) max_strikes: usize,
 }
 
@@ -49,16 +99,33 @@ impl Default for CircuitBreakerConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_strikes: tkg_common::CircuitBreakerLedger::DEFAULT_MAX_STRIKES,
+            max_strikes: default_max_strikes(),
         }
     }
 }
 
+fn default_protected_patterns() -> Vec<String> {
+    vec![
+        "Cargo.toml".into(),
+        "Cargo.lock".into(),
+        "build.rs".into(),
+        "CMakeLists.txt".into(),
+        "meson.build".into(),
+        "package.json".into(),
+        "build.zig".into(),
+        "go.mod".into(),
+        "Makefile".into(),
+    ]
+}
+
 /// Manifest mutation guard configuration protecting build files against host proc-macro execution escape.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct ManifestGuardConfig {
+    #[serde(default = "default_true")]
     pub(crate) enabled: bool,
+    #[serde(default = "default_protected_patterns")]
     pub(crate) protected_patterns: Vec<String>,
+    #[serde(default)]
     pub(crate) protected_tools: Vec<String>,
 }
 
@@ -66,26 +133,22 @@ impl Default for ManifestGuardConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            protected_patterns: vec![
-                "Cargo.toml".into(),
-                "Cargo.lock".into(),
-                "build.rs".into(),
-                "CMakeLists.txt".into(),
-                "meson.build".into(),
-                "package.json".into(),
-                "build.zig".into(),
-                "go.mod".into(),
-                "Makefile".into(),
-            ],
+            protected_patterns: default_protected_patterns(),
             protected_tools: Vec::new(),
         }
     }
 }
 
+const fn default_max_preview_files() -> usize {
+    4
+}
+
 /// Work-In-Progress (WIP) turn-by-turn change detector configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct WipConfig {
+    #[serde(default = "default_true")]
     pub(crate) enabled: bool,
+    #[serde(default = "default_max_preview_files")]
     pub(crate) max_preview_files: usize,
 }
 
@@ -93,20 +156,35 @@ impl Default for WipConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            max_preview_files: 4,
+            max_preview_files: default_max_preview_files(),
         }
     }
 }
 
+const fn default_max_lines() -> usize {
+    40
+}
+
+const fn default_wake_timeout_seconds() -> u64 {
+    5
+}
+
 /// Declarative context injection for Turn 1 (`SessionStart`).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct WakeInjection {
+    #[serde(default)]
     pub(crate) name: String,
+    #[serde(default = "default_matcher")]
     pub(crate) matcher: String,
+    #[serde(default)]
     pub(crate) command: Vec<String>,
+    #[serde(default = "default_max_lines")]
     pub(crate) max_lines: usize,
+    #[serde(default = "default_wake_timeout_seconds")]
     pub(crate) timeout_seconds: u64,
+    #[serde(default)]
     pub(crate) prefix: String,
+    #[serde(default)]
     pub(crate) fallback: Option<String>,
 }
 
@@ -114,10 +192,10 @@ impl Default for WakeInjection {
     fn default() -> Self {
         Self {
             name: String::new(),
-            matcher: "*".to_owned(),
+            matcher: default_matcher(),
             command: Vec::new(),
-            max_lines: 40,
-            timeout_seconds: 5,
+            max_lines: default_max_lines(),
+            timeout_seconds: default_wake_timeout_seconds(),
             prefix: String::new(),
             fallback: None,
         }
@@ -125,11 +203,15 @@ impl Default for WakeInjection {
 }
 
 /// Session start context & wake-up injection configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub(crate) struct SessionStartConfig {
+    #[serde(default = "default_true")]
     pub(crate) enabled: bool,
+    #[serde(default = "default_true")]
     pub(crate) inject_wake_state: bool,
+    #[serde(default = "default_true")]
     pub(crate) inject_documentation: bool,
+    #[serde(default, alias = "custom_injections")]
     pub(crate) injections: Vec<WakeInjection>,
 }
 
@@ -144,11 +226,18 @@ impl Default for SessionStartConfig {
     }
 }
 
+const fn default_max_modified_files() -> usize {
+    10
+}
+
 /// Session stop handoff recording configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub(crate) struct StopConfig {
+    #[serde(default = "default_true")]
     pub(crate) enabled: bool,
+    #[serde(default = "default_true")]
     pub(crate) record_handoff: bool,
+    #[serde(default = "default_max_modified_files")]
     pub(crate) max_modified_files: usize,
 }
 
@@ -157,19 +246,25 @@ impl Default for StopConfig {
         Self {
             enabled: true,
             record_handoff: true,
-            max_modified_files: 10,
+            max_modified_files: default_max_modified_files(),
         }
     }
 }
 
 /// Root configuration parsed from `hooks.toml`.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
 pub(crate) struct HooksConfig {
+    #[serde(default)]
     pub(crate) pre_tool_use: PreToolUseConfig,
+    #[serde(default)]
     pub(crate) circuit_breaker: CircuitBreakerConfig,
+    #[serde(default)]
     pub(crate) manifest_guard: ManifestGuardConfig,
+    #[serde(default)]
     pub(crate) wip: WipConfig,
+    #[serde(default)]
     pub(crate) session_start: SessionStartConfig,
+    #[serde(default)]
     pub(crate) stop: StopConfig,
 }
 
@@ -205,261 +300,17 @@ pub(crate) fn matches_pattern(text: &str, pattern: &str) -> bool {
             if text.starts_with(prefix) {
                 return true;
             }
-        } else if text == part {
+        } else if tkg_common::path_matches_pattern(text, part) {
             return true;
         }
     }
     false
 }
 
-fn parse_custom_check(table: &toml::Table) -> CustomCheck {
-    let name = table
-        .get("name")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("")
-        .to_owned();
-    let matcher = table
-        .get("matcher")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("*")
-        .to_owned();
-    let command = table
-        .get("command")
-        .and_then(toml::Value::as_array)
-        .map_or_default(|arr| {
-            arr.iter()
-                .filter_map(toml::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect()
-        });
-    let fail_if_output_contains = table
-        .get("fail_if_output_contains")
-        .and_then(toml::Value::as_str)
-        .map(ToOwned::to_owned);
-    let decision = if table
-        .get("decision")
-        .and_then(toml::Value::as_str)
-        .is_some_and(|d| d.eq_ignore_ascii_case("ask"))
-    {
-        HookDecision::Ask
-    } else {
-        HookDecision::Deny
-    };
-    let reason = table
-        .get("reason")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("Declarative check condition failed")
-        .to_owned();
-
-    CustomCheck {
-        name,
-        matcher,
-        command,
-        fail_if_output_contains,
-        decision,
-        reason,
-    }
-}
-
-fn parse_wake_injection(table: &toml::Table) -> WakeInjection {
-    let name = table
-        .get("name")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("")
-        .to_owned();
-    let matcher = table
-        .get("matcher")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("*")
-        .to_owned();
-    let command = table
-        .get("command")
-        .and_then(toml::Value::as_array)
-        .map_or_default(|arr| {
-            arr.iter()
-                .filter_map(toml::Value::as_str)
-                .map(ToOwned::to_owned)
-                .collect()
-        });
-    let max_lines = table
-        .get("max_lines")
-        .and_then(toml::Value::as_integer)
-        .and_then(|n| usize::try_from(n).ok())
-        .unwrap_or(40);
-    let timeout_seconds = table
-        .get("timeout_seconds")
-        .and_then(toml::Value::as_integer)
-        .and_then(|n| u64::try_from(n).ok())
-        .unwrap_or(5);
-    let prefix = table
-        .get("prefix")
-        .and_then(toml::Value::as_str)
-        .unwrap_or("")
-        .to_owned();
-    let fallback = table
-        .get("fallback")
-        .and_then(toml::Value::as_str)
-        .map(ToOwned::to_owned);
-
-    WakeInjection {
-        name,
-        matcher,
-        command,
-        max_lines,
-        timeout_seconds,
-        prefix,
-        fallback,
-    }
-}
-
-fn parse_pre_tool_use(pre: &toml::Table) -> PreToolUseConfig {
-    let mut config = PreToolUseConfig::default();
-    if let Some(pipeline) = pre.get("pipeline").and_then(toml::Value::as_array) {
-        config.pipeline = pipeline
-            .iter()
-            .filter_map(toml::Value::as_str)
-            .map(ToOwned::to_owned)
-            .collect();
-    }
-    if let Some(checks) = pre.get("custom_checks").and_then(toml::Value::as_array) {
-        for check in checks {
-            if let Some(ct) = check.as_table() {
-                config.custom_checks.push(parse_custom_check(ct));
-            }
-        }
-    }
-    config
-}
-
-fn parse_circuit_breaker(cb: &toml::Table) -> CircuitBreakerConfig {
-    let mut config = CircuitBreakerConfig::default();
-    if let Some(enabled) = cb.get("enabled").and_then(toml::Value::as_bool) {
-        config.enabled = enabled;
-    }
-    if let Some(max) = cb.get("max_strikes").and_then(toml::Value::as_integer)
-        && let Ok(m) = usize::try_from(max)
-    {
-        config.max_strikes = m;
-    }
-    config
-}
-
-fn parse_manifest_guard(mg: &toml::Table) -> ManifestGuardConfig {
-    let mut config = ManifestGuardConfig::default();
-    if let Some(enabled) = mg.get("enabled").and_then(toml::Value::as_bool) {
-        config.enabled = enabled;
-    }
-    if let Some(patterns) = mg.get("protected_patterns").and_then(toml::Value::as_array) {
-        config.protected_patterns = patterns
-            .iter()
-            .filter_map(toml::Value::as_str)
-            .map(ToOwned::to_owned)
-            .collect();
-    }
-    if let Some(tools) = mg.get("protected_tools").and_then(toml::Value::as_array) {
-        config.protected_tools = tools
-            .iter()
-            .filter_map(toml::Value::as_str)
-            .map(ToOwned::to_owned)
-            .collect();
-    }
-    config
-}
-
-fn parse_wip(wip: &toml::Table) -> WipConfig {
-    let mut config = WipConfig::default();
-    if let Some(enabled) = wip.get("enabled").and_then(toml::Value::as_bool) {
-        config.enabled = enabled;
-    }
-    if let Some(max) = wip
-        .get("max_preview_files")
-        .and_then(toml::Value::as_integer)
-        && let Ok(m) = usize::try_from(max)
-    {
-        config.max_preview_files = m;
-    }
-    config
-}
-
-fn parse_session_start(ss: &toml::Table) -> SessionStartConfig {
-    let mut config = SessionStartConfig::default();
-    if let Some(enabled) = ss.get("enabled").and_then(toml::Value::as_bool) {
-        config.enabled = enabled;
-    }
-    if let Some(wake) = ss.get("inject_wake_state").and_then(toml::Value::as_bool) {
-        config.inject_wake_state = wake;
-    }
-    if let Some(doc) = ss
-        .get("inject_documentation")
-        .and_then(toml::Value::as_bool)
-    {
-        config.inject_documentation = doc;
-    }
-    let injections_arr = ss
-        .get("injections")
-        .or_else(|| ss.get("custom_injections"))
-        .and_then(toml::Value::as_array);
-    if let Some(injections) = injections_arr {
-        for inj in injections {
-            if let Some(it) = inj.as_table() {
-                config.injections.push(parse_wake_injection(it));
-            }
-        }
-    }
-    config
-}
-
-fn parse_stop(stop: &toml::Table) -> StopConfig {
-    let mut config = StopConfig::default();
-    if let Some(enabled) = stop.get("enabled").and_then(toml::Value::as_bool) {
-        config.enabled = enabled;
-    }
-    if let Some(record) = stop.get("record_handoff").and_then(toml::Value::as_bool) {
-        config.record_handoff = record;
-    }
-    if let Some(max) = stop
-        .get("max_modified_files")
-        .and_then(toml::Value::as_integer)
-        && let Ok(m) = usize::try_from(max)
-    {
-        config.max_modified_files = m;
-    }
-    config
-}
-
 /// Parses a `hooks.toml` string into a structured `HooksConfig`.
 #[must_use]
 pub(crate) fn parse_hooks_config(content: &str) -> HooksConfig {
-    let Ok(table) = content.parse::<toml::Table>() else {
-        return HooksConfig::default();
-    };
-
-    HooksConfig {
-        pre_tool_use: table
-            .get("pre_tool_use")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_pre_tool_use),
-        circuit_breaker: table
-            .get("circuit_breaker")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_circuit_breaker),
-        manifest_guard: table
-            .get("manifest_guard")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_manifest_guard),
-        wip: table
-            .get("wip")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_wip),
-        session_start: table
-            .get("session_start")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_session_start),
-        stop: table
-            .get("stop")
-            .and_then(toml::Value::as_table)
-            .map_or_default(parse_stop),
-    }
+    toml::from_str(content).unwrap_or_default()
 }
 
 #[cfg(test)]
