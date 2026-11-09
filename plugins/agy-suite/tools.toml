@@ -1163,3 +1163,27 @@ action = "project_state"
 category = "workflow"
 truncate_lines = 100
 timeout_seconds = 10
+
+[tools.record_session_handoff]
+description = "Records structured session handoff metadata (summary, deliverables, status, target agent, and modified files) to .agy/state/last_handoff.md and handoff.json for continuity across agent sessions"
+action = "record_session_handoff"
+category = "workflow"
+args = [
+    { name = "summary", required = true, description = "Executive summary of completed tasks, architecture decisions, and remaining work" },
+    { name = "status", required = false, default = "Completed", description = "Milestone status, e.g. 'Completed', 'ReadyForReview', 'Blocked'" },
+    { name = "deliverables", required = false, description = "Comma-separated list of deliverables, specs, or modules produced" },
+    { name = "target_agent", required = false, regex = "^[a-zA-Z0-9_-]+$", description = "Recommended next agent persona to take over" }
+]
+truncate_lines = 20
+timeout_seconds = 10
+
+[tools.detect_wip_changes]
+description = "Inspects the working copy for modifications since the last check, updating .agy/cache/wip/ and reporting modified files"
+action = "detect_wip"
+category = "workflow"
+args = [
+    { name = "conversation_id", required = false, regex = "^[a-zA-Z0-9_-]+$", description = "Optional conversation or session ID for cache isolation" },
+    { name = "max_preview", required = false, description = "Maximum number of modified files to display in preview (default: 10)" }
+]
+truncate_lines = 30
+timeout_seconds = 5

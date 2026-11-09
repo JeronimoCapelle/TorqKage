@@ -21,6 +21,8 @@ pub enum ToolAction {
     WorkspaceInspect,
     WorkspaceMerge,
     SetActiveAgent,
+    RecordSessionHandoff,
+    DetectWip,
     #[serde(untagged)]
     Unknown(String),
 }

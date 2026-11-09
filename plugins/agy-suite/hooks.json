@@ -3,7 +3,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks record-handoff || agy-hooks record-handoff",
+        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks record-handoff || which agy-hooks >/dev/null 2>&1 && agy-hooks record-handoff || true",
         "timeout": 10
       }
     ]
@@ -12,7 +12,7 @@
     "SessionStart": [
       {
         "type": "command",
-        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks inject-wake || agy-hooks inject-wake",
+        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks inject-wake || which agy-hooks >/dev/null 2>&1 && agy-hooks inject-wake || true",
         "timeout": 5
       }
     ]
@@ -21,7 +21,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks detect-wip || agy-hooks detect-wip",
+        "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks detect-wip || which agy-hooks >/dev/null 2>&1 && agy-hooks detect-wip || true",
         "timeout": 2
       }
     ]
@@ -33,7 +33,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks pre-tool-use || agy-hooks pre-tool-use",
+            "command": "[ -x ./bin/agy-hooks ] && ./bin/agy-hooks pre-tool-use || which agy-hooks >/dev/null 2>&1 && agy-hooks pre-tool-use || true",
             "timeout": 15
           }
         ]

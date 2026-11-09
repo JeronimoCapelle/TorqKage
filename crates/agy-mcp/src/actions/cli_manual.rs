@@ -160,6 +160,8 @@ const fn action_name(action: &crate::models::ToolAction) -> &'static str {
         crate::models::ToolAction::WorkspaceInspect => "workspace_inspect",
         crate::models::ToolAction::WorkspaceMerge => "workspace_merge",
         crate::models::ToolAction::SetActiveAgent => "set_active_agent",
+        crate::models::ToolAction::RecordSessionHandoff => "record_session_handoff",
+        crate::models::ToolAction::DetectWip => "detect_wip",
         crate::models::ToolAction::Unknown(_) => "custom",
     }
 }

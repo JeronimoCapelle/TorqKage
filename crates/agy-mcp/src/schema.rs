@@ -120,7 +120,9 @@ fn build_input_schema(def: &ToolDefinition) -> serde_json::Value {
         | ToolAction::WorkspaceEnsure
         | ToolAction::WorkspaceInspect
         | ToolAction::WorkspaceMerge
-        | ToolAction::SetActiveAgent => build_parameterized_schema(&def.args),
+        | ToolAction::SetActiveAgent
+        | ToolAction::RecordSessionHandoff
+        | ToolAction::DetectWip => build_parameterized_schema(&def.args),
 
         ToolAction::StaticCommand | ToolAction::ProjectState | ToolAction::Unknown(_) => {
             json!({

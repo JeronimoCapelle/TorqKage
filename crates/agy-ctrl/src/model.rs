@@ -124,6 +124,8 @@ impl ToolItem {
                 ToolAction::WorkspaceInspect => "workspace_inspect".to_owned(),
                 ToolAction::WorkspaceMerge => "workspace_merge".to_owned(),
                 ToolAction::SetActiveAgent => "set_active_agent".to_owned(),
+                ToolAction::RecordSessionHandoff => "record_session_handoff".to_owned(),
+                ToolAction::DetectWip => "detect_wip".to_owned(),
                 ToolAction::Unknown(s) => s,
             },
             category,

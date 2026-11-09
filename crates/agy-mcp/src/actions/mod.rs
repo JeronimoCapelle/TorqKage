@@ -1,12 +1,14 @@
 //! Bounded tool action execution engines.
 
 pub(crate) mod cli_manual;
+pub(crate) mod detect_wip;
 pub(crate) mod file_read;
 pub(crate) mod file_search;
 pub(crate) mod file_write;
 pub(crate) mod mpatch_edit;
 pub(crate) mod parameterized_cmd;
 pub(crate) mod project_state;
+pub(crate) mod session_handoff;
 pub(crate) mod static_cmd;
 pub(crate) mod workspace_ensure;
 pub(crate) mod workspace_inspect;
@@ -249,6 +251,12 @@ pub(crate) fn dispatch_action(
             ))
         },
 
+        ToolAction::RecordSessionHandoff => {
+            session_handoff::execute(workspace_root, arguments, effective_agent)
+        },
+
+        ToolAction::DetectWip => Ok(detect_wip::execute(workspace_root, arguments)),
+
         ToolAction::Unknown(_) => Err(format!(
             "Unknown or unsupported tool action for tool '{}'",
             tool.name
@@ -408,6 +416,18 @@ fn validate_declared_arguments(
 
 fn evaluate_pre_flight_guards(tool: &ToolDefinition, workspace_root: &Path) -> Result<(), String> {
     if tool.mutating() {
+        let ledger = CircuitBreakerLedger::load(workspace_root);
+        if ledger.tripped || ledger.consecutive_failures >= ledger.max_strikes {
+            return Err(format!(
+                "🛑 CIRCUIT BREAKER TRIPPED ({}/{} consecutive gate/verification failures):\n\
+                 Last Error Signature: {}\n\
+                 Autonomous modifications are GATED. Manual operator reset required via 'agy-ctrl inspect-breaker' or 'inspect_circuit_breaker'.",
+                ledger.consecutive_failures,
+                ledger.max_strikes,
+                ledger.last_error_signature.as_deref().unwrap_or("unknown")
+            ));
+        }
+
         crate::guards::check_vcs_conflicts(workspace_root)?;
     }
 
@@ -609,6 +629,92 @@ mod tests {
             saved_json.get("agent").and_then(serde_json::Value::as_str),
             Some("doc-author")
         );
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_evaluate_pre_flight_guards_blocks_on_circuit_breaker_trip() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_breaker_gate_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let tool = ToolDefinition {
+            name: "write_file".to_owned(),
+            safety: agy_common::tools::ToolSafetyPolicy {
+                mutating: true,
+                ..Default::default()
+            },
+            action: ToolAction::FileWrite,
+            ..Default::default()
+        };
+
+        // Normal state: passes
+        evaluate_pre_flight_guards(&tool, &temp_dir).unwrap();
+
+        // Trip the circuit breaker
+        let mut ledger = CircuitBreakerLedger::new("test_agent");
+        ledger.consecutive_failures = 2;
+        ledger.tripped = true;
+        ledger.last_error_signature = Some("error[E0308]".to_owned());
+        ledger.save(&temp_dir).unwrap();
+
+        // Mutating tool now blocked
+        let err = evaluate_pre_flight_guards(&tool, &temp_dir).unwrap_err();
+        assert!(err.contains("CIRCUIT BREAKER TRIPPED"));
+        assert!(err.contains("error[E0308]"));
+
+        // Non-mutating tool still allowed
+        let read_tool = ToolDefinition {
+            name: "read_file".to_owned(),
+            safety: agy_common::tools::ToolSafetyPolicy {
+                mutating: false,
+                ..Default::default()
+            },
+            action: ToolAction::FileRead,
+            ..Default::default()
+        };
+        evaluate_pre_flight_guards(&read_tool, &temp_dir).unwrap();
+
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    fn test_dispatch_action_record_handoff() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "mcp_rec_handoff_test_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        drop(std::fs::create_dir_all(&temp_dir));
+
+        let tool = ToolDefinition {
+            name: "record_session_handoff".to_owned(),
+            action: ToolAction::RecordSessionHandoff,
+            ..Default::default()
+        };
+
+        let args = serde_json::json!({
+            "summary": "Completed systems audit",
+            "status": "ReadyForDV",
+            "target_agent": "test-author",
+            "deliverables": "docs/audit.md"
+        });
+        let guards = BTreeMap::new();
+        let tools = vec![tool.clone()];
+
+        let (out, is_err) =
+            dispatch_action(&tool, &temp_dir, &args, Some("planner"), &guards, &tools).unwrap();
+        assert!(!is_err);
+        assert!(out.contains("Session handoff successfully recorded"));
+        assert!(out.contains("ReadyForDV"));
 
         drop(std::fs::remove_dir_all(&temp_dir));
     }

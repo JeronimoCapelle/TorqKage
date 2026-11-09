@@ -26,6 +26,28 @@ pub(crate) fn execute(
         ));
     }
 
+    // Evaluate mandatory pre-launch quality gates if declared by the target agent
+    let checks = agy_common::find_agent_manifest_path(workspace_root, agent)
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .map_or_else(Vec::new, |content| {
+            agy_common::parse_pre_launch_checks(&content)
+        });
+
+    if !checks.is_empty() {
+        let check_refs: Vec<&str> = checks.iter().map(String::as_str).collect();
+        if let Err(errors) =
+            agy_common::gatekeeper::evaluate_pre_flight_checks(workspace_root, &check_refs)
+        {
+            return Err(format!(
+                "🛑 Subagent Admission Denied for '{agent}': Mandatory pre-launch quality gates failed.\n\
+                 Target agent requirements: [{}]\n\n\
+                 {}",
+                checks.join(", "),
+                errors.join("\n\n")
+            ));
+        }
+    }
+
     match JujutsuWorkspace::ensure_agent_workspace(workspace_root, agent) {
         Ok(path) => Ok((
             format!("Isolated workspace ready at: {}", path.display()),
