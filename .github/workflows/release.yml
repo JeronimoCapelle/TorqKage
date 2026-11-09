@@ -29,11 +29,7 @@ jobs:
       - name: Generate Release Notes via git-cliff
         run: |
           TAG="${GITHUB_REF_NAME}"
-          NOTES=$(git-cliff --latest --strip header || git-cliff --unreleased --strip header)
-          if [ -z "$NOTES" ]; then
-            NOTES="Release ${TAG}"
-          fi
-          printf "# Changelog\n\n## [%s]\n\n%s\n" "${TAG#v}" "$NOTES" > CHANGELOG.md
+          git-cliff --latest -o CHANGELOG.md || printf "# Changelog\n\n## [%s]\n\nRelease %s\n" "${TAG#v}" "${TAG}" > CHANGELOG.md
 
       - uses: taiki-e/create-gh-release-action@v1
         with:
