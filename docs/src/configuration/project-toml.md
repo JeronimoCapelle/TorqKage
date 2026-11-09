@@ -204,7 +204,7 @@ filter = "comments_only"
 
 ### 9. Execution Harness & Agent System Runner (`[runner]` / `[harness]`)
 
-`Torqkage` is harness-agnostic. While it defaults to Google Antigravity (`agy`), you can configure any agent system or CLI runner (such as `opencode`, Claude Code, or a custom wrapper):
+`Torqkage` is harness-agnostic. It works across popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners), with ongoing expansion to support additional common harnesses:
 
 ```toml
 [runner]

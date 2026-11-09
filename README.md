@@ -35,7 +35,7 @@ Configuring tool access for autonomous coding agents usually involves an undesir
 1. **MCP sprawl:** Writing and running separate Node.js or Python MCP servers for every linter, compiler, and CLI tool, which increases resource usage and maintenance overhead.
 2. **Ambient shell access:** Giving agents direct terminal access, which risks unintended filesystem changes, secret exposure, and burns context tokens repeatedly re-explaining CLI usage.
 
-`Torqkage` bridges this gap. It is a declarative Meta-MCP server and agent engine built for agentic execution harnesses such as [Google Antigravity (`agy`)](https://github.com/google/antigravity) and OpenCode. Tools declared in `tools.toml` are exposed as structured MCP actions governed by strict security policies:
+`Torqkage` bridges this gap. It is a declarative Meta-MCP server and agent engine built for popular agentic execution harnesses—including Claude Code, OpenCode, Cursor, and Google Antigravity (`agy`), with broader support for additional common harnesses in active development. Tools declared in `tools.toml` are exposed as structured MCP actions governed by strict security policies:
 
 | Problem | How Torqkage Addresses It |
 | :--- | :--- |

@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Arch%20%7C%20CachyOS-green.svg)](https://archlinux.org)
 [![VCS](https://img.shields.io/badge/vcs-Jujutsu%20%2B%20Git-purple.svg)](https://github.com/martinvonz/jj)
 
-`Torqkage` is an enterprise-grade, high-assurance plugin for Google Antigravity (AGY). It equips autonomous and interactive AI agent fleets with bounded Model Context Protocol (MCP) tooling, deterministic sub-millisecond lifecycle safety hooks, sparse workspace isolation, and an interactive terminal control deck (`tkg`).
+`Torqkage` is an enterprise-grade, high-assurance governance engine and toolkit for popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity). It equips autonomous and interactive AI agent fleets with bounded Model Context Protocol (MCP) tooling, deterministic sub-millisecond lifecycle safety hooks, sparse workspace isolation, and an interactive terminal control deck (`tkg`).
 
 The suite is built around a **zero-hardcoded-assumptions, declarative-first architecture**: all compiler commands, build caches, quality gates, lifecycle hooks, tool permissions, directory boundaries, and security perimeters are defined in transparent, human-editable, self-documenting TOML configuration files.
 
