@@ -1,8 +1,8 @@
 //! `PreInvocation` working tree change detector.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use tkg_common::{PreInvocationInput, PreInvocationResponse, WorkspaceResolver};
+use tkg_common::PreInvocationResponse;
 
 use crate::stdin::{read_pre_invocation_input, write_pre_invocation_response};
 
@@ -14,7 +14,7 @@ use crate::stdin::{read_pre_invocation_input, write_pre_invocation_response};
 pub(crate) fn execute() {
     let input = read_pre_invocation_input();
 
-    let root = resolve_workspace_root(&input);
+    let root = input.common.resolve_workspace_root();
     let config = crate::config::HooksConfig::load(&root);
 
     let resp = if config.wip.enabled {
@@ -24,16 +24,6 @@ pub(crate) fn execute() {
     };
 
     write_pre_invocation_response(&resp);
-}
-
-fn resolve_workspace_root(input: &PreInvocationInput) -> PathBuf {
-    if let Some(first_path) = input.common.workspace_paths.first()
-        && first_path.exists()
-    {
-        return first_path.clone();
-    }
-
-    WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
 }
 
 fn detect_wip_changes(

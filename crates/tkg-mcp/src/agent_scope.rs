@@ -63,36 +63,20 @@ pub(crate) fn resolve_agent_guards(
     workspace_root: &Path,
     active_agent: Option<&str>,
 ) -> BTreeMap<String, AgentGuard> {
-    let mut guards = BTreeMap::new();
-
-    let candidate_dirs = tkg_common::frontmatter::candidate_agent_directories(workspace_root);
-
-    for dir in candidate_dirs {
-        if !dir.is_dir() {
-            continue;
-        }
-        if let Ok(entries) = fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "md")
-                    && let Ok(content) = fs::read_to_string(&path)
-                    && let Ok(frontmatter) = AgentFrontmatter::parse(&content)
-                    && !frontmatter.name.is_empty()
-                {
-                    let name = frontmatter.name.clone();
-                    let guard = frontmatter.to_guard();
-                    guards.entry(name).or_insert(guard);
-                }
-            }
-        }
-    }
+    let mut guards: BTreeMap<String, AgentGuard> =
+        tkg_common::discover_agent_frontmatters(workspace_root)
+            .into_iter()
+            .map(|(_path, fm)| {
+                let guard = fm.to_guard();
+                (fm.name, guard)
+            })
+            .collect();
 
     // Ensure active agent is loaded if not already found in directory scans
     if let Some(agent) = active_agent
         && !guards.contains_key(agent)
         && let Some(path) = tkg_common::find_agent_manifest_path(workspace_root, agent)
-        && let Ok(content) = fs::read_to_string(&path)
-        && let Ok(frontmatter) = AgentFrontmatter::parse(&content)
+        && let Ok(frontmatter) = AgentFrontmatter::parse_file(&path)
     {
         guards.insert(agent.to_owned(), frontmatter.to_guard());
     }

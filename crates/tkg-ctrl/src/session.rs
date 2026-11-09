@@ -216,19 +216,9 @@ pub(crate) fn find_agent_session_for_workspace(
     find_agent_session_with_runner(agent_name, workspace_root, &runner)
 }
 
-fn discover_opencode_session(agent_name: &str, workspace_root: &Path) -> Option<SessionSummary> {
-    let mut candidate_dirs = Vec::new();
-    candidate_dirs.push(workspace_root.join(".opencode").join("sessions"));
-    candidate_dirs.push(workspace_root.join(".opencode"));
-
-    if let Ok(home) = std::env::var("HOME") {
-        let home_path = PathBuf::from(&home);
-        candidate_dirs.push(home_path.join(".local/share/opencode/sessions"));
-        candidate_dirs.push(home_path.join(".opencode/sessions"));
-    }
-
+fn discover_json_session_in_dirs(dirs: &[PathBuf], agent_name: &str) -> Option<SessionSummary> {
     let mut sessions = Vec::new();
-    for dir in candidate_dirs {
+    for dir in dirs {
         if !dir.is_dir() {
             continue;
         }
@@ -251,31 +241,27 @@ fn discover_opencode_session(agent_name: &str, workspace_root: &Path) -> Option<
     sessions.into_iter().next()
 }
 
+fn discover_opencode_session(agent_name: &str, workspace_root: &Path) -> Option<SessionSummary> {
+    let mut candidate_dirs = vec![
+        workspace_root.join(".opencode").join("sessions"),
+        workspace_root.join(".opencode"),
+    ];
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = PathBuf::from(&home);
+        candidate_dirs.push(home_path.join(".local/share/opencode/sessions"));
+        candidate_dirs.push(home_path.join(".opencode/sessions"));
+    }
+
+    discover_json_session_in_dirs(&candidate_dirs, agent_name)
+}
+
 fn discover_generic_state_session(
     agent_name: &str,
     workspace_root: &Path,
 ) -> Option<SessionSummary> {
-    let state_dir = workspace_root.join(".tkg/state/sessions");
-    if !state_dir.is_dir() {
-        return None;
-    }
-    let Ok(entries) = std::fs::read_dir(state_dir) else {
-        return None;
-    };
-    let mut sessions = Vec::new();
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().is_some_and(|ext| ext == "json")
-            && let Ok(content) = std::fs::read_to_string(&path)
-            && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
-            && let Some(sess) = parse_json_session(&val, &path, agent_name)
-        {
-            sessions.push(sess);
-        }
-    }
-
-    sessions.sort_by(|a, b| b.last_modified_time.cmp(&a.last_modified_time));
-    sessions.into_iter().next()
+    let dirs = [workspace_root.join(".tkg/state/sessions")];
+    discover_json_session_in_dirs(&dirs, agent_name)
 }
 
 fn parse_json_session(

@@ -18,7 +18,114 @@ use std::{collections::BTreeMap, path::Path, process::Command};
 
 use tkg_common::{CircuitBreakerLedger, SubprocessSupervisor, extract_compiler_error_signature};
 
-use crate::models::{AgentGuard, ToolAction, ToolDefinition};
+use crate::models::{AgentGuard, OutputCapture, ToolAction, ToolDefinition};
+
+/// Processes raw subprocess `Output` into a formatted, ANSI-stripped, and truncated `(text, is_error)` tuple
+/// according to `tool` capture, fallback, and exit-code settings.
+#[must_use]
+pub(crate) fn process_command_output(
+    output: &std::process::Output,
+    tool: &ToolDefinition,
+    program: &str,
+) -> (String, bool) {
+    let is_error = output.status.code().map_or_else(
+        || !output.status.success(),
+        |code| {
+            if tool.success_exit_codes.contains(&code) {
+                false
+            } else {
+                !output.status.success()
+            }
+        },
+    );
+
+    let raw_text = match tool.output_capture {
+        OutputCapture::ExitCodeOnly => {
+            let code = output.status.code().unwrap_or(-1);
+            if is_error {
+                format!("Command '{program}' failed (exit code {code})")
+            } else {
+                format!("Command '{program}' completed successfully (exit code {code})")
+            }
+        },
+
+        OutputCapture::Stdout => {
+            let out = String::from_utf8_lossy(&output.stdout);
+            if out.trim().is_empty() && is_error {
+                let err = String::from_utf8_lossy(&output.stderr);
+                if err.trim().is_empty() {
+                    out.into_owned()
+                } else {
+                    err.into_owned()
+                }
+            } else {
+                out.into_owned()
+            }
+        },
+
+        OutputCapture::Stderr => {
+            let err = String::from_utf8_lossy(&output.stderr);
+            if err.trim().is_empty() && !is_error {
+                String::from_utf8_lossy(&output.stdout).into_owned()
+            } else {
+                err.into_owned()
+            }
+        },
+
+        OutputCapture::Both | OutputCapture::JsonSpans => {
+            let out = String::from_utf8_lossy(&output.stdout);
+            let err = String::from_utf8_lossy(&output.stderr);
+            if err.trim().is_empty() {
+                out.into_owned()
+            } else if out.trim().is_empty() {
+                err.into_owned()
+            } else {
+                format!("{out}\n--- stderr ---\n{err}")
+            }
+        },
+    };
+
+    let with_empty_fallback = if raw_text.trim().is_empty()
+        && let Some(fallback) = &tool.empty_fallback
+    {
+        fallback.clone()
+    } else {
+        raw_text
+    };
+
+    let error_text = if is_error
+        && with_empty_fallback.contains("Multiple targets present in package")
+    {
+        "Multiple targets present in package (both library and binary). Please explicitly specify target using 'lib: true' or 'bin: \"<binary_name>\"'.".to_owned()
+    } else {
+        with_empty_fallback
+    };
+
+    let final_text = if is_error
+        && let Some(fallback) = tool.error_fallback.as_deref()
+        && (error_text.contains("could not find") || error_text.contains("not found"))
+    {
+        let advice = if fallback == "token_smart_not_found" {
+            "Item not found in module tree. Verify item path or inspect module hierarchy."
+        } else {
+            fallback
+        };
+        format!("{advice}\n\n{error_text}")
+    } else {
+        error_text
+    };
+
+    let clean_text = crate::guards::strip_ansi(&final_text);
+
+    let truncated = crate::guards::truncate_output(
+        &clean_text,
+        tool.truncate_lines,
+        tool.truncate_bytes,
+        tool.emit_truncation_notice(),
+    );
+
+    (truncated, is_error)
+}
 
 /// Executes a command either sandboxed via Bubblewrap or directly with supervisor hygiene.
 ///
@@ -227,21 +334,8 @@ pub(crate) fn dispatch_action(
                 .and_then(serde_json::Value::as_str)
                 .ok_or_else(|| "Missing required parameter 'agent'".to_owned())?;
 
-            let paths = tkg_common::TkgStatePaths::new(workspace_root);
-            if let Some(parent) = paths.active_agent_file().parent() {
-                drop(std::fs::create_dir_all(parent));
-            }
-            let payload = serde_json::json!({
-                "agent": target_agent,
-            });
-            std::fs::write(
-                paths.active_agent_file(),
-                serde_json::to_string_pretty(&payload).unwrap_or_default(),
-            )
-            .map_err(|e| format!("Failed to update active_agent.json: {e}"))?;
-
-            let txt_path = paths.state_dir().join("active_agent");
-            drop(std::fs::write(txt_path, target_agent));
+            tkg_common::set_active_agent(workspace_root, target_agent)
+                .map_err(|e| format!("Failed to update active_agent.json: {e}"))?;
 
             Ok((
                 format!(

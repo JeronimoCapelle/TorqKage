@@ -5,9 +5,8 @@ use std::path::Path;
 use tkg_common::tools::ToolArg;
 
 use crate::{
-    actions::execute_supervised_command_with_detector,
-    guards::{strip_ansi, truncate_output},
-    models::{OutputCapture, ToolDefinition},
+    actions::{execute_supervised_command_with_detector, process_command_output},
+    models::ToolDefinition,
 };
 
 pub(crate) fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> bool {
@@ -29,16 +28,10 @@ pub(crate) fn is_arg_supplied(arg: &ToolArg, arguments: &serde_json::Value) -> b
     }
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "Procedural parameter validation, default resolution, and pattern matching"
-)]
-fn validate_and_build_args(
+fn check_parameter_conflicts(
     tool: &ToolDefinition,
-    workspace_root: &Path,
     arguments: &serde_json::Value,
-) -> Result<Vec<String>, String> {
-    // 1. Check declarative parameter conflicts
+) -> Result<(), String> {
     for arg in &tool.args {
         if !arg.conflicts_with.is_empty() && is_arg_supplied(arg, arguments) {
             for conflicting_name in &arg.conflicts_with {
@@ -54,6 +47,47 @@ fn validate_and_build_args(
             }
         }
     }
+    Ok(())
+}
+
+fn validate_path_arg(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    arg: &ToolArg,
+    val: &str,
+) -> Result<(), String> {
+    let is_path_arg = arg.arg_type.as_deref() == Some("path")
+        || arg.arg_type.as_deref() == Some("file")
+        || arg.arg_type.as_deref() == Some("directory")
+        || arg.name == "path";
+
+    if is_path_arg {
+        if tool.enforce_workspace_bounds() {
+            let _safe_path = crate::guards::resolve_safe_path(
+                workspace_root,
+                val,
+                &tool.allowed_directories,
+                true,
+            )?;
+        }
+
+        if tool.ban_dangerous_files() {
+            let project = tkg_common::ProjectConfig::detect_or_load(workspace_root);
+            crate::guards::check_dangerous_files_with_security(
+                Path::new(val),
+                Some(&project.security),
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_and_build_args(
+    tool: &ToolDefinition,
+    workspace_root: &Path,
+    arguments: &serde_json::Value,
+) -> Result<Vec<String>, String> {
+    check_parameter_conflicts(tool, arguments)?;
 
     let mut dynamic_args = Vec::new();
 
@@ -107,29 +141,7 @@ fn validate_and_build_args(
                 ));
             }
 
-            let is_path_arg = arg.arg_type.as_deref() == Some("path")
-                || arg.arg_type.as_deref() == Some("file")
-                || arg.arg_type.as_deref() == Some("directory")
-                || arg.name == "path";
-
-            if is_path_arg {
-                if tool.enforce_workspace_bounds() {
-                    let _safe_path = crate::guards::resolve_safe_path(
-                        workspace_root,
-                        &val,
-                        &tool.allowed_directories,
-                        true,
-                    )?;
-                }
-
-                if tool.ban_dangerous_files() {
-                    let project = tkg_common::ProjectConfig::detect_or_load(workspace_root);
-                    crate::guards::check_dangerous_files_with_security(
-                        Path::new(&val),
-                        Some(&project.security),
-                    )?;
-                }
-            }
+            validate_path_arg(tool, workspace_root, arg, &val)?;
 
             if let Some(flag) = &arg.flag {
                 if flag.ends_with('=') {
@@ -150,59 +162,6 @@ fn validate_and_build_args(
     }
 
     Ok(dynamic_args)
-}
-
-fn format_captured_output(output: &std::process::Output, tool: &ToolDefinition) -> String {
-    match tool.output_capture {
-        OutputCapture::ExitCodeOnly => {
-            let code = output.status.code().unwrap_or(-1);
-            format!("Process exited with status code {code}.")
-        },
-
-        OutputCapture::Stderr => {
-            let stderr_str = String::from_utf8_lossy(&output.stderr);
-            if stderr_str.trim().is_empty()
-                && let Some(fallback) = &tool.empty_fallback
-            {
-                return fallback.clone();
-            }
-            stderr_str.into_owned()
-        },
-
-        OutputCapture::Both => {
-            let stdout_str = String::from_utf8_lossy(&output.stdout);
-            let stderr_str = String::from_utf8_lossy(&output.stderr);
-            if stdout_str.trim().is_empty()
-                && stderr_str.trim().is_empty()
-                && let Some(fallback) = &tool.empty_fallback
-            {
-                return fallback.clone();
-            }
-            if stderr_str.trim().is_empty() {
-                stdout_str.into_owned()
-            } else if stdout_str.trim().is_empty() {
-                stderr_str.into_owned()
-            } else {
-                format!("{stdout_str}\n--- stderr ---\n{stderr_str}")
-            }
-        },
-
-        OutputCapture::Stdout | OutputCapture::JsonSpans => {
-            let text = String::from_utf8_lossy(&output.stdout);
-            if text.trim().is_empty() && !output.status.success() {
-                let err = String::from_utf8_lossy(&output.stderr);
-                if !err.trim().is_empty() {
-                    return err.into_owned();
-                }
-            }
-            if text.trim().is_empty()
-                && let Some(fallback) = &tool.empty_fallback
-            {
-                return fallback.clone();
-            }
-            text.into_owned()
-        },
-    }
 }
 
 /// Executes a parameterized CLI command with argument validation.
@@ -256,49 +215,7 @@ where
         is_outer_sandbox,
     )?;
 
-    let is_error = if let Some(code) = output.status.code() {
-        if tool.success_exit_codes.contains(&code) {
-            false
-        } else {
-            !output.status.success()
-        }
-    } else {
-        !output.status.success()
-    };
-
-    let raw_text = format_captured_output(&output, tool);
-
-    let error_text = if is_error && raw_text.contains("Multiple targets present in package") {
-        "Multiple targets present in package (both library and binary). Please explicitly specify target using 'lib: true' or 'bin: \"<binary_name>\"'.".to_owned()
-    } else {
-        raw_text
-    };
-
-    // Apply declarative error fallback if configured and process failed
-    let final_text = if is_error
-        && let Some(fallback) = tool.error_fallback.as_deref()
-        && (error_text.contains("could not find") || error_text.contains("not found"))
-    {
-        let advice = if fallback == "token_smart_not_found" {
-            "Item not found in module tree. Verify item path or inspect module hierarchy."
-        } else {
-            fallback
-        };
-        format!("{advice}\n\n{error_text}")
-    } else {
-        error_text
-    };
-
-    let clean_text = strip_ansi(&final_text);
-
-    let truncated = truncate_output(
-        &clean_text,
-        tool.truncate_lines,
-        tool.truncate_bytes,
-        tool.emit_truncation_notice(),
-    );
-
-    Ok((truncated, is_error))
+    Ok(process_command_output(&output, tool, binary))
 }
 
 pub(crate) fn matches_pattern(val: &str, pattern: &str) -> bool {
@@ -328,7 +245,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::models::ToolArg;
+    use crate::models::{OutputCapture, ToolArg};
 
     #[test]
     fn test_pattern_matching() {

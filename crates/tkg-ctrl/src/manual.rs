@@ -118,13 +118,12 @@ pub(crate) fn controls_content() -> Vec<Line<'static>> {
 }
 
 #[cfg(test)]
-#[allow(clippy::assert_is_empty, reason = "Assertion on collection presence")]
 mod tests {
     use super::*;
 
     #[test]
     fn test_controls_content_not_empty() {
         let lines = controls_content();
-        assert!(!lines.is_empty());
+        assert_ne!(lines, []);
     }
 }

@@ -50,6 +50,17 @@ pub struct CommonHookPayload {
     pub last_user_input: Option<String>,
 }
 
+impl CommonHookPayload {
+    /// Resolves the canonical workspace root from `workspace_paths` or the current working directory.
+    #[must_use]
+    pub fn resolve_workspace_root(&self) -> PathBuf {
+        if let Some(first_path) = self.workspace_paths.first() {
+            return first_path.clone();
+        }
+        crate::resolver::WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
+    }
+}
+
 /// Tool call specification contained in tool-related hook inputs.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ToolCallPayload {

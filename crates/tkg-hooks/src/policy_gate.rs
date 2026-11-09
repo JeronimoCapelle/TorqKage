@@ -1,10 +1,10 @@
 //! Granular tool-level permission policy enforcement (`enforce-tool-policy`).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tkg_common::{
-    CircuitBreakerLedger, FastHashMap, PreToolResponse, PreToolUseInput, WorkspaceResolver,
-    tools::{RawToolsConfig, ToolDefinition, resolve},
+    CircuitBreakerLedger, FastHashMap, PreToolResponse, PreToolUseInput,
+    tools::{RawToolsConfig, ToolDefinition},
 };
 
 use crate::stdin;
@@ -15,14 +15,7 @@ use crate::stdin;
 /// requires human confirmation (`ask`) or is authorized for autonomous execution (`allow`).
 pub(crate) fn execute() {
     let input = stdin::read_pre_tool_use_input();
-    let root = input
-        .common
-        .workspace_paths
-        .first()
-        .cloned()
-        .unwrap_or_else(|| {
-            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
-        });
+    let root = input.common.resolve_workspace_root();
 
     let response = evaluate_policy(&input, &root);
     stdin::write_pre_tool_use_response(&response);
@@ -85,11 +78,11 @@ pub(crate) struct ParsedToolsConfig {
 
 impl ParsedToolsConfig {
     /// Parses and resolves a `tools.toml` content string into structured tool definitions.
+    #[cfg(test)]
     #[must_use]
-    #[allow(dead_code, reason = "Used by unit tests to parse inline TOML configs")]
     pub(crate) fn from_str(content: &str) -> Self {
         let raw = RawToolsConfig::from_toml_str(content);
-        let tools = resolve(&raw)
+        let tools = tkg_common::tools::resolve(&raw)
             .into_iter()
             .map(|t| (t.name.clone(), t))
             .collect();
@@ -121,11 +114,8 @@ impl ParsedToolsConfig {
     }
 
     /// Checks if a tool resolves a boolean attribute to true across concrete, base, and category tiers.
+    #[cfg(test)]
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "Compatibility helper for attribute queries and unit tests"
-    )]
     pub(crate) fn is_tool_attribute(&self, tool_name: &str, attr: &str) -> bool {
         let Some(tool) = self.tools.get(tool_name) else {
             return false;
@@ -152,30 +142,11 @@ pub(crate) fn is_mutating_tool(tool_name: &str, root: &Path) -> bool {
     ParsedToolsConfig::load(root).is_mutating(tool_name)
 }
 
-/// Inspects tools.toml (if present) for `require_permission_gate = true`.
-#[allow(dead_code, reason = "Direct query helper for tool gate inspection")]
-pub(crate) fn is_tool_gated_in_config(tool_name: &str, root: &Path) -> bool {
-    ParsedToolsConfig::load(root).requires_permission_gate(tool_name)
-}
-
 /// Evaluates whether a tool requires a specific gate before execution.
+#[cfg(test)]
 #[must_use]
-#[allow(
-    dead_code,
-    reason = "Direct query helper for gate evaluation and tests"
-)]
 pub(crate) fn tool_requires_gate(tool_name: &str, root: &Path, gate_name: &str) -> bool {
     ParsedToolsConfig::load(root).tool_requires_gate(tool_name, gate_name)
-}
-
-/// Evaluates whether a tool failure tracks strikes against the circuit breaker ledger.
-#[must_use]
-#[allow(
-    dead_code,
-    reason = "Declarative query utility for circuit breaker policy"
-)]
-pub(crate) fn tool_tracks_circuit_breaker(tool_name: &str, root: &Path) -> bool {
-    ParsedToolsConfig::load(root).is_tool_attribute(tool_name, "tracks_circuit_breaker")
 }
 
 #[cfg(test)]

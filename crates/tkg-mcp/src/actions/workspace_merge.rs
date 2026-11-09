@@ -47,17 +47,15 @@ mod tests {
     use super::*;
 
     #[test]
-    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
     fn test_workspace_merge_missing_agent() {
         let args = serde_json::json!({});
-        assert!(execute(Path::new("."), &args).is_err());
+        assert!(execute(Path::new("."), &args).is_err_and(|e| e.contains("Missing required")));
     }
 
     #[test]
-    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
     fn test_workspace_merge_invalid_agent_name() {
         let args = serde_json::json!({"agent": "../malicious/path"});
-        assert!(execute(Path::new("."), &args).is_err());
+        assert!(execute(Path::new("."), &args).is_err_and(|e| e.contains("Invalid agent")));
 
         let args_dash = serde_json::json!({"agent": "--help"});
         assert!(
@@ -67,7 +65,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
     fn test_workspace_merge_invalid_strategy() {
         let args = serde_json::json!({
             "agent": "fuzz_probe",

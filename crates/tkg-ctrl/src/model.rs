@@ -1,16 +1,15 @@
 //! Data models, YAML frontmatter parser/serializer, and tool catalog definitions.
 
 use std::{
-    fmt::Write,
     fs,
     path::{Path, PathBuf},
 };
 
 use tkg_common::{
-    FastHashSet,
+    AgentFrontmatter,
     tools::{
-        RawToolsConfig, ToolAction, ToolDefinition, ToolFormatting, ToolPreconditions,
-        ToolSafetyPolicy, ToolSandboxPolicy, resolve,
+        RawToolsConfig, ToolDefinition, ToolFormatting, ToolPreconditions, ToolSafetyPolicy,
+        ToolSandboxPolicy, resolve,
     },
 };
 
@@ -111,23 +110,7 @@ impl ToolItem {
         Self {
             name: def.name,
             description: def.description,
-            action: match def.action {
-                ToolAction::StaticCommand => "static_command".to_owned(),
-                ToolAction::ParameterizedCommand => "parameterized_command".to_owned(),
-                ToolAction::FileRead => "file_read".to_owned(),
-                ToolAction::FileWrite => "file_write".to_owned(),
-                ToolAction::MpatchEdit => "mpatch_edit".to_owned(),
-                ToolAction::FileSearch => "file_search".to_owned(),
-                ToolAction::CliManual => "cli_manual".to_owned(),
-                ToolAction::ProjectState => "project_state".to_owned(),
-                ToolAction::WorkspaceEnsure => "workspace_ensure".to_owned(),
-                ToolAction::WorkspaceInspect => "workspace_inspect".to_owned(),
-                ToolAction::WorkspaceMerge => "workspace_merge".to_owned(),
-                ToolAction::SetActiveAgent => "set_active_agent".to_owned(),
-                ToolAction::RecordSessionHandoff => "record_session_handoff".to_owned(),
-                ToolAction::DetectWip => "detect_wip".to_owned(),
-                ToolAction::Unknown(s) => s,
-            },
+            action: def.action.as_str().to_owned(),
             category,
             safety: def.safety,
             sandbox: def.sandbox,
@@ -357,11 +340,72 @@ pub(crate) struct AgentManifest {
     pub(crate) disallowed_dirs: Vec<String>,
     pub(crate) allowed_files: Vec<String>,
     pub(crate) disallowed_files: Vec<String>,
+    pub(crate) path_policies: Vec<tkg_common::PathPolicy>,
     pub(crate) directives: String,
     pub(crate) modified: bool,
 }
 
 impl AgentManifest {
+    /// Constructs an `AgentManifest` from a file path and parsed `AgentFrontmatter`.
+    #[must_use]
+    pub(crate) fn from_frontmatter(file_path: PathBuf, mut parsed: AgentFrontmatter) -> Self {
+        if parsed.name.is_empty()
+            && let Some(stem) = file_path.file_stem().and_then(std::ffi::OsStr::to_str)
+        {
+            stem.clone_into(&mut parsed.name);
+        }
+
+        Self {
+            file_path,
+            name: parsed.name,
+            description: parsed.description,
+            effort: parsed.effort,
+            permission_mode: parsed.permission_mode,
+            command_execution_policy: parsed.command_execution_policy,
+            role_flags: AgentRoleFlags {
+                main_agent: parsed.main_agent,
+                subagent: parsed.subagent,
+            },
+            inherit_mcp: parsed.inherit_mcp,
+            native_tools: parsed.native_tools,
+            mcp_tools: parsed.mcp_tools,
+            allowed_subagents: parsed.allowed_subagents,
+            pre_launch_checks: parsed.pre_launch_checks,
+            allowed_dirs: parsed.allowed_dirs,
+            disallowed_dirs: parsed.disallowed_dirs,
+            allowed_files: parsed.allowed_files,
+            disallowed_files: parsed.disallowed_files,
+            path_policies: parsed.path_policies,
+            directives: parsed.directives,
+            modified: false,
+        }
+    }
+
+    /// Converts this `AgentManifest` back into a canonical `AgentFrontmatter`.
+    #[must_use]
+    pub(crate) fn to_frontmatter(&self) -> AgentFrontmatter {
+        AgentFrontmatter {
+            name: self.name.clone(),
+            description: self.description.clone(),
+            effort: self.effort.clone(),
+            permission_mode: self.permission_mode.clone(),
+            command_execution_policy: self.command_execution_policy.clone(),
+            main_agent: self.role_flags.main_agent,
+            subagent: self.role_flags.subagent,
+            inherit_mcp: self.inherit_mcp,
+            allowed_subagents: self.allowed_subagents.clone(),
+            pre_launch_checks: self.pre_launch_checks.clone(),
+            native_tools: self.native_tools.clone(),
+            mcp_tools: self.mcp_tools.clone(),
+            allowed_dirs: self.allowed_dirs.clone(),
+            disallowed_dirs: self.disallowed_dirs.clone(),
+            allowed_files: self.allowed_files.clone(),
+            disallowed_files: self.disallowed_files.clone(),
+            path_policies: self.path_policies.clone(),
+            directives: self.directives.clone(),
+        }
+    }
+
     /// Checks whether an MCP tool is allowed for this agent.
     #[must_use]
     pub(crate) fn allows_mcp_tool(&self, tool_name: &str) -> bool {
@@ -407,11 +451,8 @@ impl AgentManifest {
     }
 
     /// Serializes this agent manifest to YAML frontmatter + Markdown directives using the default (`Antigravity`) dialect.
+    #[cfg(test)]
     #[must_use]
-    #[allow(
-        dead_code,
-        reason = "Convenience serializer for default harness and tests"
-    )]
     pub(crate) fn serialize(&self) -> String {
         self.serialize_for_harness(&tkg_common::harness::Antigravity)
     }
@@ -419,180 +460,26 @@ impl AgentManifest {
     /// Serializes this agent manifest to YAML frontmatter + Markdown directives tailored for `harness`.
     #[must_use]
     pub(crate) fn serialize_for_harness(&self, harness: &dyn tkg_common::Harness) -> String {
-        let mut out = String::new();
-        out.push_str("---\n");
-        _ = writeln!(out, "name: {}", self.name);
-        _ = writeln!(
-            out,
-            "description: \"{}\"",
-            self.description.replace('"', "\\\"")
-        );
-        _ = writeln!(out, "effort: {}", self.effort);
-        if harness.uses_agy_frontmatter() {
-            if !self.permission_mode.is_empty() {
-                _ = writeln!(out, "permissionMode: {}", self.permission_mode);
-            }
-            if !self.command_execution_policy.is_empty() {
-                _ = writeln!(
-                    out,
-                    "commandExecutionPolicy: {}",
-                    self.command_execution_policy
-                );
-            }
-            if self.role_flags.main_agent {
-                out.push_str("mainAgent: true\n");
-            }
-            if self.role_flags.subagent {
-                out.push_str("subagent: true\n");
-            }
-        }
-        if !self.allowed_subagents.is_empty() {
-            out.push_str("allowed_subagents:\n");
-            for sub in &self.allowed_subagents {
-                _ = writeln!(out, "  - {sub}");
-            }
-        }
-        if !self.pre_launch_checks.is_empty() {
-            out.push_str("pre_launch_checks:\n");
-            for check in &self.pre_launch_checks {
-                _ = writeln!(out, "  - {check}");
-            }
-        }
-        if !self.allowed_dirs.is_empty() {
-            out.push_str("allowed_dirs:\n");
-            for dir in &self.allowed_dirs {
-                _ = writeln!(out, "  - {dir}");
-            }
-        }
-        if !self.disallowed_dirs.is_empty() {
-            out.push_str("disallowed_dirs:\n");
-            for dir in &self.disallowed_dirs {
-                _ = writeln!(out, "  - {dir}");
-            }
-        }
-        if !self.allowed_files.is_empty() {
-            out.push_str("allowed_files:\n");
-            for file in &self.allowed_files {
-                _ = writeln!(out, "  - {file}");
-            }
-        }
-        if !self.disallowed_files.is_empty() {
-            out.push_str("disallowed_files:\n");
-            for file in &self.disallowed_files {
-                _ = writeln!(out, "  - {file}");
-            }
-        }
-        if harness.uses_agy_frontmatter() {
-            if !self.inherit_mcp {
-                out.push_str("inheritMcp: false\n");
-            }
-            out.push_str("mcpServers:\n");
-            out.push_str("  - name: tkg-tools\n");
-            out.push_str("    command: tkg-mcp\n");
-            _ = writeln!(out, "    args: [\"--agent\", \"{}\"]", self.name);
-        }
-
-        if self.native_tools.is_empty() {
-            out.push_str("tools: []\n");
-        } else {
-            out.push_str("tools:\n");
-            for tool in &self.native_tools {
-                _ = writeln!(out, "  - {tool}");
-            }
-        }
-
-        if self.mcp_tools.is_empty() {
-            out.push_str("mcp_tools: []\n");
-        } else {
-            out.push_str("mcp_tools:\n");
-            for tool in &self.mcp_tools {
-                _ = writeln!(out, "  - {tool}");
-            }
-        }
-        out.push_str("---\n\n");
-        out.push_str(self.directives.trim_start());
-        if !out.ends_with('\n') {
-            out.push('\n');
-        }
-        out
+        self.to_frontmatter().serialize_for_harness(harness)
     }
 }
 
-/// Parses an agent Markdown file into an `AgentManifest`.
-pub(crate) fn parse_agent_file(path: &Path) -> Result<AgentManifest, String> {
-    let content =
-        fs::read_to_string(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
-    parse_agent_markdown(path.to_path_buf(), &content)
-}
-
 /// Parses an agent Markdown content string.
+#[cfg(test)]
 pub(crate) fn parse_agent_markdown(
     file_path: PathBuf,
     content: &str,
 ) -> Result<AgentManifest, String> {
-    let parsed = tkg_common::frontmatter::AgentFrontmatter::parse(content)?;
-    let mut name = parsed.name;
-    if name.is_empty()
-        && let Some(stem) = file_path.file_stem().and_then(std::ffi::OsStr::to_str)
-    {
-        stem.clone_into(&mut name);
-    }
-
-    Ok(AgentManifest {
-        file_path,
-        name,
-        description: parsed.description,
-        effort: parsed.effort,
-        permission_mode: parsed.permission_mode,
-        command_execution_policy: parsed.command_execution_policy,
-        role_flags: AgentRoleFlags {
-            main_agent: parsed.main_agent,
-            subagent: parsed.subagent,
-        },
-        inherit_mcp: parsed.inherit_mcp,
-        native_tools: parsed.native_tools,
-        mcp_tools: parsed.mcp_tools,
-        allowed_subagents: parsed.allowed_subagents,
-        pre_launch_checks: parsed.pre_launch_checks,
-        allowed_dirs: parsed.allowed_dirs,
-        disallowed_dirs: parsed.disallowed_dirs,
-        allowed_files: parsed.allowed_files,
-        disallowed_files: parsed.disallowed_files,
-        directives: parsed.directives,
-        modified: false,
-    })
+    let parsed = AgentFrontmatter::parse(content)?;
+    Ok(AgentManifest::from_frontmatter(file_path, parsed))
 }
 
 /// Discovers and loads all agent manifests within the plugin or repository.
 pub(crate) fn discover_agents(workspace_root: &Path) -> Vec<AgentManifest> {
-    let candidate_dirs = tkg_common::frontmatter::candidate_agent_directories(workspace_root);
-    let mut agents = Vec::new();
-    let mut seen_names = FastHashSet::default();
-
-    for dir in candidate_dirs {
-        if !dir.is_dir() {
-            continue;
-        }
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension() != Some(std::ffi::OsStr::new("md")) {
-                continue;
-            }
-            let Ok(agent) = parse_agent_file(&path) else {
-                continue;
-            };
-            if seen_names.insert(agent.name.clone()) {
-                agents.push(agent);
-            }
-        }
-    }
-
-    agents.sort_by(|a, b| a.name.cmp(&b.name));
-    agents
+    tkg_common::discover_agent_frontmatters(workspace_root)
+        .into_iter()
+        .map(|(path, fm)| AgentManifest::from_frontmatter(path, fm))
+        .collect()
 }
 
 #[cfg(test)]

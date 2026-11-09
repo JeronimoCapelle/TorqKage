@@ -1,10 +1,5 @@
 //! Ratatui terminal rendering routines for the tkg control deck.
 
-#![allow(
-    clippy::too_many_lines,
-    reason = "Terminal UI rendering pipelines for multi-pane layouts"
-)]
-
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -1121,10 +1116,6 @@ const fn compute_scroll_window(
 }
 
 /// Helper function to create a centered rectangular area for modals.
-#[allow(
-    clippy::arithmetic_side_effects,
-    reason = "Modal centered rectangle percentage layout"
-)]
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let pad_y = 100_u16.saturating_sub(percent_y) / 2;
     let [_top, center_v, _bottom] = Layout::default()

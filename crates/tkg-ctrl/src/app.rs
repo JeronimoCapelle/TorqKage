@@ -356,25 +356,21 @@ impl App {
     }
 
     /// Toggles the currently highlighted tool on or off for the active agent.
-    #[allow(
-        clippy::collapsible_if,
-        reason = "Disjoint borrowing of self requires sequential if-let blocks"
-    )]
     pub(crate) fn toggle_current_tool(&mut self) {
-        if let Some(tool) = self.current_highlighted_tool().cloned() {
-            if let Some(agent) = self.selected_agent_mut() {
-                agent.toggle_mcp_tool(&tool.name);
-                let allowed = agent.allows_mcp_tool(&tool.name);
-                self.status_message = Some((
-                    format!(
-                        "Tool '{}' {} for agent '{}'",
-                        tool.name,
-                        if allowed { "GRANTED" } else { "REMOVED" },
-                        agent.name
-                    ),
-                    false,
-                ));
-            }
+        if let Some(tool) = self.current_highlighted_tool().cloned()
+            && let Some(agent) = self.selected_agent_mut()
+        {
+            agent.toggle_mcp_tool(&tool.name);
+            let allowed = agent.allows_mcp_tool(&tool.name);
+            self.status_message = Some((
+                format!(
+                    "Tool '{}' {} for agent '{}'",
+                    tool.name,
+                    if allowed { "GRANTED" } else { "REMOVED" },
+                    agent.name
+                ),
+                false,
+            ));
         }
     }
 

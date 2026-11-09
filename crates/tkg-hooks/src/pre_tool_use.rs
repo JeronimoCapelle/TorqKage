@@ -5,9 +5,7 @@ use std::{
     process::Command,
 };
 
-use tkg_common::{
-    CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput, WorkspaceResolver,
-};
+use tkg_common::{CircuitBreakerLedger, HookDecision, PreToolResponse, PreToolUseInput};
 
 use crate::{
     config::{CustomCheck, HooksConfig, matches_pattern},
@@ -17,14 +15,7 @@ use crate::{
 /// Executes the unified `pre-tool-use` hook.
 pub(crate) fn execute() {
     let input = stdin::read_pre_tool_use_input();
-    let root = input
-        .common
-        .workspace_paths
-        .first()
-        .cloned()
-        .unwrap_or_else(|| {
-            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
-        });
+    let root = input.common.resolve_workspace_root();
 
     let config = HooksConfig::load(&root);
     let response = evaluate_pre_tool_use(&input, &root, &config);
@@ -176,11 +167,6 @@ fn resolve_active_agent(input: &PreToolUseInput, root: &Path) -> Option<String> 
 
 /// Evaluates agent directory boundary guards and path policies on mutating tool calls.
 #[must_use]
-#[allow(
-    clippy::option_if_let_else,
-    clippy::collapsible_if,
-    reason = "Deterministic priority resolution of tool argument payloads"
-)]
 pub(crate) fn evaluate_path_policies(
     input: &PreToolUseInput,
     root: &Path,
@@ -234,45 +220,41 @@ pub(crate) fn evaluate_path_policies(
 
         // 2. Check path policies (content filter)
         let original = std::fs::read_to_string(&full_path).unwrap_or_default();
-        let new_content_opt = if let Some(c) = tc
-            .args
-            .get("content")
-            .or_else(|| tc.args.get("Content"))
-            .and_then(serde_json::Value::as_str)
-        {
-            Some(c.to_owned())
-        } else if let Some(target) = tc
-            .args
-            .get("target")
-            .or_else(|| tc.args.get("Target"))
-            .and_then(serde_json::Value::as_str)
-            && let Some(replacement) = tc
-                .args
-                .get("replacement")
-                .or_else(|| tc.args.get("Replacement"))
-                .and_then(serde_json::Value::as_str)
-        {
-            Some(original.replace(target, replacement))
-        } else {
-            None
-        };
-
-        if let Some(ref new_content) = new_content_opt {
-            if let Err(err) = tkg_common::check_agent_path_policies_direct(
+        if let Some(new_content) = extract_new_content(&tc.args, &original)
+            && let Err(err) = tkg_common::check_agent_path_policies_direct(
                 root,
                 &full_path,
                 &original,
-                new_content,
+                &new_content,
                 active_agent.as_deref(),
                 agent_guard.as_ref(),
                 Some(&project),
-            ) {
-                return Some(PreToolResponse::deny(err));
-            }
+            )
+        {
+            return Some(PreToolResponse::deny(err));
         }
     }
 
     None
+}
+
+fn extract_new_content(args: &serde_json::Value, original: &str) -> Option<String> {
+    if let Some(c) = args
+        .get("content")
+        .or_else(|| args.get("Content"))
+        .and_then(serde_json::Value::as_str)
+    {
+        return Some(c.to_owned());
+    }
+    let target = args
+        .get("target")
+        .or_else(|| args.get("Target"))
+        .and_then(serde_json::Value::as_str)?;
+    let replacement = args
+        .get("replacement")
+        .or_else(|| args.get("Replacement"))
+        .and_then(serde_json::Value::as_str)?;
+    Some(original.replace(target, replacement))
 }
 
 #[cfg(test)]

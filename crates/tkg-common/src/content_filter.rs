@@ -404,188 +404,194 @@ pub fn strip_comments_and_normalize_with_syntax(input: &str, syntax: &SyntaxConf
     normalize_whitespace(&stripped)
 }
 
-/// Helper checking if `chars[start..]` starts with `seq`.
-#[inline]
-fn matches_char_sequence(chars: &[char], start: usize, seq: &[char]) -> bool {
-    if start.saturating_add(seq.len()) > chars.len() {
-        return false;
-    }
-    for (offset, &sc) in seq.iter().enumerate() {
-        if chars.get(start.saturating_add(offset)) != Some(&sc) {
-            return false;
-        }
-    }
-    true
-}
-
 /// Lexer state-machine stripping comments while preserving code tokens and string contents.
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    reason = "Char-index state machine lexer operating strictly within bounded vector lengths"
-)]
 #[must_use]
 pub fn strip_comments_with_syntax(input: &str, syntax: &SyntaxConfig) -> String {
     let mut out = String::with_capacity(input.len());
-    let chars: Vec<char> = input.chars().collect();
-    let len = chars.len();
+    let len = input.len();
     let mut i = 0_usize;
 
-    let line_comment_chars: Vec<Vec<char>> = syntax
-        .line_comments
-        .iter()
-        .map(|s| s.chars().collect())
-        .filter(|v: &Vec<char>| !v.is_empty())
-        .collect();
+    while let Some(rest) = input.get(i..) {
+        if rest.is_empty() {
+            break;
+        }
 
-    let block_comment_chars: Vec<(Vec<char>, Vec<char>)> = syntax
-        .block_comments
-        .iter()
-        .map(|b| (b.start.chars().collect(), b.end.chars().collect()))
-        .filter(|(s, e): &(Vec<char>, Vec<char>)| !s.is_empty() && !e.is_empty())
-        .collect();
-
-    while i < len {
         // 1. Raw string literal check: e.g. r"..." or r#"..."#
-        if let Some((raw_lit, next_idx)) = try_consume_raw_string(&chars, i) {
-            out.push_str(&raw_lit);
+        if let Some((raw_lit, next_idx)) = try_consume_raw_string(input, i) {
+            out.push_str(raw_lit);
             i = next_idx;
             continue;
         }
 
         // 2. Block comments checked before regular strings (handles Python """ before ")
-        let mut matched_block = false;
-        for (start_seq, end_seq) in &block_comment_chars {
-            if matches_char_sequence(&chars, i, start_seq) {
-                matched_block = true;
-                i = i.saturating_add(start_seq.len());
-
-                if start_seq == end_seq {
-                    while i < len {
-                        if matches_char_sequence(&chars, i, end_seq) {
-                            i = i.saturating_add(end_seq.len());
-                            break;
-                        }
-                        i = i.saturating_add(1_usize);
-                    }
-                } else {
-                    let mut depth = 1_usize;
-                    while i < len && depth > 0_usize {
-                        if matches_char_sequence(&chars, i, start_seq) {
-                            depth = depth.saturating_add(1_usize);
-                            i = i.saturating_add(start_seq.len());
-                        } else if matches_char_sequence(&chars, i, end_seq) {
-                            depth = depth.saturating_sub(1_usize);
-                            i = i.saturating_add(end_seq.len());
-                        } else {
-                            i = i.saturating_add(1_usize);
-                        }
-                    }
-                }
-
-                out.push(' ');
-                break;
-            }
-        }
-        if matched_block {
+        if let Some(next_idx) = try_consume_block_comment(input, i, &syntax.block_comments) {
+            out.push(' ');
+            i = next_idx;
             continue;
         }
 
         // 3. Line comments
-        let mut matched_line = false;
-        for lc_seq in &line_comment_chars {
-            if matches_char_sequence(&chars, i, lc_seq) {
-                matched_line = true;
-                i = i.saturating_add(lc_seq.len());
-                while i < len && chars[i] != '\n' {
-                    i = i.saturating_add(1_usize);
-                }
-                out.push(' ');
-                break;
-            }
-        }
-        if matched_line {
+        if let Some(next_idx) = try_consume_line_comment(input, i, &syntax.line_comments) {
+            out.push(' ');
+            i = next_idx;
             continue;
         }
 
-        let ch = chars[i];
+        let Some(ch) = rest.chars().next() else {
+            break;
+        };
 
         // 4. Regular string literal: "..." or '...'
         if ch == '"' || ch == '\'' {
-            let quote = ch;
-            out.push(quote);
-            i = i.saturating_add(1_usize);
-
-            while i < len {
-                let sc = chars[i];
-                out.push(sc);
-                if sc == '\\' && i.saturating_add(1_usize) < len {
-                    i = i.saturating_add(1_usize);
-                    out.push(chars[i]);
-                } else if sc == quote {
-                    i = i.saturating_add(1_usize);
-                    break;
-                }
-                i = i.saturating_add(1_usize);
-            }
+            i = consume_quoted_string(input, i, len, ch, &mut out);
             continue;
         }
 
         // 5. Normal character
         out.push(ch);
-        i = i.saturating_add(1_usize);
+        i = i.saturating_add(ch.len_utf8());
     }
 
     out
 }
 
-/// Helper attempting to parse a raw string literal `r#"..."#` starting at `chars[start]`.
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    reason = "Raw string parsing within bounded character slice"
-)]
-fn try_consume_raw_string(chars: &[char], start: usize) -> Option<(String, usize)> {
-    let len = chars.len();
+fn try_consume_block_comment(
+    input: &str,
+    start: usize,
+    block_comments: &[BlockCommentDelimiters],
+) -> Option<usize> {
+    let rest = input.get(start..)?;
+    let len = input.len();
+
+    for block in block_comments {
+        let start_seq = block.start.as_str();
+        let end_seq = block.end.as_str();
+        if !start_seq.is_empty() && !end_seq.is_empty() && rest.starts_with(start_seq) {
+            let mut i = start.saturating_add(start_seq.len());
+
+            if start_seq == end_seq {
+                if let Some(end_offset) = input.get(i..).and_then(|s| s.find(end_seq)) {
+                    i = i.saturating_add(end_offset).saturating_add(end_seq.len());
+                } else {
+                    i = len;
+                }
+            } else {
+                let mut depth = 1_usize;
+                while i < len && depth > 0_usize {
+                    let Some(sub) = input.get(i..) else {
+                        break;
+                    };
+                    if sub.starts_with(start_seq) {
+                        depth = depth.saturating_add(1_usize);
+                        i = i.saturating_add(start_seq.len());
+                    } else if sub.starts_with(end_seq) {
+                        depth = depth.saturating_sub(1_usize);
+                        i = i.saturating_add(end_seq.len());
+                    } else if let Some(ch) = sub.chars().next() {
+                        i = i.saturating_add(ch.len_utf8());
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            return Some(i);
+        }
+    }
+
+    None
+}
+
+fn try_consume_line_comment(input: &str, start: usize, line_comments: &[String]) -> Option<usize> {
+    let rest = input.get(start..)?;
+    let len = input.len();
+
+    for lc_seq in line_comments {
+        if !lc_seq.is_empty() && rest.starts_with(lc_seq.as_str()) {
+            let i = start.saturating_add(lc_seq.len());
+            let next_i = input
+                .get(i..)
+                .and_then(|s| s.find('\n'))
+                .map_or(len, |nl_offset| i.saturating_add(nl_offset));
+            return Some(next_i);
+        }
+    }
+
+    None
+}
+
+fn consume_quoted_string(
+    input: &str,
+    start: usize,
+    len: usize,
+    quote: char,
+    out: &mut String,
+) -> usize {
+    out.push(quote);
+    let mut i = start.saturating_add(quote.len_utf8());
+
+    while i < len {
+        let Some(sc) = input.get(i..).and_then(|s| s.chars().next()) else {
+            break;
+        };
+        out.push(sc);
+        i = i.saturating_add(sc.len_utf8());
+        if sc == '\\' {
+            if let Some(escaped) = input.get(i..).and_then(|s| s.chars().next()) {
+                out.push(escaped);
+                i = i.saturating_add(escaped.len_utf8());
+            }
+        } else if sc == quote {
+            break;
+        }
+    }
+
+    i
+}
+
+/// Helper attempting to parse a raw string literal `r#"..."#` starting at byte offset `start`.
+fn try_consume_raw_string(input: &str, start: usize) -> Option<(&str, usize)> {
+    let bytes = input.as_bytes();
+    let len = bytes.len();
     let mut i = start;
 
-    if i < len && (chars[i] == 'b' || chars[i] == 'c') {
+    if bytes.get(i).is_some_and(|&b| b == b'b' || b == b'c') {
         i = i.saturating_add(1_usize);
     }
 
-    if i >= len || chars[i] != 'r' {
+    if bytes.get(i) != Some(&b'r') {
         return None;
     }
     i = i.saturating_add(1_usize);
 
     let mut hash_count = 0_usize;
-    while i < len && chars[i] == '#' {
+    while bytes.get(i) == Some(&b'#') {
         hash_count = hash_count.saturating_add(1_usize);
         i = i.saturating_add(1_usize);
     }
 
-    if i >= len || chars[i] != '"' {
+    if bytes.get(i) != Some(&b'"') {
         return None;
     }
     i = i.saturating_add(1_usize);
 
     while i < len {
-        if chars[i] == '"' {
+        if bytes.get(i) == Some(&b'"') {
             let mut matched_hashes = 0_usize;
             let mut check_idx = i.saturating_add(1_usize);
-            while check_idx < len && matched_hashes < hash_count && chars[check_idx] == '#' {
+            while matched_hashes < hash_count && bytes.get(check_idx) == Some(&b'#') {
                 matched_hashes = matched_hashes.saturating_add(1_usize);
                 check_idx = check_idx.saturating_add(1_usize);
             }
             if matched_hashes == hash_count {
-                let end = check_idx;
-                let s: String = chars[start..end].iter().collect();
-                return Some((s, end));
+                return input.get(start..check_idx).map(|lit| (lit, check_idx));
             }
         }
-        i = i.saturating_add(1_usize);
+        if let Some(ch) = input.get(i..).and_then(|s| s.chars().next()) {
+            i = i.saturating_add(ch.len_utf8());
+        } else {
+            break;
+        }
     }
 
     None
@@ -604,11 +610,6 @@ pub fn strip_tests_and_normalize(
 
 /// Strips unit test blocks using explicit language syntax and normalizes whitespace.
 #[must_use]
-#[allow(
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    reason = "Language-agnostic test stripper covering both brace-based and indentation-based definitions"
-)]
 pub fn strip_tests_and_normalize_with_syntax(
     input: &str,
     syntax: &SyntaxConfig,
@@ -652,11 +653,6 @@ pub fn strip_tests_and_normalize_with_syntax(
 }
 
 /// Strips indentation-based test functions and classes (e.g. Python `def test_...`, `@pytest`).
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    reason = "Indentation line parser operating on bounded lines"
-)]
 fn strip_indentation_test_items(input: &str, syntax: &SyntaxConfig) -> String {
     let mut out = String::with_capacity(input.len());
     let mut skipping_indent: Option<usize> = None;
@@ -714,23 +710,14 @@ fn strip_indentation_test_items(input: &str, syntax: &SyntaxConfig) -> String {
 
 /// Strips all content strictly enclosed between `start_marker` and `end_marker`.
 #[must_use]
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    clippy::string_slice,
-    reason = "String slice slicing bounded by find indices"
-)]
 pub fn strip_delimited(input: &str, start_marker: &str, end_marker: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut rest = input;
 
-    while let Some(start_idx) = rest.find(start_marker) {
-        out.push_str(&rest[..start_idx]);
-        let after_start_offset = start_idx.saturating_add(start_marker.len());
-        let after_start = &rest[after_start_offset..];
-        if let Some(end_idx) = after_start.find(end_marker) {
-            let next_offset = end_idx.saturating_add(end_marker.len());
-            rest = &after_start[next_offset..];
+    while let Some((before, after_start)) = rest.split_once(start_marker) {
+        out.push_str(before);
+        if let Some((_, after_end)) = after_start.split_once(end_marker) {
+            rest = after_end;
         } else {
             rest = "";
             break;
@@ -768,125 +755,122 @@ fn is_matching_test_item(token: &str, syntax: &SyntaxConfig) -> bool {
 }
 
 /// State-machine lexer that identifies test attributes/definitions and consumes the entire item.
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    reason = "Attribute slicing and bracket traversal on bounded character vector"
-)]
-fn parse_rust_attribute(
-    chars: &[char],
+fn parse_rust_attribute<'a>(
+    input: &'a str,
     i: &mut usize,
     syntax: &SyntaxConfig,
-) -> Option<(String, bool)> {
-    let len = chars.len();
-    if *i >= len
-        || chars[*i] != '#'
-        || i.saturating_add(1_usize) >= len
-        || chars[i.saturating_add(1_usize)] != '['
-    {
+) -> Option<(&'a str, bool)> {
+    let len = input.len();
+    if !input.get(*i..).is_some_and(|s| s.starts_with("#[")) {
         return None;
     }
 
     let start = *i;
     *i = i.saturating_add(2_usize);
+    let content_start = *i;
+    let mut content_end = *i;
     let mut bracket_depth = 1_usize;
-    let mut attr_content = String::new();
 
     while *i < len && bracket_depth > 0_usize {
-        let ch = chars[*i];
+        let Some(ch) = input.get(*i..).and_then(|s| s.chars().next()) else {
+            break;
+        };
         if ch == '[' {
             bracket_depth = bracket_depth.saturating_add(1_usize);
-            attr_content.push(ch);
             *i = i.saturating_add(1_usize);
+            content_end = *i;
         } else if ch == ']' {
             bracket_depth = bracket_depth.saturating_sub(1_usize);
             if bracket_depth > 0_usize {
-                attr_content.push(ch);
+                content_end = i.saturating_add(1_usize);
             }
             *i = i.saturating_add(1_usize);
         } else if ch == '"' {
-            attr_content.push(ch);
             *i = i.saturating_add(1_usize);
             while *i < len {
-                let sc = chars[*i];
-                attr_content.push(sc);
-                if sc == '\\' && i.saturating_add(1_usize) < len {
-                    *i = i.saturating_add(1_usize);
-                    attr_content.push(chars[*i]);
+                let Some(sc) = input.get(*i..).and_then(|s| s.chars().next()) else {
+                    break;
+                };
+                *i = i.saturating_add(sc.len_utf8());
+                if sc == '\\' {
+                    if let Some(esc) = input.get(*i..).and_then(|s| s.chars().next()) {
+                        *i = i.saturating_add(esc.len_utf8());
+                    }
                 } else if sc == '"' {
-                    *i = i.saturating_add(1_usize);
                     break;
                 }
-                *i = i.saturating_add(1_usize);
             }
+            content_end = *i;
         } else {
-            attr_content.push(ch);
-            *i = i.saturating_add(1_usize);
+            *i = i.saturating_add(ch.len_utf8());
+            content_end = *i;
         }
     }
 
-    let full_attr: String = chars[start..*i].iter().collect();
-    let is_test = is_matching_test_item(&attr_content, syntax);
+    let full_attr = input.get(start..*i)?;
+    let attr_content = input.get(content_start..content_end)?;
+    let is_test = is_matching_test_item(attr_content, syntax);
     Some((full_attr, is_test))
 }
 
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    reason = "Bounded lookahead on character vector"
-)]
-fn matches_direct_test_definition(chars: &[char], i: usize, syntax: &SyntaxConfig) -> bool {
-    let len = chars.len();
-    let current_slice: String = chars[i..len.min(i.saturating_add(30_usize))]
-        .iter()
-        .collect();
+fn matches_direct_test_definition(input: &str, i: usize, syntax: &SyntaxConfig) -> bool {
+    let Some(rest) = input.get(i..) else {
+        return false;
+    };
     syntax
         .test_attributes
         .iter()
-        .any(|a| current_slice.starts_with(a))
+        .any(|a| rest.starts_with(a.as_str()))
         || syntax.test_prefixes.iter().any(|p| {
-            current_slice.starts_with(&format!("func {p}")) || current_slice.starts_with(p)
+            rest.starts_with(p.as_str())
+                || rest
+                    .strip_prefix("func ")
+                    .is_some_and(|after_func| after_func.starts_with(p.as_str()))
         })
 }
 
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    reason = "Bounded brace traversal on character vector"
-)]
-fn skip_test_item_body(chars: &[char], i: &mut usize) {
-    let len = chars.len();
+fn skip_test_item_body(input: &str, i: &mut usize) {
+    let len = input.len();
     let mut brace_depth = 0_usize;
     let mut seen_brace = false;
 
     while *i < len {
-        let ch = chars[*i];
-
-        if let Some((_, next_idx)) = try_consume_raw_string(chars, *i) {
+        if let Some((_, next_idx)) = try_consume_raw_string(input, *i) {
             *i = next_idx;
             continue;
         }
 
+        let Some(ch) = input.get(*i..).and_then(|s| s.chars().next()) else {
+            break;
+        };
+
         if ch == '"' {
             *i = i.saturating_add(1_usize);
             while *i < len {
-                let sc = chars[*i];
-                if sc == '\\' && i.saturating_add(1_usize) < len {
-                    *i = i.saturating_add(2_usize);
-                } else if sc == '"' {
-                    *i = i.saturating_add(1_usize);
+                let Some(sc) = input.get(*i..).and_then(|s| s.chars().next()) else {
                     break;
-                } else {
-                    *i = i.saturating_add(1_usize);
+                };
+                *i = i.saturating_add(sc.len_utf8());
+                if sc == '\\' {
+                    if let Some(esc) = input.get(*i..).and_then(|s| s.chars().next()) {
+                        *i = i.saturating_add(esc.len_utf8());
+                    }
+                } else if sc == '"' {
+                    break;
                 }
             }
             continue;
         }
 
-        if ch == '\'' && i.saturating_add(2_usize) < len && chars[i.saturating_add(2_usize)] == '\''
+        if ch == '\''
+            && let Some(sub) = input.get(*i..)
         {
-            *i = i.saturating_add(3_usize);
-            continue;
+            let mut chars = sub.chars();
+            _ = chars.next();
+            if let (Some(mid), Some('\'')) = (chars.next(), chars.next()) {
+                *i = i.saturating_add(2_usize).saturating_add(mid.len_utf8());
+                continue;
+            }
         }
 
         if ch == '{' {
@@ -908,43 +892,40 @@ fn skip_test_item_body(chars: &[char], i: &mut usize) {
             *i = i.saturating_add(1_usize);
             break;
         } else {
-            *i = i.saturating_add(1_usize);
+            *i = i.saturating_add(ch.len_utf8());
         }
     }
 }
 
-#[allow(
-    clippy::arithmetic_side_effects,
-    clippy::indexing_slicing,
-    clippy::iter_with_drain,
-    reason = "Item-level brace tracking state machine operating on bounded character vector"
-)]
 fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
     let mut out = String::with_capacity(input.len());
-    let chars: Vec<char> = input.chars().collect();
-    let len = chars.len();
+    let len = input.len();
     let mut i = 0_usize;
 
-    let mut attr_buffer: Vec<(String, bool)> = Vec::new();
+    let mut attr_buffer: Vec<(&str, bool)> = Vec::new();
 
     while i < len {
-        if chars[i].is_whitespace() {
+        let Some(ch) = input.get(i..).and_then(|s| s.chars().next()) else {
+            break;
+        };
+
+        if ch.is_whitespace() {
             if attr_buffer.is_empty() {
-                out.push(chars[i]);
+                out.push(ch);
             }
-            i = i.saturating_add(1_usize);
+            i = i.saturating_add(ch.len_utf8());
             continue;
         }
 
         // 1. Rust attribute detection: #[ ... ]
-        if let Some((full_attr, is_test)) = parse_rust_attribute(&chars, &mut i, syntax) {
+        if let Some((full_attr, is_test)) = parse_rust_attribute(input, &mut i, syntax) {
             attr_buffer.push((full_attr, is_test));
             continue;
         }
 
         // 2. Direct test definitions (e.g. Zig `test "..."`, C++ `TEST(...)`, Go `func Test...`)
-        if matches_direct_test_definition(&chars, i, syntax) {
-            attr_buffer.push((String::new(), true));
+        if matches_direct_test_definition(input, i, syntax) {
+            attr_buffer.push(("", true));
         }
 
         // Non-attribute token or start of item
@@ -953,24 +934,24 @@ fn strip_brace_test_items(input: &str, syntax: &SyntaxConfig) -> String {
 
             if item_is_test {
                 attr_buffer.clear();
-                skip_test_item_body(&chars, &mut i);
+                skip_test_item_body(input, &mut i);
                 out.push(' ');
                 continue;
             }
 
-            for (attr, _) in attr_buffer.drain(..) {
-                out.push_str(&attr);
+            for (attr, _) in std::mem::take(&mut attr_buffer) {
+                out.push_str(attr);
                 out.push(' ');
             }
         }
 
-        out.push(chars[i]);
-        i = i.saturating_add(1_usize);
+        out.push(ch);
+        i = i.saturating_add(ch.len_utf8());
     }
 
-    for (attr, is_test) in attr_buffer.drain(..) {
+    for (attr, is_test) in attr_buffer {
         if !is_test {
-            out.push_str(&attr);
+            out.push_str(attr);
             out.push(' ');
         }
     }
@@ -985,8 +966,11 @@ pub fn matches_directory_scope_with_containers(
     scope: &str,
     containers: &[String],
 ) -> bool {
-    let clean = scope.trim_matches(['/', '\\']);
-    if clean.is_empty() || clean == "*" {
+    let clean = scope.trim_matches(['/', '\\']).replace('\\', "/");
+    if clean.is_empty() {
+        return false;
+    }
+    if clean == "*" {
         return true;
     }
 
@@ -1157,17 +1141,14 @@ pub fn check_agent_path_policies_direct(
     let relative = candidate.strip_prefix(workspace_root).unwrap_or(candidate);
     let rel_lossy = relative.to_string_lossy();
 
-    let detected_project;
-    #[allow(
-        clippy::option_if_let_else,
-        reason = "Borrowing from conditionally loaded local project config"
-    )]
-    let effective_proj = if let Some(p) = project {
-        p
-    } else {
-        detected_project = crate::project::ProjectConfig::detect_or_load(workspace_root);
-        &detected_project
-    };
+    let effective_proj = project.map_or_else(
+        || {
+            std::borrow::Cow::Owned(crate::project::ProjectConfig::detect_or_load(
+                workspace_root,
+            ))
+        },
+        std::borrow::Cow::Borrowed,
+    );
     let containers = &effective_proj.workspace.containers;
 
     // 1. Collect candidate policies from agent frontmatter

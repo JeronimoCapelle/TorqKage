@@ -181,6 +181,28 @@ pub(crate) fn build_harness_command(
     cmd
 }
 
+/// Resolves the target working directory for launching an agent session, creating or syncing an isolated
+/// Jujutsu workspace if `isolated_workspace` is enabled and falling back to `workspace_root` on error.
+fn resolve_launch_workspace(
+    workspace_root: &Path,
+    agent_name: &str,
+    isolated_workspace: bool,
+) -> (std::path::PathBuf, bool) {
+    if isolated_workspace {
+        match tkg_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, agent_name) {
+            Ok(ws_path) => (ws_path, true),
+            Err(e) => {
+                eprintln!(
+                    "⚠ [tkg] Failed to initialize isolated workspace: {e}. Falling back to root."
+                );
+                (workspace_root.to_path_buf(), false)
+            },
+        }
+    } else {
+        (workspace_root.to_path_buf(), false)
+    }
+}
+
 /// Interactive launcher: suspends Ratatui, runs pre-flight checks, spawns the agent session,
 /// and restores the terminal on exit.
 ///
@@ -209,19 +231,9 @@ pub(crate) fn launch_agent_interactive(
     drop(execute!(stdout(), LeaveAlternateScreen));
     drop(terminal.show_cursor());
 
-    let (effective_workspace, was_isolated) = if isolated_workspace {
-        match tkg_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
-            Ok(ws_path) => (ws_path, true),
-            Err(e) => {
-                eprintln!(
-                    "⚠ [tkg] Failed to initialize isolated workspace: {e}. Falling back to root."
-                );
-                (workspace_root.to_path_buf(), false)
-            },
-        }
-    } else {
-        (workspace_root.to_path_buf(), false)
-    };
+    let (effective_workspace, was_isolated) =
+        resolve_launch_workspace(workspace_root, &agent.name, isolated_workspace);
+    drop(tkg_common::set_active_agent(workspace_root, &agent.name));
 
     // Print friendly launcher header
     println!("\n================================================================================");
@@ -327,19 +339,9 @@ pub(crate) fn launch_agent_headless(
         return Err(report.format_diagnostics());
     }
 
-    let (effective_workspace, was_isolated) = if isolated_workspace {
-        match tkg_common::JujutsuWorkspace::ensure_agent_workspace(workspace_root, &agent.name) {
-            Ok(ws_path) => (ws_path, true),
-            Err(e) => {
-                eprintln!(
-                    "⚠ [tkg] Failed to initialize isolated workspace: {e}. Falling back to root."
-                );
-                (workspace_root.to_path_buf(), false)
-            },
-        }
-    } else {
-        (workspace_root.to_path_buf(), false)
-    };
+    let (effective_workspace, was_isolated) =
+        resolve_launch_workspace(workspace_root, &agent.name, isolated_workspace);
+    drop(tkg_common::set_active_agent(workspace_root, &agent.name));
 
     if let Some(conv_id) = resume_conversation {
         println!(
@@ -440,6 +442,7 @@ mod tests {
             disallowed_dirs: Vec::new(),
             allowed_files: Vec::new(),
             disallowed_files: Vec::new(),
+            path_policies: Vec::new(),
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),
@@ -480,6 +483,7 @@ mod tests {
             disallowed_dirs: Vec::new(),
             allowed_files: Vec::new(),
             disallowed_files: Vec::new(),
+            path_policies: Vec::new(),
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),
@@ -519,6 +523,7 @@ mod tests {
             disallowed_dirs: Vec::new(),
             allowed_files: Vec::new(),
             disallowed_files: Vec::new(),
+            path_policies: Vec::new(),
             native_tools: Vec::new(),
             mcp_tools: Vec::new(),
             directives: String::new(),

@@ -1,9 +1,7 @@
 //! Pre-tool gate for `invoke_subagent` calls validating declared `pre_launch_checks`.
 
-use std::path::PathBuf;
-
 use serde_json::Value;
-use tkg_common::{PreToolResponse, PreToolUseInput, WorkspaceResolver};
+use tkg_common::{PreToolResponse, PreToolUseInput};
 
 use crate::stdin;
 
@@ -42,14 +40,7 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
     }
 
     // Resolve workspace root from payload or current working directory
-    let root = input
-        .common
-        .workspace_paths
-        .first()
-        .cloned()
-        .unwrap_or_else(|| {
-            WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
-        });
+    let root = input.common.resolve_workspace_root();
 
     // Evaluate declared pre_launch_checks via canonical subagent admission gate
     match tkg_common::subagent_gate::check_subagent_admission(&root, type_name) {

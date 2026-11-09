@@ -121,7 +121,7 @@ fn format_mcp_tool_help(tool: &ToolDefinition) -> String {
     if let Some(cat) = &tool.category {
         _ = writeln!(out, "**Category:** {cat}");
     }
-    _ = writeln!(out, "**Action Handler:** {}", action_name(&tool.action));
+    _ = writeln!(out, "**Action Handler:** {}", tool.action.as_str());
 
     if !tool.allowed_directories.is_empty() {
         _ = writeln!(
@@ -144,26 +144,6 @@ fn format_mcp_tool_help(tool: &ToolDefinition) -> String {
     );
 
     out
-}
-
-const fn action_name(action: &crate::models::ToolAction) -> &'static str {
-    match action {
-        crate::models::ToolAction::FileRead => "file_read",
-        crate::models::ToolAction::FileWrite => "file_write",
-        crate::models::ToolAction::MpatchEdit => "mpatch_edit",
-        crate::models::ToolAction::FileSearch => "file_search",
-        crate::models::ToolAction::StaticCommand => "static_command",
-        crate::models::ToolAction::ParameterizedCommand => "parameterized_command",
-        crate::models::ToolAction::CliManual => "cli_manual",
-        crate::models::ToolAction::ProjectState => "project_state",
-        crate::models::ToolAction::WorkspaceEnsure => "workspace_ensure",
-        crate::models::ToolAction::WorkspaceInspect => "workspace_inspect",
-        crate::models::ToolAction::WorkspaceMerge => "workspace_merge",
-        crate::models::ToolAction::SetActiveAgent => "set_active_agent",
-        crate::models::ToolAction::RecordSessionHandoff => "record_session_handoff",
-        crate::models::ToolAction::DetectWip => "detect_wip",
-        crate::models::ToolAction::Unknown(_) => "custom",
-    }
 }
 
 fn format_tool_parameters(out: &mut String, tool: &ToolDefinition) {

@@ -1,12 +1,8 @@
 //! Session state handoff recording (`Stop`) and wake-up injection (`SessionStart`).
 
-use std::{
-    fmt::Write,
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::{fmt::Write, path::Path, process::Command};
 
-use tkg_common::{InjectStep, SessionStartResponse, StopResponse, WorkspaceResolver};
+use tkg_common::{InjectStep, SessionStartResponse, StopResponse};
 
 use crate::stdin::{
     read_session_start_input, read_stop_input, write_session_start_response, write_stop_response,
@@ -20,7 +16,7 @@ use crate::stdin::{
 pub(crate) fn execute_record_handoff() {
     let input = read_stop_input();
 
-    let root = resolve_workspace_root(input.common.workspace_paths.first());
+    let root = input.common.resolve_workspace_root();
     let config = crate::config::HooksConfig::load(&root);
 
     if !config.stop.enabled || !config.stop.record_handoff {
@@ -140,7 +136,7 @@ fn evaluate_custom_injections(
 pub(crate) fn execute_inject_wake() {
     let input = read_session_start_input();
 
-    let root = resolve_workspace_root(input.common.workspace_paths.first());
+    let root = input.common.resolve_workspace_root();
     let config = crate::config::HooksConfig::load(&root);
 
     if !config.session_start.enabled {
@@ -166,16 +162,6 @@ pub(crate) fn execute_inject_wake() {
     );
 
     write_session_start_response(&resp);
-}
-
-fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
-    if let Some(first_path) = candidate
-        && first_path.exists()
-    {
-        return first_path.clone();
-    }
-
-    WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
 }
 
 #[cfg(test)]

@@ -428,10 +428,6 @@ impl JujutsuWorkspace {
     ///
     /// # Errors
     /// Returns `TkgError` if rebase, conflicts, or quality gates fail.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "Comprehensive VCS merge and gate workflow"
-    )]
     pub fn merge_agent_workspace(
         workspace_root: &Path,
         agent: &str,
@@ -520,14 +516,30 @@ impl JujutsuWorkspace {
             return Err(conf_err);
         }
 
+        Self::finalize_merged_workspace(
+            &repo_root,
+            agent,
+            strat,
+            &agent_ws_path,
+            start_op_id.as_deref(),
+        )
+    }
+
+    fn finalize_merged_workspace(
+        repo_root: &Path,
+        agent: &str,
+        strat: &str,
+        agent_ws_path: &Path,
+        start_op_id: Option<&str>,
+    ) -> Result<String> {
         // Evaluate declarative project quality gates on merged tree
-        let project = crate::project::ProjectConfig::detect_or_load(&repo_root);
+        let project = crate::project::ProjectConfig::detect_or_load(repo_root);
         let mut gate_names: Vec<&str> = project.gates.keys().map(String::as_str).collect();
         gate_names.push("vcs_conflicts");
 
-        match crate::gatekeeper::evaluate_pre_flight_checks(&repo_root, &gate_names) {
+        match crate::gatekeeper::evaluate_pre_flight_checks(repo_root, &gate_names) {
             Ok(warnings) => {
-                Self::forget_agent_workspace(&repo_root, agent)?;
+                Self::forget_agent_workspace(repo_root, agent)?;
 
                 let mut report = format!(
                     "✅ Successfully merged isolated workspace for '{agent}' onto '@' (strategy: {strat}):\n\
@@ -551,7 +563,7 @@ impl JujutsuWorkspace {
                 Ok(report)
             },
             Err(errors) => {
-                restore_op(&repo_root, start_op_id.as_deref());
+                restore_op(repo_root, start_op_id);
                 Err(TkgError::Process(format!(
                     "Merge aborted: Quality gate evaluation failed on merged tree:\n{}\n\
                      Merge rolled back via 'jj op restore'. Workspace preserved at '{}'.",
@@ -639,6 +651,98 @@ impl JujutsuWorkspace {
             }
         }
         filtered
+    }
+
+    /// Queries the active bookmark, workspace name, or Git branch for `root`.
+    #[must_use]
+    pub fn query_current_branch(root: &Path) -> String {
+        if Self::is_jj_repo(root) {
+            let mut cmd = Command::new("jj");
+            cmd.args([
+                "--color=never",
+                "log",
+                "-r",
+                "@",
+                "--no-graph",
+                "-T",
+                "bookmarks",
+            ]);
+            cmd.current_dir(root);
+            if let Ok(out) =
+                SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+                && out.status.success()
+            {
+                let bm = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+                if !bm.is_empty() {
+                    return bm;
+                }
+            }
+            if let Some(ws_name) = Self::current_workspace_name(root) {
+                return format!("jj workspace: {ws_name}");
+            }
+            return "@ (working copy)".to_owned();
+        }
+
+        let mut cmd = Command::new("git");
+        cmd.args(["rev-parse", "--abbrev-ref", "HEAD"]);
+        cmd.current_dir(root);
+        if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+            && out.status.success()
+        {
+            let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+            if !name.is_empty() {
+                return name;
+            }
+        }
+        "unknown".to_owned()
+    }
+
+    /// Queries a human-readable working copy status summary (e.g. `"Clean"` or `"3 modified file(s)"`),
+    /// respecting `project.is_ignored_or_cache_path`.
+    #[must_use]
+    pub fn query_vcs_status_summary(root: &Path) -> String {
+        let project = crate::project::ProjectConfig::detect_or_load(root);
+        let raw_output = if Self::is_jj_repo(root) {
+            let mut cmd = Command::new("jj");
+            cmd.args(["--color=never", "diff", "--summary"]);
+            cmd.current_dir(root);
+            SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        } else {
+            let mut cmd = Command::new("git");
+            cmd.args(["status", "-s"]);
+            cmd.current_dir(root);
+            SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
+        };
+
+        let Ok(out) = raw_output else {
+            return "Unavailable".to_owned();
+        };
+        if !out.status.success() {
+            return "Unavailable".to_owned();
+        }
+
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let count = stdout
+            .lines()
+            .filter(|l| {
+                let trimmed = l.trim();
+                if trimmed.is_empty() {
+                    return false;
+                }
+                let path_to_check = if let Some((_, p)) = trimmed.split_once(' ') {
+                    p.trim()
+                } else {
+                    trimmed
+                };
+                !project.is_ignored_or_cache_path(path_to_check)
+            })
+            .count();
+
+        if count == 0 {
+            "Clean".to_owned()
+        } else {
+            format!("{count} modified file(s)")
+        }
     }
 }
 
@@ -842,7 +946,6 @@ mod tests {
     }
 
     #[test]
-    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
     fn test_inspect_agent_workspace_non_existent() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -851,11 +954,10 @@ mod tests {
             .unwrap()
             .to_path_buf();
         let res = JujutsuWorkspace::inspect_agent_workspace(&root, "non_existent_agent_999");
-        assert!(res.is_err());
+        assert!(res.is_err_and(|e| !e.to_string().is_empty()));
     }
 
     #[test]
-    #[allow(clippy::assertions_on_result_states, reason = "Test error state")]
     fn test_merge_agent_workspace_non_existent() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
@@ -864,7 +966,7 @@ mod tests {
             .unwrap()
             .to_path_buf();
         let res = JujutsuWorkspace::merge_agent_workspace(&root, "non_existent_agent_999", None);
-        assert!(res.is_err());
+        assert!(res.is_err_and(|e| !e.to_string().is_empty()));
     }
 
     #[test]

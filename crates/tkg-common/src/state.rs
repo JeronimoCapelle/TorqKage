@@ -191,6 +191,24 @@ pub fn resolve_active_agent(workspace_root: &Path) -> Option<String> {
     None
 }
 
+/// Persists `agent_name` as the active agent in `.tkg/state/active_agent.json` and `.tkg/state/active_agent`.
+///
+/// # Errors
+/// Returns `std::io::Error` if creating directories or atomically writing the state file fails.
+pub fn set_active_agent(workspace_root: &Path, agent_name: &str) -> std::io::Result<()> {
+    let paths = TkgStatePaths::new(workspace_root);
+    let payload = serde_json::json!({
+        "agent": agent_name,
+    });
+    let json_bytes = serde_json::to_vec_pretty(&payload)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    atomic_write(&paths.active_agent_file(), &json_bytes)?;
+
+    let txt_path = paths.state_dir().join("active_agent");
+    drop(atomic_write(&txt_path, agent_name.as_bytes()));
+    Ok(())
+}
+
 /// Writes `content` to `path` atomically by creating a temporary file in the same parent directory,
 /// writing all bytes, and performing an atomic POSIX `rename(2)` via [`tempfile::NamedTempFile::persist`].
 ///

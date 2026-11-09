@@ -41,10 +41,11 @@ pub mod wip;
 
 pub use content_filter::{
     BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig, check_agent_guard_direct,
-    check_agent_path_policies_direct, matches_directory_scope, path_matches_pattern,
+    check_agent_path_policies_direct, matches_directory_scope,
+    matches_directory_scope_with_containers, path_matches_pattern,
 };
 pub use error::{Result, TkgError};
-pub use frontmatter::AgentFrontmatter;
+pub use frontmatter::{AgentFrontmatter, discover_agent_frontmatters};
 pub use gatekeeper::{
     GateCheck, GateCheckStatus, ProjectGateCheck, VcsConflictCheck, WorkspaceCleanCheck,
     evaluate_pre_flight_checks, find_agent_manifest_path, parse_pre_launch_checks,
@@ -75,6 +76,7 @@ pub use models::{
 pub use project::{
     GateDefinition, ProjectConfig, ProjectDocsConfig, ProjectMeta, ProjectRunnerConfig,
     ProjectSandboxConfig, ProjectSecurityConfig, ProjectWorkspaceConfig, SecurityCategory,
+    check_dangerous_files_with_security,
 };
 pub use resolver::WorkspaceResolver;
 pub use rustc_hash::{
@@ -82,7 +84,7 @@ pub use rustc_hash::{
     FxHashSet, FxHashSet as FastHashSet, FxHasher, FxHasher as FastHasher,
 };
 pub use sandbox::{build_bubblewrap_command, is_inside_container};
-pub use state::{TkgStatePaths, atomic_write, resolve_active_agent};
+pub use state::{TkgStatePaths, atomic_write, resolve_active_agent, set_active_agent};
 pub use subagent_gate::{
     SubagentAdmissionResult, check_subagent_admission, inspect_subagent_admission,
 };

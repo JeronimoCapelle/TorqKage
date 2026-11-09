@@ -1,13 +1,13 @@
 //! In-process project state inspection for the MCP daemon.
 
-use std::{path::Path, process::Command};
+use std::path::Path;
 
-use tkg_common::{DEFAULT_VCS_QUERY_TIMEOUT_SECS, JujutsuWorkspace, SubprocessSupervisor};
+use tkg_common::JujutsuWorkspace;
 
 pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
-    let branch = query_current_branch(workspace_root);
-    let git_status = query_vcs_status(workspace_root);
-    let handoff = read_last_handoff(workspace_root);
+    let branch = JujutsuWorkspace::query_current_branch(workspace_root);
+    let git_status = JujutsuWorkspace::query_vcs_status_summary(workspace_root);
+    let handoff = tkg_common::handoff::read_last_handoff_message(workspace_root);
     let project = tkg_common::ProjectConfig::detect_or_load(workspace_root);
 
     let mut out =
@@ -32,93 +32,6 @@ pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
         out.push('\n');
     }
     (out, false)
-}
-
-fn query_current_branch(root: &Path) -> String {
-    if JujutsuWorkspace::is_jj_repo(root) {
-        let mut cmd = Command::new("jj");
-        cmd.args([
-            "--color=never",
-            "log",
-            "-r",
-            "@",
-            "--no-graph",
-            "-T",
-            "bookmarks",
-        ]);
-        cmd.current_dir(root);
-        if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            && out.status.success()
-        {
-            let bm = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-            if !bm.is_empty() {
-                return bm;
-            }
-        }
-        if let Some(ws_name) = JujutsuWorkspace::current_workspace_name(root) {
-            return format!("jj workspace: {ws_name}");
-        }
-        return "@ (working copy)".to_owned();
-    }
-
-    let mut cmd = Command::new("git");
-    cmd.args(["rev-parse", "--abbrev-ref", "HEAD"]);
-    cmd.current_dir(root);
-    if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-        && out.status.success()
-    {
-        let name = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-        if !name.is_empty() {
-            return name;
-        }
-    }
-    "unknown".to_owned()
-}
-
-fn query_vcs_status(root: &Path) -> String {
-    if JujutsuWorkspace::is_jj_repo(root) {
-        if JujutsuWorkspace::is_workspace_clean(root) {
-            return "Clean".to_owned();
-        }
-        let mut cmd = Command::new("jj");
-        cmd.args(["--color=never", "diff", "--summary"]);
-        cmd.current_dir(root);
-        if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-            && out.status.success()
-        {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let count = stdout
-                .lines()
-                .filter(|l| {
-                    let t = l.trim();
-                    !t.is_empty() && t != "A target" && t != "M target"
-                })
-                .count();
-            return format!("{count} modified file(s)");
-        }
-        return "Unavailable".to_owned();
-    }
-
-    let mut cmd = Command::new("git");
-    cmd.args(["status", "-s"]);
-    cmd.current_dir(root);
-    if let Ok(out) = SubprocessSupervisor::run_supervised(cmd, DEFAULT_VCS_QUERY_TIMEOUT_SECS)
-        && out.status.success()
-    {
-        let stdout = String::from_utf8_lossy(&out.stdout);
-        let count = stdout.lines().count();
-        if count == 0 {
-            "Clean".to_owned()
-        } else {
-            format!("{count} modified file(s)")
-        }
-    } else {
-        "Unavailable".to_owned()
-    }
-}
-
-fn read_last_handoff(root: &Path) -> Option<String> {
-    tkg_common::handoff::read_last_handoff_message(root)
 }
 
 #[cfg(test)]

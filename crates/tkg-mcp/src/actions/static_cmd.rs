@@ -3,9 +3,8 @@
 use std::path::Path;
 
 use crate::{
-    actions::execute_supervised_command,
-    guards::truncate_output,
-    models::{OutputCapture, ToolDefinition},
+    actions::{execute_supervised_command, process_command_output},
+    models::ToolDefinition,
 };
 
 /// Executes a static argv command vector.
@@ -38,75 +37,7 @@ pub(crate) fn execute(
         &tool.name,
     )?;
 
-    let is_error = if let Some(code) = output.status.code() {
-        if tool.success_exit_codes.contains(&code) {
-            false
-        } else {
-            !output.status.success()
-        }
-    } else {
-        !output.status.success()
-    };
-
-    let text_content = match tool.output_capture {
-        OutputCapture::ExitCodeOnly => {
-            let code = output.status.code().unwrap_or(-1);
-            if is_error {
-                format!("Command '{program}' failed (exit code {code})")
-            } else {
-                format!("Command '{program}' completed successfully (exit code {code})")
-            }
-        },
-
-        OutputCapture::Stdout => {
-            let out = String::from_utf8_lossy(&output.stdout);
-            if out.trim().is_empty() && is_error {
-                String::from_utf8_lossy(&output.stderr).into_owned()
-            } else {
-                out.into_owned()
-            }
-        },
-
-        OutputCapture::Stderr => {
-            let err = String::from_utf8_lossy(&output.stderr);
-            if err.trim().is_empty() && !is_error {
-                String::from_utf8_lossy(&output.stdout).into_owned()
-            } else {
-                err.into_owned()
-            }
-        },
-
-        OutputCapture::Both | OutputCapture::JsonSpans => {
-            let out = String::from_utf8_lossy(&output.stdout);
-            let err = String::from_utf8_lossy(&output.stderr);
-            if err.trim().is_empty() {
-                out.into_owned()
-            } else if out.trim().is_empty() {
-                err.into_owned()
-            } else {
-                format!("{out}\n--- stderr ---\n{err}")
-            }
-        },
-    };
-
-    let effective_content = if text_content.trim().is_empty()
-        && let Some(fallback) = &tool.empty_fallback
-    {
-        fallback.clone()
-    } else {
-        text_content
-    };
-
-    let clean_content = crate::guards::strip_ansi(&effective_content);
-
-    let truncated = truncate_output(
-        &clean_content,
-        tool.truncate_lines,
-        tool.truncate_bytes,
-        tool.emit_truncation_notice(),
-    );
-
-    Ok((truncated, is_error))
+    Ok(process_command_output(&output, tool, program))
 }
 
 #[cfg(test)]
@@ -118,6 +49,7 @@ pub(crate) fn execute(
 )]
 mod tests {
     use super::*;
+    use crate::models::OutputCapture;
 
     #[test]
     fn test_static_command_echo() {

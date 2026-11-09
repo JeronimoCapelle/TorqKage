@@ -27,6 +27,30 @@ pub enum ToolAction {
     Unknown(String),
 }
 
+impl ToolAction {
+    /// Returns the canonical `snake_case` identifier for this tool action.
+    #[must_use]
+    pub const fn as_str(&self) -> &str {
+        match self {
+            Self::FileRead => "file_read",
+            Self::FileWrite => "file_write",
+            Self::MpatchEdit => "mpatch_edit",
+            Self::FileSearch => "file_search",
+            Self::StaticCommand => "static_command",
+            Self::ParameterizedCommand => "parameterized_command",
+            Self::CliManual => "cli_manual",
+            Self::ProjectState => "project_state",
+            Self::WorkspaceEnsure => "workspace_ensure",
+            Self::WorkspaceInspect => "workspace_inspect",
+            Self::WorkspaceMerge => "workspace_merge",
+            Self::SetActiveAgent => "set_active_agent",
+            Self::RecordSessionHandoff => "record_session_handoff",
+            Self::DetectWip => "detect_wip",
+            Self::Unknown(s) => s.as_str(),
+        }
+    }
+}
+
 /// Capture strategy for standard process streams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]

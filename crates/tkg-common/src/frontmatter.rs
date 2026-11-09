@@ -1,6 +1,10 @@
 //! YAML frontmatter parsing and agent manifest extraction.
 
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Write,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -161,6 +165,154 @@ impl AgentFrontmatter {
             Some(parsed.to_guard())
         }
     }
+
+    /// Serializes this agent manifest to YAML frontmatter + Markdown directives tailored for `harness`.
+    #[must_use]
+    pub fn serialize_for_harness(&self, harness: &dyn crate::Harness) -> String {
+        let mut out = String::new();
+        out.push_str("---\n");
+        _ = writeln!(out, "name: {}", self.name);
+        _ = writeln!(
+            out,
+            "description: \"{}\"",
+            self.description.replace('"', "\\\"")
+        );
+        _ = writeln!(out, "effort: {}", self.effort);
+        if harness.uses_agy_frontmatter() {
+            if !self.permission_mode.is_empty() {
+                _ = writeln!(out, "permissionMode: {}", self.permission_mode);
+            }
+            if !self.command_execution_policy.is_empty() {
+                _ = writeln!(
+                    out,
+                    "commandExecutionPolicy: {}",
+                    self.command_execution_policy
+                );
+            }
+            if self.main_agent {
+                out.push_str("mainAgent: true\n");
+            }
+            if self.subagent {
+                out.push_str("subagent: true\n");
+            }
+        }
+        write_yaml_list(
+            &mut out,
+            "allowed_subagents",
+            &self.allowed_subagents,
+            false,
+        );
+        write_yaml_list(
+            &mut out,
+            "pre_launch_checks",
+            &self.pre_launch_checks,
+            false,
+        );
+        write_yaml_list(&mut out, "allowed_dirs", &self.allowed_dirs, false);
+        write_yaml_list(&mut out, "disallowed_dirs", &self.disallowed_dirs, false);
+        write_yaml_list(&mut out, "allowed_files", &self.allowed_files, false);
+        write_yaml_list(&mut out, "disallowed_files", &self.disallowed_files, false);
+        if !self.path_policies.is_empty() {
+            out.push_str("path_policies:\n");
+            for policy in &self.path_policies {
+                _ = writeln!(out, "  - path: {}", policy.path);
+                let filter_str = match policy.filter {
+                    crate::content_filter::ContentFilterKind::CommentsOnly => "comments_only",
+                    crate::content_filter::ContentFilterKind::TestsOnly => "tests_only",
+                    crate::content_filter::ContentFilterKind::Delimited => "delimited",
+                };
+                _ = writeln!(out, "    filter: {filter_str}");
+                if let Some(ref start) = policy.start_marker {
+                    _ = writeln!(out, "    start_marker: \"{}\"", start.replace('"', "\\\""));
+                }
+                if let Some(ref end) = policy.end_marker {
+                    _ = writeln!(out, "    end_marker: \"{}\"", end.replace('"', "\\\""));
+                }
+            }
+        }
+        if harness.uses_agy_frontmatter() {
+            if !self.inherit_mcp {
+                out.push_str("inheritMcp: false\n");
+            }
+            out.push_str("mcpServers:\n");
+            out.push_str("  - name: tkg-tools\n");
+            out.push_str("    command: tkg-mcp\n");
+            _ = writeln!(out, "    args: [\"--agent\", \"{}\"]", self.name);
+        }
+
+        write_yaml_list(&mut out, "tools", &self.native_tools, true);
+        write_yaml_list(&mut out, "mcp_tools", &self.mcp_tools, true);
+        out.push_str("---\n\n");
+        out.push_str(self.directives.trim_start());
+        if !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Parses an agent Markdown file from disk, filling in `name` from the file stem if omitted in YAML.
+    ///
+    /// # Errors
+    /// Returns an error if reading the file or parsing YAML frontmatter fails.
+    pub fn parse_file(path: &Path) -> Result<Self, String> {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+        let mut parsed = Self::parse(&content)?;
+        if parsed.name.is_empty()
+            && let Some(stem) = path.file_stem().and_then(std::ffi::OsStr::to_str)
+        {
+            stem.clone_into(&mut parsed.name);
+        }
+        Ok(parsed)
+    }
+}
+
+fn write_yaml_list(out: &mut String, key: &str, items: &[String], emit_empty: bool) {
+    if items.is_empty() {
+        if emit_empty {
+            _ = writeln!(out, "{key}: []");
+        }
+    } else {
+        _ = writeln!(out, "{key}:");
+        for item in items {
+            _ = writeln!(out, "  - {item}");
+        }
+    }
+}
+
+/// Discovers and parses all unique agent manifests across candidate locations for `workspace_root`.
+///
+/// Returns `(file_path, AgentFrontmatter)` tuples sorted alphabetically by agent name.
+#[must_use]
+pub fn discover_agent_frontmatters(workspace_root: &Path) -> Vec<(PathBuf, AgentFrontmatter)> {
+    let candidate_dirs = candidate_agent_directories(workspace_root);
+    let mut agents = Vec::new();
+    let mut seen_names = FastHashSet::default();
+
+    for dir in candidate_dirs {
+        if !dir.is_dir() {
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension() != Some(std::ffi::OsStr::new("md")) {
+                continue;
+            }
+            let Ok(frontmatter) = AgentFrontmatter::parse_file(&path) else {
+                continue;
+            };
+            if !frontmatter.name.is_empty() && seen_names.insert(frontmatter.name.clone()) {
+                agents.push((path, frontmatter));
+            }
+        }
+    }
+
+    agents.sort_by(|a, b| a.1.name.cmp(&b.1.name));
+    agents
 }
 
 fn parse_fenced_block(content: &str) -> Result<(&str, String), String> {
@@ -256,7 +408,6 @@ pub fn find_agent_manifest(workspace_root: &Path, agent_name: &str) -> Option<Pa
 #[allow(
     clippy::unwrap_used,
     clippy::expect_used,
-    clippy::assert_is_empty,
     clippy::indexing_slicing,
     reason = "Unit test assertions"
 )]
@@ -346,6 +497,11 @@ path_policies:
 
         let guard = manifest.to_guard();
         assert_eq!(guard.path_policies.len(), 2);
+
+        // Roundtrip serialize_for_harness preserves path_policies
+        let serialized = manifest.serialize_for_harness(&crate::harness::Antigravity);
+        let roundtripped = AgentFrontmatter::parse(&serialized).unwrap();
+        assert_eq!(roundtripped.path_policies, manifest.path_policies);
     }
 
     #[test]
@@ -389,7 +545,7 @@ Directives";
     fn test_extract_pre_launch_checks_empty_list() {
         let md = "---\nname: test\npre_launch_checks: []\n---\nbody";
         let checks = AgentFrontmatter::extract_pre_launch_checks(md);
-        assert!(checks.is_empty());
+        assert_eq!(checks, Vec::<String>::new());
     }
 
     #[test]
