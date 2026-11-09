@@ -12,7 +12,7 @@ use crate::{guards::truncate_output, models::ToolDefinition};
 /// Executes a CLI manual lookup action (`query_tool_help`).
 ///
 /// Priority ladder:
-/// 1. Torqkage internal MCP tool definition & schema (if `tool_name` matches an MCP tool)
+/// 1. `TorqKage` internal MCP tool definition & schema (if `tool_name` matches an MCP tool)
 /// 2. `navi` cheatsheet recipe (if `query` parameter provided)
 /// 3. `tldr` cheatsheet (concise real-world examples)
 /// 4. `--help` CLI output (short flag reference, capped at 60 lines)
@@ -60,7 +60,7 @@ fn resolve_tool_help(
         );
     }
 
-    // 1. Check if `name` matches an internal Torqkage MCP tool
+    // 1. Check if `name` matches an internal TorqKage MCP tool
     if let Some(mcp_tool) = available_tools.iter().find(|t| t.name == name) {
         return format_mcp_tool_help(mcp_tool);
     }
@@ -101,7 +101,7 @@ fn resolve_tool_help(
 
     if !tool_installed {
         return format!(
-            "Tool '{name}' is neither a recognized Torqkage MCP tool nor a host CLI binary on $PATH."
+            "Tool '{name}' is neither a recognized TorqKage MCP tool nor a host CLI binary on $PATH."
         );
     }
 
@@ -116,7 +116,7 @@ fn resolve_tool_help(
 
 fn format_mcp_tool_help(tool: &ToolDefinition) -> String {
     let mut out = String::new();
-    _ = writeln!(out, "# Torqkage MCP Tool: `{}`", tool.name);
+    _ = writeln!(out, "# TorqKage MCP Tool: `{}`", tool.name);
     _ = writeln!(out, "\n**Description:** {}", tool.description);
     if let Some(cat) = &tool.category {
         _ = writeln!(out, "**Category:** {cat}");
@@ -139,7 +139,7 @@ fn format_mcp_tool_help(tool: &ToolDefinition) -> String {
 
     _ = writeln!(
         out,
-        "\n> [!NOTE]\n> This is an Torqkage MCP tool. Invoke it via `call_mcp_tool` using `ServerName: \"tkg-tools\"` and `ToolName: \"{}\"` (or as a native tool if eagerly loaded).",
+        "\n> [!NOTE]\n> This is a TorqKage MCP tool. Invoke it via `call_mcp_tool` using `ServerName: \"tkg-tools\"` and `ToolName: \"{}\"` (or as a native tool if eagerly loaded).",
         tool.name
     );
 
@@ -349,7 +349,7 @@ mod tests {
         let args = serde_json::json!({ "tool_name": "custom_diagnostic_tool" });
         let (out, is_err) = execute(&tool, &args, &mcp_tools);
         assert!(!is_err);
-        assert!(out.contains("Torqkage MCP Tool: `custom_diagnostic_tool`"));
+        assert!(out.contains("TorqKage MCP Tool: `custom_diagnostic_tool`"));
         assert!(out.contains("Inspects system health"));
     }
 
@@ -359,7 +359,7 @@ mod tests {
         let args = serde_json::json!({ "tool_name": "definitely_nonexistent_tool_xyz_123" });
         let (out, is_err) = execute(&tool, &args, &[]);
         assert!(!is_err);
-        assert!(out.contains("neither a recognized Torqkage MCP tool nor a host CLI binary"));
+        assert!(out.contains("neither a recognized TorqKage MCP tool nor a host CLI binary"));
     }
 
     #[test]

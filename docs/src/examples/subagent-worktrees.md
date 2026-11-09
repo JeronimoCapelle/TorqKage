@@ -1,6 +1,6 @@
 # Example: Isolated Subagent Worktrees
 
-One of the unique advantages of `Torqkage` is **VCS-level working copy isolation** powered by [Jujutsu (`jj`)](https://github.com/martinvonz/jj).
+One of the unique advantages of `TorqKage` is **VCS-level working copy isolation** powered by [Jujutsu (`jj`)](https://github.com/martinvonz/jj).
 
 ---
 
@@ -15,7 +15,7 @@ When an autonomous AI agent modifies code in your main working copy:
 
 ## The Solution: Automatic Agent Worktrees
 
-`Torqkage` solves this via `tkg_common::JujutsuWorkspace`. When an agent is launched with `--isolated` or by toggling <kbd>w</kbd> in `tkg`:
+`TorqKage` solves this via `tkg_common::JujutsuWorkspace`. When an agent is launched with `--isolated` or by toggling <kbd>w</kbd> in `tkg`:
 
 ```
 repo_root/

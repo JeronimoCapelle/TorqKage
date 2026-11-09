@@ -1,4 +1,4 @@
-# VHS Tape: Torqkage interactive terminal control deck
+# VHS Tape: TorqKage interactive terminal control deck
 # Output configuration
 Output "assets/demo.gif"
 
@@ -19,8 +19,8 @@ Set Theme { "background": "#000000", "foreground": "#ffffff", "selectionBackgrou
 # Boot environment
 Hide
 Type "export TERM=xterm-256color" Enter
-Type "export PATH=$HOME/projects/rust/TorqKage/target/release:$PATH" Enter
-Type "cd $HOME/projects/rust/TorqKage" Enter
+Type "export PATH=$HOME/projects/rust/torqkage/target/release:$PATH" Enter
+Type "cd $HOME/projects/rust/torqkage" Enter
 Type "clear" Enter
 Show
 

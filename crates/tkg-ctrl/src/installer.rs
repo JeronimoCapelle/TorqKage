@@ -465,7 +465,7 @@ pub(crate) fn install_plugin_interactive(
     ))
 }
 
-/// Registers or installs the Torqkage configuration for the selected execution harness.
+/// Registers or installs the `TorqKage` configuration for the selected execution harness.
 pub(crate) fn register_harness_config(
     workspace_root: &Path,
     runner: &tkg_common::ProjectRunnerConfig,

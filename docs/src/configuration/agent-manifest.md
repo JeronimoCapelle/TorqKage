@@ -1,6 +1,6 @@
 # Agent Manifests (`AGENT.md`)
 
-Agent manifests define persona identity, reasoning effort, permission boundaries, sandboxing policies, tool whitelists, admission prerequisites, and behavioral directives. In `Torqkage`, agent manifests are authored as Markdown documents with YAML frontmatter bounded by triple-dash (`---`) fences.
+Agent manifests define persona identity, reasoning effort, permission boundaries, sandboxing policies, tool whitelists, admission prerequisites, and behavioral directives. In `TorqKage`, agent manifests are authored as Markdown documents with YAML frontmatter bounded by triple-dash (`---`) fences.
 
 Manifest files reside in `plugins/torqkage/agents/<name>.md`, `<workspace>/agents/<name>.md`, or custom locations, where `<name>` corresponds to the persona identifier (such as `coder`, `test-author`, `doc-author`, `finisher`, `planner`, or `copilot`).
 
@@ -221,4 +221,4 @@ Agent manifests are discovered using the following deterministic search order:
 Many agent harnesses support interpreted Markdown skills (`SKILL.md`). In production systems engineering, this approach exhibits severe defects:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions burns 2,000–4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
-- **`Torqkage` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
+- **`TorqKage` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.

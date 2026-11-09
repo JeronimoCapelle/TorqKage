@@ -2,7 +2,7 @@
 //!
 //! Declarative `project.toml` configuration model, parser, and ecosystem auto-detection.
 //! Decouples language-specific build tools, compilers, test runners, and build caches
-//! from the `Torqkage` core engine.
+//! from the `TorqKage` core engine.
 
 use std::{
     collections::BTreeMap,

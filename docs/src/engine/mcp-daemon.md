@@ -25,7 +25,7 @@ Instead of shelling out to generic scripts, `tkg-mcp` compiles high-assurance na
 
 ## The Meta-MCP Pattern vs. Traditional MCP Servers
 
-In the standard MCP ecosystem, every new tool requires writing, compiling, and running a bespoke Node.js or Python process. `Torqkage` replaces this sprawl with a single, high-performance Safe Rust daemon (`tkg-mcp`). By declaring tools in `tools.toml`, developers gain instant access to:
+In the standard MCP ecosystem, every new tool requires writing, compiling, and running a bespoke Node.js or Python process. `TorqKage` replaces this sprawl with a single, high-performance Safe Rust daemon (`tkg-mcp`). By declaring tools in `tools.toml`, developers gain instant access to:
 - **Automatic JSON Schema Synthesis:** Generates strict type schemas from TOML declarations.
 - **Regex Argument Validation:** Intercepts shell injections before any subprocess is spawned.
 - **Bubblewrap Container Isolation:** Runs untrusted commands inside private namespaces (`CLONE_NEWNET`, private loopback only, zero outbound sockets).

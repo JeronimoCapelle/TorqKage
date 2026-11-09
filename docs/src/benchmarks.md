@@ -1,6 +1,6 @@
 # Performance & Benchmarks
 
-`Torqkage` is engineered for zero runtime overhead, sub-millisecond lifecycle interception, and minimal memory footprint.
+`TorqKage` is engineered for zero runtime overhead, sub-millisecond lifecycle interception, and minimal memory footprint.
 
 ---
 
@@ -20,7 +20,7 @@ Lifecycle hooks run synchronously on model events (`pre-tool-use`, `detect-wip`,
 
 ## 2. Compilation Speed Profiles
 
-Developer iteration speed is critical. `Torqkage` configures dedicated Cargo compilation profiles in `Cargo.toml`:
+Developer iteration speed is critical. `TorqKage` configures dedicated Cargo compilation profiles in `Cargo.toml`:
 
 | Profile | Compiler Backend | Linker | Full Workspace Build Time | Optimization Level |
 | :--- | :--- | :--- | :--- | :--- |
@@ -47,7 +47,7 @@ When container isolation is active—either toggled in `tkg` or declared per-too
 
 ## 4. Hardware Instruction Profiling Methodology
 
-When profiling low-level systems or optimizing hot loops in production code, `Torqkage`'s `perf-analyst` leverages:
+When profiling low-level systems or optimizing hot loops in production code, `TorqKage`'s `perf-analyst` leverages:
 1. **Microarchitectural Pipeline Simulation:** `llvm-mca -mcpu=native` to inspect instruction IPC and throughput bottlenecks.
 2. **Assembly Inspection:** `cargo asm --rust` to inspect generated vectorization and register allocations.
 3. **Statistical Flamegraphs:** `cargo flamegraph` for call stack CPU sampling.

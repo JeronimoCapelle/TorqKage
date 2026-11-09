@@ -1,6 +1,6 @@
 # System Architecture
 
-`Torqkage` is structured as a unified 4-crate Rust workspace:
+`TorqKage` is structured as a unified 4-crate Rust workspace:
 
 ```
 crates/
@@ -23,4 +23,4 @@ The suite replaces hardcoded assumptions with three declarative TOML contracts:
 
 ## Safe Rust Invariant
 
-Every crate in `Torqkage` enforces `#![forbid(unsafe_code)]` at the crate root. Memory safety and concurrency correctness are verified by the Rust compiler without unsafe pointer arithmetic or transmutations.
+Every crate in `TorqKage` enforces `#![forbid(unsafe_code)]` at the crate root. Memory safety and concurrency correctness are verified by the Rust compiler without unsafe pointer arithmetic or transmutations.

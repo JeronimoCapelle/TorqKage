@@ -74,7 +74,7 @@ pub(crate) fn print_fleet_status(agents: &[AgentManifest], tools: &[ToolItem]) {
 /// # Errors
 /// Returns an error if validation fails.
 pub(crate) fn print_validation_report(workspace_root: &Path) -> Result<(), String> {
-    println!("Running offline pre-flight validation for Torqkage...");
+    println!("Running offline pre-flight validation for TorqKage...");
     match run_plugin_validation(workspace_root) {
         Ok(out) => {
             println!("✔ Validation Passed:\n{out}");

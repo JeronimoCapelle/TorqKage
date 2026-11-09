@@ -1,6 +1,6 @@
 //! # harness
 //!
-//! The [`Harness`] trait is the single seam between Torqkage and an agent execution harness
+//! The [`Harness`] trait is the single seam between `TorqKage` and an agent execution harness
 //! (Antigravity, `OpenCode`, Claude Code, or any custom CLI). Everything harness-specific that
 //! the suite needs to know *statically* — binary name, CLI flags, directory conventions,
 //! environment variables, plugin install locations — lives in an implementation of this trait.

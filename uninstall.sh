@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Torqkage Uninstaller
+# TorqKage Uninstaller
 #
-# Removes the Torqkage plugin bundle and CLI symlinks cleanly:
+# Removes the TorqKage plugin bundle and CLI symlinks cleanly:
 #   1. Removes ~/.gemini/config/plugins/torqkage
 #   2. Removes ~/.local/bin/tkg, ~/.local/bin/tkg-mcp, ~/.local/bin/tkg-hooks
 #   3. Optionally cleans local workspace bundle ./plugins/torqkage/bin
@@ -19,7 +19,7 @@ EXTRA_PLUGIN_DIRS=(
 )
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 
-echo "==> [Torqkage] Removing plugin bundle and symlinks..."
+echo "==> [TorqKage] Removing plugin bundle and symlinks..."
 
 # Remove CLI symlinks
 for bin in tkg tkg-mcp tkg-hooks; do

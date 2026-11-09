@@ -1,6 +1,6 @@
 # Pre-Built Ecosystem Starter Kits
 
-`Torqkage` is a **declarative governance engine and sandboxed MCP runtime**. Rather than locking you into a single pre-configured fleet, the engine enables developers—and autonomous AIs—to define completely custom, air-gapped agent teams using pure TOML and Markdown.
+`TorqKage` is a **declarative governance engine and sandboxed MCP runtime**. Rather than locking you into a single pre-configured fleet, the engine enables developers—and autonomous AIs—to define completely custom, air-gapped agent teams using pure TOML and Markdown.
 
 To accelerate bootstrapping, the engine includes ready-to-use, production-hardened starter kits located in `docs/templates/`:
 
@@ -19,7 +19,7 @@ To accelerate bootstrapping, the engine includes ready-to-use, production-harden
 1. Copy the desired starter kit into your workspace's `.tkg/` directory:
    ```bash
    mkdir -p .tkg
-   cp -r /path/to/TorqKage/docs/templates/go/* .tkg/
+   cp -r /path/to/torqkage/docs/templates/go/* .tkg/
    ```
 
 2. Boot the interactive flight deck:
@@ -36,11 +36,11 @@ To accelerate bootstrapping, the engine includes ready-to-use, production-harden
 
 ## 🤖 The "Prompt-to-Fleet" Workflow (LLM as Fleet Architect)
 
-Because `Torqkage` configurations are 100% declarative, you can prompt any LLM (Claude, ChatGPT, Gemini, or Antigravity) to design a bespoke fleet for your exact tech stack:
+Because `TorqKage` configurations are 100% declarative, you can prompt any LLM (Claude, ChatGPT, Gemini, or Antigravity) to design a bespoke fleet for your exact tech stack:
 
 ```text
-"Act as an Torqkage Fleet Architect. I am building a project in <Language/Framework>.
-Based on the Torqkage declarative schemas, generate:
+"Act as a TorqKage Fleet Architect. I am building a project in <Language/Framework>.
+Based on the TorqKage declarative schemas, generate:
 1. project.toml: with gates for compilation, unit tests, and linting.
 2. tools.toml: declaring test runners and diagnostic tools with enforce_sandbox = true,
    strict regex parameter validation, and enums for mutually exclusive flags.

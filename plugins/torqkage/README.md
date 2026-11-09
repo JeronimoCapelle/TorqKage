@@ -1,10 +1,10 @@
-# Torqkage: High-Assurance Systems Programming & Agent Orchestration Plugin
+# TorqKage: High-Assurance Systems Programming & Agent Orchestration Plugin
 
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
+[![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](../../LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Arch%20%7C%20CachyOS-green.svg)](https://archlinux.org)
 [![VCS](https://img.shields.io/badge/vcs-Jujutsu%20%2B%20Git-purple.svg)](https://github.com/martinvonz/jj)
 
-`Torqkage` is an enterprise-grade, high-assurance governance engine and toolkit for popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity). It equips autonomous and interactive AI agent fleets with bounded Model Context Protocol (MCP) tooling, deterministic sub-millisecond lifecycle safety hooks, sparse workspace isolation, and an interactive terminal control deck (`tkg`).
+`TorqKage` is an enterprise-grade, high-assurance governance engine and toolkit for popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity). It equips autonomous and interactive AI agent fleets with bounded Model Context Protocol (MCP) tooling, deterministic sub-millisecond lifecycle safety hooks, sparse workspace isolation, and an interactive terminal control deck (`tkg`).
 
 The suite is built around a **zero-hardcoded-assumptions, declarative-first architecture**: all compiler commands, build caches, quality gates, lifecycle hooks, tool permissions, directory boundaries, and security perimeters are defined in transparent, human-editable, self-documenting TOML configuration files.
 
@@ -21,7 +21,7 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
    - [4. `project.toml` (Ecosystem & Quality Gates)](#4-projecttoml-ecosystem--quality-gates)
    - [5. `hooks.toml` (Safety Pipeline & Interceptors)](#5-hookstoml-safety-pipeline--interceptors)
    - [6. `tools.toml` (Declarative MCP Tools)](#6-toolstoml-declarative-mcp-tools)
-4. [How `agents/*.md` Files Interact with `Torqkage`](#how-agentsmd-files-interact-with-torqkage)
+4. [How `agents/*.md` Files Interact with `TorqKage`](#how-agentsmd-files-interact-with-torqkage)
    - [Frontmatter Specification](#frontmatter-specification)
    - [The Air-Gapped Zero-Trust Tooling Model](#the-air-gapped-zero-trust-tooling-model)
    - [Dynamic Pre-Launch Admission Gatekeeping](#dynamic-pre-launch-admission-gatekeeping)
@@ -180,7 +180,7 @@ plugins/torqkage/
 
 ---
 
-## How `agents/*.md` Files Interact with `Torqkage`
+## How `agents/*.md` Files Interact with `TorqKage`
 
 Every agent in `plugins/torqkage/agents/` is a self-contained autonomous actor defined via Markdown with YAML frontmatter.
 
@@ -340,7 +340,7 @@ sequenceDiagram
 
 ### Adapting to Other Languages
 
-To switch `Torqkage` to Zig, Go, TypeScript, Python, or C/C++, simply update `project.toml` with the appropriate ecosystem template:
+To switch `TorqKage` to Zig, Go, TypeScript, Python, or C/C++, simply update `project.toml` with the appropriate ecosystem template:
 
 #### Zig Project Example
 ```toml

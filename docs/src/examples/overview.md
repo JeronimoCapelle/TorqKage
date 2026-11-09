@@ -1,6 +1,6 @@
 # Real-World Workflows & Examples
 
-This section walks through hands-on examples of applying `Torqkage` to real-world software engineering workflows.
+This section walks through hands-on examples of applying `TorqKage` to real-world software engineering workflows.
 
 ---
 

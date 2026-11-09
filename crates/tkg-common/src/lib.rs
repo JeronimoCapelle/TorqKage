@@ -1,7 +1,7 @@
 //! # tkg-common
 //!
 //! Shared systems primitives, process hygiene supervisor, dynamic workspace root resolver,
-//! and `ProtoJSON` lifecycle models for the `Torqkage` (`tkg`) suite.
+//! and `ProtoJSON` lifecycle models for the `TorqKage` (`tkg`) suite.
 //!
 //! ## Submodules
 //! - [`error`]: Centralized typed error hierarchy ([`TkgError`]).

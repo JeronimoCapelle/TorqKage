@@ -11,7 +11,7 @@ use tkg_common::{
     SessionStartInput, SessionStartResponse, StopInput, StopResponse, ToolCallPayload,
 };
 
-/// Wire-protocol adapter translating between a harness's hook JSON and Torqkage's canonical hook types.
+/// Wire-protocol adapter translating between a harness's hook JSON and `TorqKage`'s canonical hook types.
 pub(crate) trait HookDialect: Send + Sync {
     /// Parses a raw `stdin` JSON string into a canonical [`PreToolUseInput`].
     fn parse_pre_tool_use(&self, raw: &str) -> Result<PreToolUseInput, serde_json::Error> {

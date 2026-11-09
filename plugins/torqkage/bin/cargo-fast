@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# cargo-fast — Turbo Compilation Runner for Torqkage
+# cargo-fast — Turbo Compilation Runner for TorqKage
 # ==============================================================================
 # Automatically detects and leverages sccache, mold, and Cranelift if available,
 # falling back gracefully to standard fast profile compilation.

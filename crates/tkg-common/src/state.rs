@@ -1,4 +1,4 @@
-//! Centralized state and workspace path resolution for the `Torqkage` ecosystem.
+//! Centralized state and workspace path resolution for the `TorqKage` ecosystem.
 //!
 //! All runtime state, isolated workspaces, and inter-agent artifacts are
 //! consolidated under the `.tkg/` root directory in the workspace root:

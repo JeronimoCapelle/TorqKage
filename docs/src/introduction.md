@@ -1,11 +1,11 @@
 # Introduction
 
-Welcome to **The `Torqkage` Engine Manual**.
+Welcome to **The `TorqKage` Engine Manual**.
 
 > ### Sandboxed Meta-MCP Runtime and Declarative Fleet Engine
 > Turn any CLI binary, compiler, or script into an isolated, schema-validated MCP tool with declarative TOML configurations.
 
-`Torqkage` is a declarative governance engine, Meta-MCP server, featherweight lifecycle runner, and Ratatui 0.30 interactive flight deck designed as a high-assurance extension layer for popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity, and custom runners), with support for more common harnesses in active development.
+`TorqKage` is a declarative governance engine, Meta-MCP server, featherweight lifecycle runner, and Ratatui 0.30 interactive flight deck designed as a high-assurance extension layer for popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity, and custom runners), with support for more common harnesses in active development.
 
 ```
                     ┌──────────────────────────────────────────────┐
@@ -14,7 +14,7 @@ Welcome to **The `Torqkage` Engine Manual**.
                     └──────────────────────┬───────────────────────┘
                                            │
                         ┌──────────────────┴──────────────────┐
-                        │              Torqkage              │
+                        │              TorqKage              │
                         │    (Pure Safe Rust 2024 Workspace)  │
                         └─┬──────────────┬──────────────┬───┬─┘
                           │              │              │   │
@@ -24,13 +24,13 @@ Welcome to **The `Torqkage` Engine Manual**.
         └───────────────────┘  └──────────────────┘  └─────────────────┘  └──────────────────┘
 ```
 
-## Why `Torqkage`?
+## Why `TorqKage`?
 
 Autonomous AI coding agents frequently suffer from two fatal failure modes in production systems engineering:
 1. **Ambient Shell Poisoning:** Agents run unstructured `bash` commands with full host access, risking accidental `rm -rf`, network leaks, or credential corruption.
 2. **Token Exhaustion:** Re-injecting multi-kilobyte interpreted Markdown skills on every turn burns tokens and slows generation.
 
-`Torqkage` replaces ambient, unstructured execution with **deterministic capability perimeters**:
+`TorqKage` replaces ambient, unstructured execution with **deterministic capability perimeters**:
 - **Pure Safe Rust:** The entire workspace enforces `#![forbid(unsafe_code)]`.
 - **Configurable Container Sandboxing:** Ephemeral Bubblewrap (`bwrap`) isolation toggleable for the entire session in `tkg` or declared per-tool (`enforce_sandbox = true`), featuring private loopback, read-only system roots, and credential masking.
 - **Featherweight Daemons:** Sub-millisecond (<1ms, <500KB RSS) lifecycle intercepts and bounded MCP tool execution.

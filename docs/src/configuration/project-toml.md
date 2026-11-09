@@ -1,6 +1,6 @@
 # Project Configuration (`project.toml`)
 
-The `project.toml` file defines repository identity, compiler quality gates, workspace layout, Bubblewrap sandbox bind-mounts, environment variables, security guardrails, and documentation locations. It completely decouples language-specific build tools, compilers, test runners, and build caches from the `Torqkage` core engine.
+The `project.toml` file defines repository identity, compiler quality gates, workspace layout, Bubblewrap sandbox bind-mounts, environment variables, security guardrails, and documentation locations. It completely decouples language-specific build tools, compilers, test runners, and build caches from the `TorqKage` core engine.
 
 When `project.toml` is present in the repository, `tkg`, `tkg-mcp`, and `tkg-hooks` read its declarations to validate code changes, manage build caches, and protect sensitive repository paths.
 
@@ -151,7 +151,7 @@ CC = "clang"
 
 ### 6. Security & Sensitive File Protection (`[security]`)
 
-`Torqkage` includes an active security sentry that protects sensitive keys, credentials, and configuration files from being read, modified, or exfiltrated by agents.
+`TorqKage` includes an active security sentry that protects sensitive keys, credentials, and configuration files from being read, modified, or exfiltrated by agents.
 
 | Field | Type | Default | Description & Protected Targets |
 | :--- | :--- | :--- | :--- |
@@ -204,7 +204,7 @@ filter = "comments_only"
 
 ### 9. Execution Harness & Agent System Runner (`[runner]` / `[harness]`)
 
-`Torqkage` is harness-agnostic. It works across popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners), with ongoing expansion to support additional common harnesses:
+`TorqKage` is harness-agnostic. It works across popular agent execution harnesses (Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners), with ongoing expansion to support additional common harnesses:
 
 ```toml
 [runner]
@@ -233,7 +233,7 @@ The harness is chosen by `[runner] harness` in `project.toml` and, at install ti
 
 ## Ecosystem Auto-Detection & Inference
 
-When `project.toml` is absent or specific fields are omitted, `Torqkage` automatically infers sane configuration defaults by inspecting manifest indicators on disk:
+When `project.toml` is absent or specific fields are omitted, `TorqKage` automatically infers sane configuration defaults by inspecting manifest indicators on disk:
 
 | Ecosystem Indicator | Inferred `language` | Inferred Containers | Inferred Ignored Paths | Inferred Sandbox Mounts |
 | :--- | :--- | :--- | :--- | :--- |

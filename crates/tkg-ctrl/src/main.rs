@@ -1,6 +1,6 @@
 //! # tkg
 //!
-//! Offline Ratatui 0.30 terminal control deck, fleet manager, and orchestration utility for `Torqkage`.
+//! Offline Ratatui 0.30 terminal control deck, fleet manager, and orchestration utility for `TorqKage`.
 //!
 //! ## Overview
 //! `tkg` provides a full-terminal interactive TUI dashboard for managing the agent fleet,
@@ -235,7 +235,7 @@ fn handle_workspace_cli(workspace_root: &Path, args: &[String]) -> ExitCode {
 
 fn print_cli_usage() {
     println!(
-        "tkg: Offline Ratatui terminal configuration deck & agent launcher for Torqkage\n\
+        "tkg: Offline Ratatui terminal configuration deck & agent launcher for TorqKage\n\
          \n\
          USAGE:\n\
            tkg [OPTIONS]\n\
@@ -243,7 +243,7 @@ fn print_cli_usage() {
          \n\
          OPTIONS:\n\
            --status, status      Print ASCII agent fleet status & tool distribution matrix\n\
-           --validate, validate  Run pre-flight validation on Torqkage plugin and tools\n\
+           --validate, validate  Run pre-flight validation on TorqKage plugin and tools\n\
            --launch, launch      Run pre-flight checks and launch interactive agent session with <AGENT>\n\
            --sandbox             Launch agent session inside an isolated Bubblewrap OS container\n\
            --isolated, --workspace Launch session inside isolated Jujutsu workspace (.tkg/workspaces/<agent>)\n\

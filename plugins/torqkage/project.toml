@@ -1,12 +1,12 @@
 # ==============================================================================
-# project.toml — Declarative Project & Ecosystem Configuration for Torqkage
+# project.toml — Declarative Project & Ecosystem Configuration for TorqKage
 # ==============================================================================
 #
 # PURPOSE & ARCHITECTURAL ROLE:
 # ------------------------------
 # `project.toml` defines the declarative contract between your target codebase
-# and the Torqkage engine (tkg-mcp, tkg-hooks, tkg). It eliminates all
-# hardcoded language assumptions, allowing Torqkage to seamlessly support Rust,
+# and the TorqKage engine (tkg-mcp, tkg-hooks, tkg). It eliminates all
+# hardcoded language assumptions, allowing TorqKage to seamlessly support Rust,
 # Zig, Go, TypeScript, Python, C/C++, or custom polyglot environments.
 #
 # CONSUMERS & INTERACTIONS:
@@ -34,7 +34,7 @@
 #
 # DISCOVERY ORDER:
 # ----------------
-# The Torqkage engine checks for `project.toml` in the following order:
+# The TorqKage engine checks for `project.toml` in the following order:
 #   1. `$TKG_PROJECT_CONFIG` (Explicit override)
 #   2. `<project_root>/.tkg/project.toml`     (Workspace override)
 #   3. `<project_root>/project.toml`          (Repository root)
@@ -57,7 +57,7 @@ name = "torqkage"
 language = "rust"
 
 # Project release or development version.
-version = "0.1.5"
+version = "0.1.6"
 
 
 # ------------------------------------------------------------------------------
@@ -186,7 +186,7 @@ paths = [
 tool_name = "query_project_spec"
 
 # Context description explaining what information is stored in these paths.
-description = "Torqkage engine specification, RFCs, and architecture manual."
+description = "TorqKage engine specification, RFCs, and architecture manual."
 
 
 # ------------------------------------------------------------------------------
@@ -238,7 +238,7 @@ harness = "agy"
 # ECOSYSTEM SCAFFOLD TEMPLATES & EXAMPLES (Commented out for reference)
 # ==============================================================================
 # Below are drop-in replacement templates for other programming languages.
-# To adapt Torqkage to a different project, replace the sections above with
+# To adapt TorqKage to a different project, replace the sections above with
 # the matching template below.
 #
 # ------------------------------------------------------------------------------

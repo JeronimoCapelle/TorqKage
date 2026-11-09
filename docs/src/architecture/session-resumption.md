@@ -1,6 +1,6 @@
 # Multi-Source Session Resumption
 
-`Torqkage` solves conversational state loss across terminal restarts by providing pluggable, multi-source session discovery.
+`TorqKage` solves conversational state loss across terminal restarts by providing pluggable, multi-source session discovery.
 
 ## Pluggable `SessionProvider` Architecture
 

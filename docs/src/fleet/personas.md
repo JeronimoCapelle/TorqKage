@@ -1,6 +1,6 @@
 # The 10-Agent Fleet
 
-`Torqkage` provides 10 specialized agent archetypes configured in `plugins/torqkage/agents/`:
+`TorqKage` provides 10 specialized agent archetypes configured in `plugins/torqkage/agents/`:
 
 | Agent | Role | Default Mode | Key MCP Capabilities |
 | :--- | :--- | :--- | :--- |

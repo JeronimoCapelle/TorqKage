@@ -1,6 +1,6 @@
 # The Verification Sandwich
 
-High-assurance systems development in `Torqkage` follows the **Verification Sandwich** methodology across 4 distinct phases:
+High-assurance systems development in `TorqKage` follows the **Verification Sandwich** methodology across 4 distinct phases:
 
 ```
 ┌────────────────────────────────────────────────────────┐

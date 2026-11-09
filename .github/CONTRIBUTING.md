@@ -1,6 +1,6 @@
-# Contributing to `Torqkage`
+# Contributing to `TorqKage`
 
-Thank you for your interest in contributing to `Torqkage`! This project provides harness-agnostic, language-agnostic systems tooling, declarative MCP daemons, and terminal orchestrators for autonomous AI agent fleets (supporting Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners).
+Thank you for your interest in contributing to `TorqKage`! This project provides harness-agnostic, language-agnostic systems tooling, declarative MCP daemons, and terminal orchestrators for autonomous AI agent fleets (supporting Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners).
 
 ---
 
@@ -22,8 +22,8 @@ We optimize compilation using Cranelift and the Mold linker:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/JeronimoCapelle/TorqKage.git
-cd TorqKage
+git clone https://github.com/JeronimoCapelle/torqkage.git
+cd torqkage
 
 # 2. Build with Cranelift + Mold (<6 seconds)
 ./install.sh --fast

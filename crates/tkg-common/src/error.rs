@@ -1,8 +1,8 @@
-//! Error types for tkg-common and Torqkage.
+//! Error types for tkg-common and `TorqKage`.
 
 use thiserror::Error;
 
-/// Core error enumeration across Torqkage.
+/// Core error enumeration across `TorqKage`.
 #[derive(Debug, Error)]
 pub enum TkgError {
     #[error("I/O error: {0}")]

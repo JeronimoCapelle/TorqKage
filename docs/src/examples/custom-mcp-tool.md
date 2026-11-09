@@ -1,6 +1,6 @@
 # Example: Adding a Custom Declarative Tool
 
-Adding new capabilities to `Torqkage` requires **zero Rust recompilation**. Everything is defined declaratively in `tools.toml`.
+Adding new capabilities to `TorqKage` requires **zero Rust recompilation**. Everything is defined declaratively in `tools.toml`.
 
 ---
 

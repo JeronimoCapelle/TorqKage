@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Torqkage Bundler & Installer
+# TorqKage Bundler & Installer
 #
-# Installs Torqkage into ~/.gemini/config/plugins/torqkage and symlinks CLI tools
+# Installs TorqKage into ~/.gemini/config/plugins/torqkage and symlinks CLI tools
 # to ~/.local/bin/tkg, tkg-mcp, and tkg-hooks.
 #
 # By default, downloads precompiled, high-performance binaries (built with the
@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-GITHUB_REPO="JeronimoCapelle/TorqKage"
+GITHUB_REPO="JeronimoCapelle/torqkage"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd || pwd)"
 HARNESS="${TKG_HARNESS:-agy}"
 PLUGIN_DIR_OVERRIDE=""
@@ -271,7 +271,7 @@ install_bundle_to_system() {
 try_precompiled_install() {
     local target
     target="$(detect_target)"
-    echo "==> [Torqkage] Checking for precompiled binary release for '${target}' (tag: ${RELEASE_TAG})..."
+    echo "==> [TorqKage] Checking for precompiled binary release for '${target}' (tag: ${RELEASE_TAG})..."
 
     local download_url
     if [[ "${RELEASE_TAG}" == "latest" ]]; then
@@ -328,17 +328,17 @@ build_from_source_install() {
 
     # If executed standalone via 'curl ... | bash' without repository clone
     if [[ ! -f "${workspace_root}/Cargo.toml" || ! -d "${workspace_root}/plugins/torqkage" ]]; then
-        echo "==> [Torqkage] Remote source bootstrap requested (no local repository clone detected)..."
+        echo "==> [TorqKage] Remote source bootstrap requested (no local repository clone detected)..."
         if ! command -v git >/dev/null 2>&1; then
-            echo "Error: 'git' is required to shallow-clone Torqkage from source." >&2
+            echo "Error: 'git' is required to shallow-clone TorqKage from source." >&2
             exit 1
         fi
         local tmp_clone
         tmp_clone="$(mktemp -d)"
         trap 'rm -rf "${tmp_clone}"' RETURN
-        echo "--> Shallow cloning Torqkage into ${tmp_clone}/TorqKage..."
-        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${tmp_clone}/TorqKage"
-        workspace_root="${tmp_clone}/TorqKage"
+        echo "--> Shallow cloning TorqKage into ${tmp_clone}/torqkage..."
+        git clone --depth 1 "https://github.com/${GITHUB_REPO}.git" "${tmp_clone}/torqkage"
+        workspace_root="${tmp_clone}/torqkage"
     fi
 
     if ! command -v cargo >/dev/null 2>&1; then
@@ -348,7 +348,7 @@ build_from_source_install() {
     fi
 
     local plugin_dir="${workspace_root}/plugins/torqkage"
-    echo "==> [Torqkage] Compiling binaries from source (Profile: ${PROFILE})..."
+    echo "==> [TorqKage] Compiling binaries from source (Profile: ${PROFILE})..."
 
     cd "${workspace_root}"
     local bin_source_dir
@@ -409,7 +409,7 @@ build_from_source_install() {
             echo "--> Validating local workspace bundle with 'agy plugin validate'..."
             agy plugin validate "${plugin_dir}"
         fi
-        echo "==> [Torqkage] Local workspace bundle complete (--local-only). Files staged in ${plugin_dir}/bin/."
+        echo "==> [TorqKage] Local workspace bundle complete (--local-only). Files staged in ${plugin_dir}/bin/."
         return 0
     fi
 
@@ -430,6 +430,6 @@ else
         exit 1
     fi
 
-    echo "==> [Torqkage] Precompiled release not available; falling back to building from source..."
+    echo "==> [TorqKage] Precompiled release not available; falling back to building from source..."
     build_from_source_install
 fi

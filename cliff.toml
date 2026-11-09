@@ -4,13 +4,13 @@
 
 [remote.github]
 owner = "JeronimoCapelle"
-repo = "TorqKage"
+repo = "torqkage"
 
 [changelog]
 header = """
 # Changelog
 
-All notable changes to **Torqkage** are documented in this file.
+All notable changes to **TorqKage** are documented in this file.
 """
 body = """
 {% if version %}\
@@ -24,7 +24,7 @@ body = """
         - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
             {% if commit.breaking %}[**breaking**] {% endif %}\
             {{ commit.message | split(pat="\n") | first | upper_first }} \
-            ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/JeronimoCapelle/TorqKage/commit/{{ commit.id }}))\
+            ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/JeronimoCapelle/torqkage/commit/{{ commit.id }}))\
             {% if commit.body %}\n\n{% for line in commit.body | split(pat="\n") %}  {{ line }}\n{% endfor %}{% endif %}\
     {% endfor %}
 {% endfor %}
@@ -33,13 +33,13 @@ body = """
 
     ```bash
     # Precompiled Linux binaries (x86_64 gnu/musl, aarch64 gnu)
-    curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/{{ version }}/install.sh | bash
+    curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/torqkage/{{ version }}/install.sh | bash
 
     # Via Cargo (crates.io)
     cargo install torqkage tkg-mcp tkg-hooks
     ```
     {% if previous.version %}
-        **Full Changelog:** [`{{ previous.version }}...{{ version }}`](https://github.com/JeronimoCapelle/TorqKage/compare/{{ previous.version }}...{{ version }})
+        **Full Changelog:** [`{{ previous.version }}...{{ version }}`](https://github.com/JeronimoCapelle/torqkage/compare/{{ previous.version }}...{{ version }})
     {% endif %}\
 {% endif %}\n
 """

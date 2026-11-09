@@ -10,7 +10,7 @@ members = [
 exclude = ["fuzz"]
 
 [workspace.package]
-version = "0.1.5"
+version = "0.1.6"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Jerónimo Capelle"]
@@ -28,7 +28,7 @@ categories = [
 
 [workspace.dependencies]
 # Internal workspace crates
-tkg-common = { path = "crates/tkg-common", version = "0.1.5" }
+tkg-common = { path = "crates/tkg-common", version = "0.1.6" }
 
 # Serialization & Configuration
 serde = { version = "1.0", features = ["derive"] }

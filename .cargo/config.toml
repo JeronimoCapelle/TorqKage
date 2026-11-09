@@ -1,5 +1,5 @@
 # ==============================================================================
-# .cargo/config.toml — Torqkage Cargo Configuration
+# .cargo/config.toml — TorqKage Cargo Configuration
 # ==============================================================================
 # 100% compatible with standard Stable Rust (no hardcoded mold, clang, or -Z flags).
 #

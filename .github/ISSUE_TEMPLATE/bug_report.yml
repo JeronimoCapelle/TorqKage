@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: File a reproducible bug report for Torqkage
+description: File a reproducible bug report for TorqKage
 title: "bug: "
 labels: ["bug", "triage"]
 body:

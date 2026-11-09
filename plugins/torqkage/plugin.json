@@ -1,13 +1,13 @@
 {
   "$schema": "https://antigravity.google/schemas/v1/plugin.json",
   "name": "torqkage",
-  "version": "0.1.5",
-  "description": "Declarative governance engine, sandboxed Meta-MCP runtime, and Ratatui control deck for autonomous AI fleets (Torqkage)",
+  "version": "0.1.6",
+  "description": "Declarative governance engine, sandboxed Meta-MCP runtime, and Ratatui control deck for autonomous AI fleets (TorqKage)",
   "author": "infinite",
-  "homepage": "https://github.com/JeronimoCapelle/TorqKage",
+  "homepage": "https://jeronimocapelle.github.io/torqkage/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JeronimoCapelle/TorqKage"
+    "url": "https://github.com/JeronimoCapelle/torqkage"
   },
   "logo": "assets/logo.svg"
 }

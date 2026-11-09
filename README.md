@@ -1,9 +1,9 @@
-# Torqkage
+# TorqKage
 
-[![CI](https://github.com/JeronimoCapelle/TorqKage/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JeronimoCapelle/TorqKage/actions/workflows/ci.yml)
+[![CI](https://github.com/JeronimoCapelle/torqkage/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/JeronimoCapelle/torqkage/actions/workflows/ci.yml)
 [![Rust Edition](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](https://www.rust-lang.org/)
 [![License: AGPL-3.0-or-later](https://img.shields.io/badge/License-AGPL--3.0--or--later-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-manual-blue.svg)](https://jeronimocapelle.github.io/TorqKage/)
+[![Documentation](https://img.shields.io/badge/docs-manual-blue.svg)](https://jeronimocapelle.github.io/torqkage/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-2024--11--05-green.svg)](https://modelcontextprotocol.io/)
 [![Ratatui](https://img.shields.io/badge/Ratatui-0.30-purple.svg)](https://ratatui.rs/)
 
@@ -13,31 +13,31 @@ Turn any CLI binary, script, or compiler into a sandboxed, schema-validated MCP 
 Built in Safe Rust (`#![forbid(unsafe_code)]`) with Bubblewrap container isolation, sub-millisecond lifecycle hooks (<1ms, <500KB RSS), and an interactive Ratatui 0.30 terminal dashboard (`tkg`).
 
 <p align="center">
-  <img src="assets/demo.gif" alt="Torqkage Interactive Terminal Control Deck Demo" width="100%" />
+  <img src="assets/demo.gif" alt="TorqKage Interactive Terminal Control Deck Demo" width="100%" />
 </p>
 
 ---
 
-## About Torqkage
+## About TorqKage
 
 Running autonomous AI coding agents with direct shell access carries real operational risks: destructive commands, credential exposure, unintended network access, dirty git worktrees, and high token costs from repeatedly injecting CLI documentation into model context.
 
-`Torqkage` provides declarative containerization and governance for AI agent fleets. Written in Safe Rust (`#![forbid(unsafe_code)]`), it functions as a Meta-MCP server: any CLI binary, script, or compiler declared in TOML becomes an isolated, schema-validated MCP tool with Bubblewrap container sandboxing, sub-millisecond lifecycle hooks, and per-agent permission allowlists.
+`TorqKage` provides declarative containerization and governance for AI agent fleets. Written in Safe Rust (`#![forbid(unsafe_code)]`), it functions as a Meta-MCP server: any CLI binary, script, or compiler declared in TOML becomes an isolated, schema-validated MCP tool with Bubblewrap container sandboxing, sub-millisecond lifecycle hooks, and per-agent permission allowlists.
 
 The repository includes a 10-agent reference fleet for systems engineering, pre-built starter configurations for Go, Python, TypeScript, and Rust, and an interactive terminal dashboard (`tkg`) for managing permissions, inspecting tools, and resuming sessions.
 
 ---
 
-## Why Torqkage
+## Why TorqKage
 
 Configuring tool access for autonomous coding agents usually involves an undesirable choice:
 
 1. **MCP sprawl:** Writing and running separate Node.js or Python MCP servers for every linter, compiler, and CLI tool, which increases resource usage and maintenance overhead.
 2. **Ambient shell access:** Giving agents direct terminal access, which risks unintended filesystem changes, secret exposure, and burns context tokens repeatedly re-explaining CLI usage.
 
-`Torqkage` bridges this gap. It is a declarative Meta-MCP server and agent engine built for popular agentic execution harnesses—including Claude Code, OpenCode, Cursor, and Google Antigravity (`agy`), with broader support for additional common harnesses in active development. Tools declared in `tools.toml` are exposed as structured MCP actions governed by strict security policies:
+`TorqKage` bridges this gap. It is a declarative Meta-MCP server and agent engine built for popular agentic execution harnesses—including Claude Code, OpenCode, Cursor, and Google Antigravity (`agy`), with broader support for additional common harnesses in active development. Tools declared in `tools.toml` are exposed as structured MCP actions governed by strict security policies:
 
-| Problem | How Torqkage Addresses It |
+| Problem | How TorqKage Addresses It |
 | :--- | :--- |
 | **Unrestricted shell execution:** Agents run arbitrary commands with host user privileges. | **Bubblewrap container sandboxing:** Tools declared with `enforce_sandbox = true` run in an isolated Bubblewrap container with private loopback networking and read-only host mounts. |
 | **Token overhead:** Long prompt descriptions and markdown guides consume context on every interaction. | **Native interceptors (<1ms, <500KB RSS):** Schema validation, argument checking, and output filtering happen in native code before reaching model context. |
@@ -50,16 +50,16 @@ Configuring tool access for autonomous coding agents usually involves an undesir
 ## Quickstart
 
 ### 1. Precompiled Binaries
-Install the engine and register the Torqkage plugin:
+Install the engine and register the TorqKage plugin:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/torqkage/main/install.sh | bash
 ```
 
 Select the target agent harness with `--harness` (default `agy`; also `opencode`, `claude`, or any custom name) and persist the same choice in `project.toml`:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash -s -- --harness claude
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/torqkage/main/install.sh | bash -s -- --harness claude
 ```
 
 ```toml
@@ -68,17 +68,24 @@ curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/instal
 harness = "claude"
 ```
 
-### 2. Build From Source
+### 2. Install via Crates.io
+Install the CLI control deck (`tkg`), MCP daemon (`tkg-mcp`), and hook interceptor (`tkg-hooks`) via Cargo:
+
+```bash
+cargo install torqkage tkg-mcp tkg-hooks
+```
+
+### 3. Build From Source
 To compile from source:
 
 ```bash
-git clone https://github.com/JeronimoCapelle/TorqKage.git
-cd TorqKage
+git clone https://github.com/JeronimoCapelle/torqkage.git
+cd torqkage
 ./install.sh --perf       # Production profile (LTO enabled, stripped)
 ```
 *(For faster local compilation with Cranelift and Mold, pass `--fast`.)*
 
-### 3. Launch the Control Deck
+### 4. Launch the Control Deck
 Run the interactive terminal dashboard:
 
 ```bash
@@ -134,11 +141,11 @@ Pre-configured starter setups are available in [`docs/templates/`](docs/template
 
 | Starter Kit | Target Ecosystem | Tooling & Sandboxing Highlights | Agent Team |
 | :--- | :--- | :--- | :--- |
-| **[Go Microservices](https://jeronimocapelle.github.io/TorqKage/templates/go-setup.html)** | Go 1.22+ (`cmd/`, `internal/`) | Sandboxed `go test`, enum flags (`-short`, `-race`), migration permission gates | `coder`, `reviewer` |
-| **[Python & Data Engineering](https://jeronimocapelle.github.io/TorqKage/templates/python-setup.html)** | Python 3.12+ (uv, pytest, ruff, mypy) | Sandboxed `pytest` with regex filters, Mypy typing, automated Ruff fixer | `coder`, `tester` |
-| **[TypeScript & Fullstack Web](https://jeronimocapelle.github.io/TorqKage/templates/typescript-setup.html)** | Node.js / React / Next.js (pnpm, Vitest, tsc) | Sandboxed `vitest` with target scoping, `tsc --noEmit` gate, ESLint check | `frontend`, `reviewer` |
-| **[Standard Rust Systems](https://jeronimocapelle.github.io/TorqKage/templates/rust-setup.html)** | Rust 2024 Edition (Cargo workspaces) | Sandboxed `cargo test`, enum targets (`--lib`, `--bins`), Clippy gate | `coder`, `doc-author` |
-| **[Adversarial QA Auditor](https://jeronimocapelle.github.io/TorqKage/templates/qa-tester.html)** | Ecosystem-agnostic | Fuzz testing with LLVM sanitizers (enums), schema verification | `tester` (`tester.md`) |
+| **[Go Microservices](https://jeronimocapelle.github.io/torqkage/templates/go-setup.html)** | Go 1.22+ (`cmd/`, `internal/`) | Sandboxed `go test`, enum flags (`-short`, `-race`), migration permission gates | `coder`, `reviewer` |
+| **[Python & Data Engineering](https://jeronimocapelle.github.io/torqkage/templates/python-setup.html)** | Python 3.12+ (uv, pytest, ruff, mypy) | Sandboxed `pytest` with regex filters, Mypy typing, automated Ruff fixer | `coder`, `tester` |
+| **[TypeScript & Fullstack Web](https://jeronimocapelle.github.io/torqkage/templates/typescript-setup.html)** | Node.js / React / Next.js (pnpm, Vitest, tsc) | Sandboxed `vitest` with target scoping, `tsc --noEmit` gate, ESLint check | `frontend`, `reviewer` |
+| **[Standard Rust Systems](https://jeronimocapelle.github.io/torqkage/templates/rust-setup.html)** | Rust 2024 Edition (Cargo workspaces) | Sandboxed `cargo test`, enum targets (`--lib`, `--bins`), Clippy gate | `coder`, `doc-author` |
+| **[Adversarial QA Auditor](https://jeronimocapelle.github.io/torqkage/templates/qa-tester.html)** | Ecosystem-agnostic | Fuzz testing with LLVM sanitizers (enums), schema verification | `tester` (`tester.md`) |
 
 To use a starter kit, copy its configuration into `.tkg/`:
 
@@ -152,11 +159,11 @@ tkg
 
 ## Declarative Fleets from Prompts
 
-Because `Torqkage` configurations are declarative TOML and Markdown, an LLM can generate a customized fleet setup from schemas:
+Because `TorqKage` configurations are declarative TOML and Markdown, an LLM can generate a customized fleet setup from schemas:
 
 ```text
-"Act as a Torqkage Fleet Architect. I am building a project in <Language/Framework>.
-Based on the Torqkage declarative schemas, generate:
+"Act as a TorqKage Fleet Architect. I am building a project in <Language/Framework>.
+Based on the TorqKage declarative schemas, generate:
 1. project.toml: with gates for compilation, unit tests, and linting.
 2. tools.toml: declaring test runners and diagnostic tools with enforce_sandbox = true,
    strict regex parameter validation, and enums for mutually exclusive flags.
@@ -245,8 +252,8 @@ For architecture details, system invariants, and guides:
   * Process tree supervision and termination handling (`SubprocessSupervisor`).
   * Bubblewrap container sandboxing and loopback network model.
   * Design Verification (DV) methodology.
-* **[The Torqkage Engine Manual](https://jeronimocapelle.github.io/TorqKage/)**:
-  * [Pre-Built Ecosystem Starter Kits](https://jeronimocapelle.github.io/TorqKage/templates/overview.html)
+* **[The TorqKage Engine Manual](https://jeronimocapelle.github.io/torqkage/)**:
+  * [Pre-Built Ecosystem Starter Kits](https://jeronimocapelle.github.io/torqkage/templates/overview.html)
   * Setup guides and workflow tutorials.
   * Verification flow and lifecycle hook details.
   * Performance characteristics and resource footprint.

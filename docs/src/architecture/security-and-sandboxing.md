@@ -1,12 +1,12 @@
 # Configurable Sandboxing & Security Jails
 
-Security in `Torqkage` operates on a **default-deny capability model**. Sandboxing is not hardcoded to force every command into a container; rather, it is a **flexible, opt-in mechanism** configurable at both the interactive session level and the individual tool level.
+Security in `TorqKage` operates on a **default-deny capability model**. Sandboxing is not hardcoded to force every command into a container; rather, it is a **flexible, opt-in mechanism** configurable at both the interactive session level and the individual tool level.
 
 ---
 
 ## 1. Two-Tier Sandboxing Architecture
 
-`Torqkage` separates sandboxing into two independent control planes:
+`TorqKage` separates sandboxing into two independent control planes:
 
 ```mermaid
 flowchart TD
@@ -105,13 +105,13 @@ To prevent container-in-container crashes when running inside Docker, Podman, Ku
 3. Control group paths: `/proc/1/cgroup` containing `docker`, `containerd`, or `kubepods`.
 4. Nested PID namespaces: Process namespaces with multiple entries in `/proc/self/status` (`NSpid`).
 
-When existing containerization is detected, `Torqkage` **gracefully bypasses inner `bwrap` calls**, avoiding `EPERM` namespace creation failures while retaining application-level path confinement and permission gates.
+When existing containerization is detected, `TorqKage` **gracefully bypasses inner `bwrap` calls**, avoiding `EPERM` namespace creation failures while retaining application-level path confinement and permission gates.
 
 ---
 
 ## 4. Multi-Layered Defense-in-Depth
 
-Even when Bubblewrap sandboxing is turned off, `Torqkage` protects your system through multiple software sentries:
+Even when Bubblewrap sandboxing is turned off, `TorqKage` protects your system through multiple software sentries:
 
 - **Path Confinement (`enforce_workspace_bounds`):** Rejects path traversal attempts (`../`) and out-of-tree symlink escapes.
 - **Sensitive File Protection (`ban_dangerous_files`):** Blocks access to SSH keys, `.git` internals, and shell profile files.

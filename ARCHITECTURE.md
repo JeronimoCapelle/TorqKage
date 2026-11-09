@@ -1,17 +1,17 @@
-# Torqkage: System Architecture & Invariant Manual
+# TorqKage: System Architecture & Invariant Manual
 
 **Document Version:** 1.0.0  
 **Status:** Canonical & Permanent Architecture Specification  
 **Authority:** Root repository manual for human developers and autonomous AI agents (`coder`, `planner`, `spec-checker`, `finisher`, `copilot`).
 
 > **Quickstart & Usage:** For installation, terminal workflows, and the interactive control deck guide, see [README.md](README.md).  
-> **Online Engine Manual:** For full documentation, guides, and tutorials, visit the [Torqkage Engine Manual](https://jeronimocapelle.github.io/TorqKage/).
+> **Online Engine Manual:** For full documentation, guides, and tutorials, visit the [TorqKage Engine Manual](https://jeronimocapelle.github.io/torqkage/).
 
 ---
 
 ## 1. System Invariants & Non-Negotiable Directives
 
-All autonomous agents and human contributors operating within this repository or deploying `Torqkage` MUST adhere to the following invariants:
+All autonomous agents and human contributors operating within this repository or deploying `TorqKage` MUST adhere to the following invariants:
 
 1. **Manifest Integrity (Strict Prohibition):**
    - **NEVER** autonomously edit `Cargo.toml`, `Cargo.lock`, or `deny.toml`.
@@ -38,7 +38,7 @@ All autonomous agents and human contributors operating within this repository or
 
 ## 2. The Three Declarative Contracts
 
-`Torqkage` enforces a strict separation between **Platform Plumbing**, **Project Environment**, and **Agent Tooling**:
+`TorqKage` enforces a strict separation between **Platform Plumbing**, **Project Environment**, and **Agent Tooling**:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -60,12 +60,12 @@ All autonomous agents and human contributors operating within this repository or
 
 ### Hierarchy & Fallback Rules
 - Workspace configuration always takes precedence: `<workspace>/.tkg/project.toml` $\to$ `<workspace>/project.toml` $\to$ `<workspace>/plugins/torqkage/project.toml`.
-- When operating in an external repository without a `project.toml`, `Torqkage` falls back to a **blank, restrictive default configuration** rather than making language assumptions.
+- When operating in an external repository without a `project.toml`, `TorqKage` falls back to a **blank, restrictive default configuration** rather than making language assumptions.
 
 ### 2.1 Engine vs. Reference Fleet Separation
-`Torqkage` is fundamentally an **extensible, capability-governed engine and sandboxed MCP runtime**. The 10-agent fleet described in [Section 3](#3-agent-fleet-perimeters--blast-boundaries) represents the flagship reference implementation tailored for low-level systems engineering and Silicon Design Verification.
+`TorqKage` is fundamentally an **extensible, capability-governed engine and sandboxed MCP runtime**. The 10-agent fleet described in [Section 3](#3-agent-fleet-perimeters--blast-boundaries) represents the flagship reference implementation tailored for low-level systems engineering and Silicon Design Verification.
 
-Any developer or autonomous AI can define bespoke fleets and tool catalogs for different languages and domains (e.g. Go, Python, TypeScript, or custom DSLs) simply by declaring a `.tkg/` directory with `project.toml`, `tools.toml`, `hooks.toml`, and agent Markdown profiles (`agents/*.md`). Pre-built ecosystem starter kits are maintained in `docs/templates/` and documented in the [Engine Manual](https://jeronimocapelle.github.io/TorqKage/templates/overview.html).
+Any developer or autonomous AI can define bespoke fleets and tool catalogs for different languages and domains (e.g. Go, Python, TypeScript, or custom DSLs) simply by declaring a `.tkg/` directory with `project.toml`, `tools.toml`, `hooks.toml`, and agent Markdown profiles (`agents/*.md`). Pre-built ecosystem starter kits are maintained in `docs/templates/` and documented in the [Engine Manual](https://jeronimocapelle.github.io/torqkage/templates/overview.html).
 
 ---
 
@@ -95,7 +95,7 @@ Each agent in `plugins/torqkage/agents/` operates under the **Air-Gapped Least-P
 
 ## 4. The Four-Phase Fleet Lifecycle & Silicon Design Verification (DV) Framework
 
-In low-level systems engineering (such as RISC-V processor cores, kernel runtimes, and lock-free concurrency engines), **formal correctness** and **performance optimization** are distinct disciplines with opposing feedback loops. `Torqkage` organizes autonomous agents into four structured phases:
+In low-level systems engineering (such as RISC-V processor cores, kernel runtimes, and lock-free concurrency engines), **formal correctness** and **performance optimization** are distinct disciplines with opposing feedback loops. `TorqKage` organizes autonomous agents into four structured phases:
 
 ```
   PHASE 1: CONTRACT & AUDIT           PHASE 2: IMPLEMENTATION & DV          PHASE 3: AUDIT & PROFILING
@@ -189,7 +189,7 @@ Enforced across all tools (`read_project_file`, `write_file`, `modify_code`, `se
 ## 7. Directory Layout of the Repository
 
 ```
-TorqKage/
+torqkage/
 ├── ARCHITECTURE.md     # Canonical system architecture and invariant manual (this file)
 ├── README.md           # Repository overview, visual workflow, and quickstart guide
 ├── Cargo.toml          # Workspace root manifest (strict pedantic lints, zero warnings)
@@ -296,7 +296,7 @@ The `tkg-mcp` daemon replaces ambient shell access with 12 hardened native actio
 
 ## 9. Deep Systems Verification & Hardware Analysis Toolchain
 
-`Torqkage` incorporates a battle-tested systems engineering and silicon verification toolchain:
+`TorqKage` incorporates a battle-tested systems engineering and silicon verification toolchain:
 
 | Domain | Tools & Frameworks | Architectural Purpose |
 | :--- | :--- | :--- |
@@ -317,7 +317,7 @@ The `tkg-mcp` daemon replaces ambient shell access with 12 hardened native actio
 Interpreted markdown skills (`SKILL.md`) and unconfined bash wrappers exhibit severe defects in production:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions consumes 2,000 to 4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
-- **`Torqkage` Solution:** Completely bans interpreted markdown skills. All agent capabilities are declared as native, compiled MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
+- **`TorqKage` Solution:** Completely bans interpreted markdown skills. All agent capabilities are declared as native, compiled MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.
 
 ### 10.2 Four-Tier Security Continuum
 ```

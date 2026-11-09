@@ -1,6 +1,6 @@
 # Quickstart
 
-Get started with `Torqkage` in under 60 seconds.
+Get started with `TorqKage` in under 60 seconds.
 
 ## Prerequisites
 
@@ -16,22 +16,30 @@ Get started with `Torqkage` in under 60 seconds.
 Runs standalone without requiring you to clone the repository or install the Rust toolchain (fetches precompiled native binaries for your target architecture):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/torqkage/main/install.sh | bash
 ```
 
 Pass `--harness <name>` (e.g., `claude`, `opencode`, `agy`, or a custom slug) to target a specific harness:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash -s -- --harness claude
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/torqkage/main/install.sh | bash -s -- --harness claude
 ```
 
-### Method 2: From Source
+### Method 2: From Crates.io
+
+Install the `tkg`, `tkg-mcp`, and `tkg-hooks` binaries directly from crates.io:
+
+```bash
+cargo install torqkage tkg-mcp tkg-hooks
+```
+
+### Method 3: From Source
 
 Clone the repository and compile using the high-performance `perf` profile (or `--fast` with Cranelift and Mold for development):
 
 ```bash
-git clone https://github.com/JeronimoCapelle/TorqKage.git
-cd TorqKage
+git clone https://github.com/JeronimoCapelle/torqkage.git
+cd torqkage
 ./install.sh --perf
 ```
 

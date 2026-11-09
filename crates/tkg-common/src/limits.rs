@@ -1,6 +1,6 @@
 //! # limits
 //!
-//! Centralized timeout, output truncation, and process execution thresholds for Torqkage.
+//! Centralized timeout, output truncation, and process execution thresholds for `TorqKage`.
 
 use std::time::Duration;
 
