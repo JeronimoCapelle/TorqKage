@@ -2,6 +2,10 @@
 # cliff.toml — Conventional Commits Changelog Configuration (git-cliff)
 # ==============================================================================
 
+[remote.github]
+owner = "JeronimoCapelle"
+repo = "TorqKage"
+
 [changelog]
 header = """
 # Changelog
@@ -15,13 +19,29 @@ body = """
     ## [unreleased]
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
-    ### {{ group | striptags | trim | upper_first }}
+    ### {{ group | striptags | trim }}
     {% for commit in commits %}
-        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+        - {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
             {% if commit.breaking %}[**breaking**] {% endif %}\
-            {{ commit.message | upper_first }}\
+            {{ commit.message | split(pat="\n") | first | upper_first }} \
+            ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/JeronimoCapelle/TorqKage/commit/{{ commit.id }}))\
+            {% if commit.body %}\n\n{% for line in commit.body | split(pat="\n") %}  {{ line }}\n{% endfor %}{% endif %}\
     {% endfor %}
-{% endfor %}\n
+{% endfor %}
+{% if version %}
+    ### Installation
+
+    ```bash
+    # Precompiled Linux binaries (x86_64 gnu/musl, aarch64 gnu)
+    curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/{{ version }}/install.sh | bash
+
+    # Via Cargo (crates.io)
+    cargo install torqkage tkg-mcp tkg-hooks
+    ```
+    {% if previous.version %}
+        **Full Changelog:** [`{{ previous.version }}...{{ version }}`](https://github.com/JeronimoCapelle/TorqKage/compare/{{ previous.version }}...{{ version }})
+    {% endif %}\
+{% endif %}\n
 """
 trim = true
 
@@ -30,15 +50,16 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 commit_parsers = [
-    { message = "^feat", group = "<!-- 0 -->🚀 Features" },
-    { message = "^fix", group = "<!-- 1 -->🐛 Bug Fixes" },
-    { message = "^refactor", group = "<!-- 2 -->🚜 Refactor" },
-    { message = "^perf", group = "<!-- 3 -->⚡ Performance" },
-    { message = "^doc", group = "<!-- 4 -->📚 Documentation" },
-    { message = "^test", group = "<!-- 5 -->🧪 Testing" },
+    { message = "^feat", group = "<!-- 0 -->Added" },
+    { message = "^fix\\(ci\\)", skip = true },
+    { message = "^fix", group = "<!-- 1 -->Fixed" },
+    { message = "^perf", group = "<!-- 2 -->Performance" },
+    { message = "^refactor", group = "<!-- 3 -->Changed" },
+    { message = "^doc", group = "<!-- 4 -->Documentation" },
+    { message = "^test", group = "<!-- 5 -->Testing" },
     { message = "^chore\\(release\\)", skip = true },
-    { message = "^chore", group = "<!-- 6 -->⚙️ Miscellaneous Tasks" },
+    { message = "^chore", group = "<!-- 6 -->Maintenance" },
 ]
 filter_commits = false
 tag_pattern = "v[0-9].*"
-sort_commits = "oldest"
+sort_commits = "newest"
