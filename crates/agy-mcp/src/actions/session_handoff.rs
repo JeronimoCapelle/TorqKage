@@ -2,12 +2,10 @@
 
 use std::{fmt::Write, path::Path};
 
-use agy_common::{AgyStatePaths, HandoffRecord, JujutsuWorkspace, PipelineHandoff, ProjectConfig};
-
 /// Executes the session handoff recording action.
 ///
-/// Captures working copy modifications and agent deliverables, persisting them
-/// to `.agy/state/handoff.json` and `.agy/state/last_handoff.md` for session continuity.
+/// Discovers working copy modifications and agent deliverables, delegating persistence
+/// to [`agy_common::handoff::record_session_handoff`].
 ///
 /// # Errors
 /// Returns an error if required arguments are missing or saving fails.
@@ -28,10 +26,9 @@ pub(crate) fn execute(
 
     let target_agent = arguments
         .get("target_agent")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned);
+        .and_then(serde_json::Value::as_str);
 
-    let deliverables = match arguments.get("deliverables") {
+    let deliverables: Vec<String> = match arguments.get("deliverables") {
         Some(serde_json::Value::Array(arr)) => arr
             .iter()
             .filter_map(serde_json::Value::as_str)
@@ -46,47 +43,35 @@ pub(crate) fn execute(
         _ => Vec::new(),
     };
 
-    let project = ProjectConfig::detect_or_load(workspace_root);
-    let modified_files = JujutsuWorkspace::get_modified_files(workspace_root, &project, 15);
-
     let active_name = from_agent.unwrap_or("agent");
 
-    let pipeline_handoff = PipelineHandoff::new(
+    let (pipeline_handoff, _) = agy_common::handoff::record_session_handoff(
+        workspace_root,
         active_name,
-        target_agent.clone(),
+        target_agent,
         summary,
-        modified_files.clone(),
-        deliverables.clone(),
+        &deliverables,
         status,
-    );
-
-    let paths = AgyStatePaths::new(workspace_root);
-    let state_dir = paths.state_dir();
-    std::fs::create_dir_all(&state_dir).map_err(|e| {
-        format!(
-            "Failed to create state directory '{}': {e}",
-            state_dir.display()
-        )
-    })?;
-
-    let json_content = serde_json::to_string_pretty(&pipeline_handoff)
-        .map_err(|e| format!("Failed to serialize handoff.json: {e}"))?;
-    std::fs::write(paths.handoff_json_file(), json_content)
-        .map_err(|e| format!("Failed to write handoff.json: {e}"))?;
-
-    let record = HandoffRecord::new(active_name, modified_files.clone(), status);
-    std::fs::write(paths.handoff_md_file(), record.to_markdown())
-        .map_err(|e| format!("Failed to write last_handoff.md: {e}"))?;
+        15,
+    )?;
 
     let target_hint = target_agent.map_or_else(String::new, |t| format!(" -> '{t}'"));
     let mut out = format!(
         "✔ Session handoff successfully recorded{target_hint}\n- Status: {status}\n- Summary: {summary}\n"
     );
-    if !modified_files.is_empty() {
-        _ = writeln!(out, "- Modified Files: {}", modified_files.join(", "));
+    if !pipeline_handoff.modified_files.is_empty() {
+        _ = writeln!(
+            out,
+            "- Modified Files: {}",
+            pipeline_handoff.modified_files.join(", ")
+        );
     }
-    if !deliverables.is_empty() {
-        _ = writeln!(out, "- Deliverables: {}", deliverables.join(", "));
+    if !pipeline_handoff.deliverables.is_empty() {
+        _ = writeln!(
+            out,
+            "- Deliverables: {}",
+            pipeline_handoff.deliverables.join(", ")
+        );
     }
 
     Ok((out, false))
@@ -95,6 +80,8 @@ pub(crate) fn execute(
 #[cfg(test)]
 #[allow(clippy::unwrap_used, reason = "Unit test assertions")]
 mod tests {
+    use agy_common::{AgyStatePaths, PipelineHandoff};
+
     use super::*;
 
     #[test]

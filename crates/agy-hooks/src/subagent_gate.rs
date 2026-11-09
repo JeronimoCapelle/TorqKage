@@ -53,30 +53,10 @@ pub(crate) fn evaluate_tool_invocation(input: &PreToolUseInput) -> PreToolRespon
             WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
         });
 
-    // 1. Check if the target agent declares pre_launch_checks in its markdown file
-    let checks = agy_common::find_agent_manifest_path(&root, type_name)
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .map_or_else(Vec::new, |content| {
-            agy_common::parse_pre_launch_checks(&content)
-        });
-
-    if checks.is_empty() {
-        return PreToolResponse::allow();
-    }
-
-    let check_refs: Vec<&str> = checks.iter().map(String::as_str).collect();
-    match agy_common::evaluate_pre_flight_checks(&root, &check_refs) {
-        Ok(_warnings) => PreToolResponse::allow(),
-        Err(errors) => {
-            let reason = format!(
-                "🛑 Subagent Admission Denied for '{type_name}': Mandatory pre-launch quality gates failed.\n\
-                 Target agent requirements: [{}]\n\n\
-                 {}",
-                checks.join(", "),
-                errors.join("\n\n")
-            );
-            PreToolResponse::deny(reason)
-        },
+    // Evaluate declared pre_launch_checks via canonical subagent admission gate
+    match agy_common::subagent_gate::check_subagent_admission(&root, type_name) {
+        Ok(_) => PreToolResponse::allow(),
+        Err(reason) => PreToolResponse::deny(reason),
     }
 }
 

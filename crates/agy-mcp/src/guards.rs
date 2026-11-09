@@ -414,6 +414,8 @@ pub(crate) fn check_vcs_conflicts(workspace_root: &Path) -> Result<(), String> {
 ///
 /// Neutralizes procedural-macro / `build.rs` execution sandbox escape vectors.
 ///
+/// Delegates to canonical [`agy_common::manifest_guard::check_manifest_protection`].
+///
 /// # Errors
 /// Returns an error if the agent is not permitted to mutate protected build files.
 pub(crate) fn check_manifest_protection(
@@ -421,51 +423,7 @@ pub(crate) fn check_manifest_protection(
     agent_name: Option<&str>,
     guard: Option<&AgentGuard>,
 ) -> Result<(), String> {
-    let file_name = target_path
-        .file_name()
-        .and_then(|f| f.to_str())
-        .unwrap_or("");
-
-    let is_protected = matches!(
-        file_name,
-        "Cargo.toml"
-            | "Cargo.lock"
-            | "build.rs"
-            | "package.json"
-            | "package-lock.json"
-            | "pnpm-lock.yaml"
-            | "yarn.lock"
-            | "CMakeLists.txt"
-            | "build.zig"
-            | "go.mod"
-            | "go.sum"
-            | "pyproject.toml"
-            | "requirements.txt"
-            | "setup.py"
-            | "pom.xml"
-            | "build.gradle"
-            | "Gemfile"
-    );
-
-    if !is_protected {
-        return Ok(());
-    }
-
-    if let Some(g) = guard {
-        if g.allowed_files.iter().any(|f| f == file_name || f == "*") {
-            return Ok(());
-        }
-        if let Some(name) = agent_name
-            && name != "coder"
-            && !g.allowed_files.iter().any(|f| f == file_name)
-        {
-            return Err(format!(
-                "Manifest protection violation: Agent '{name}' is not authorized to mutate build manifest '{file_name}'"
-            ));
-        }
-    }
-
-    Ok(())
+    agy_common::manifest_guard::check_manifest_protection(target_path, agent_name, guard)
 }
 
 const COMMON_ROOT_DIRS: &[&str] = &[

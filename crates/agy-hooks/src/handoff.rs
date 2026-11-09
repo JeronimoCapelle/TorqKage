@@ -7,8 +7,7 @@ use std::{
 };
 
 use agy_common::{
-    HandoffRecord, InjectStep, PipelineHandoff, SessionStartInput, SessionStartResponse, StopInput,
-    StopResponse, WorkspaceResolver,
+    InjectStep, SessionStartInput, SessionStartResponse, StopInput, StopResponse, WorkspaceResolver,
 };
 
 use crate::stdin::read_stdin_payload;
@@ -32,36 +31,20 @@ pub(crate) fn execute_record_handoff() {
         return;
     }
 
-    let modified_files = collect_modified_files(&root, config.stop.max_modified_files);
     let agent_name = std::env::var("AGY_AGENT")
         .or_else(|_| input.common.model_name.clone().ok_or(()))
         .unwrap_or_else(|()| "agent".to_owned());
 
-    let status = if modified_files.is_empty() {
-        "Clean".to_owned()
-    } else {
-        "WIP".to_owned()
-    };
-
-    let record = HandoffRecord::new(&agent_name, modified_files.clone(), &status);
-
-    let paths = agy_common::AgyStatePaths::new(&root);
-    if std::fs::create_dir_all(paths.state_dir()).is_ok() {
-        let handoff_path = paths.handoff_md_file();
-        drop(std::fs::write(&handoff_path, record.to_markdown()));
-
-        let pipeline_handoff = PipelineHandoff::new(
-            &agent_name,
-            None,
-            format!("Session completed by agent '{agent_name}' with status '{status}'."),
-            modified_files,
-            Vec::new(),
-            status,
-        );
-        if let Ok(json_str) = serde_json::to_string_pretty(&pipeline_handoff) {
-            drop(std::fs::write(paths.handoff_json_file(), json_str));
-        }
-    }
+    let summary = format!("Session completed by agent '{agent_name}'.");
+    drop(agy_common::handoff::record_session_handoff(
+        &root,
+        &agent_name,
+        None,
+        &summary,
+        &[],
+        "Auto",
+        config.stop.max_modified_files,
+    ));
 
     let resp = StopResponse::allow();
     if let Ok(json) = serde_json::to_string(&resp) {
@@ -75,51 +58,21 @@ pub(crate) fn execute_record_handoff() {
 /// providing immediate continuity context for the starting conversation session.
 fn resolve_handoff_step(
     config: &crate::config::SessionStartConfig,
-    paths: &agy_common::AgyStatePaths,
+    root: &Path,
     project: &agy_common::ProjectConfig,
 ) -> Option<InjectStep> {
-    let json_handoff = paths.handoff_json_file();
-    let md_handoff = paths.handoff_md_file();
     let tool_hint = project.docs.tool_name.as_deref().map_or_else(
         || "Search documentation via configured documentation tools.".to_owned(),
         |name| format!("Use '{name}' to search specifications."),
     );
 
     if config.inject_wake_state
-        && json_handoff.exists()
-        && let Ok(content) = std::fs::read_to_string(&json_handoff)
-        && let Ok(handoff) = serde_json::from_str::<PipelineHandoff>(&content)
+        && let Some(mut msg) = agy_common::handoff::read_last_handoff_message(root)
     {
-        let mut msg = handoff.to_injection_message();
         if config.inject_documentation && !project.docs.paths.is_empty() {
             _ = write!(
                 msg,
                 "\n\n[DOCUMENTATION]: Available in [{}]. {tool_hint}",
-                project.docs.paths.join(", ")
-            );
-        }
-        return Some(InjectStep::system(msg));
-    }
-
-    if config.inject_wake_state
-        && md_handoff.exists()
-        && let Ok(content) = std::fs::read_to_string(&md_handoff)
-        && let Some(record) = HandoffRecord::from_markdown(&content)
-    {
-        let files_str = if record.modified_files.is_empty() {
-            "Working tree clean.".to_owned()
-        } else {
-            format!("Modified files: {}.", record.modified_files.join(", "))
-        };
-
-        let mut msg = format!(
-            "[WAKE-UP STATE]: Last session was with {}. {}. Status: {}.",
-            record.previous_agent, files_str, record.status
-        );
-        if config.inject_documentation && !project.docs.paths.is_empty() {
-            _ = write!(
-                msg,
-                " Documentation paths: [{}]. {tool_hint}",
                 project.docs.paths.join(", ")
             );
         }
@@ -229,7 +182,7 @@ pub(crate) fn execute_inject_wake() {
     let project = agy_common::ProjectConfig::detect_or_load(&root);
 
     let mut resp = SessionStartResponse::default();
-    if let Some(step) = resolve_handoff_step(&config.session_start, &paths, &project) {
+    if let Some(step) = resolve_handoff_step(&config.session_start, &root, &project) {
         resp.inject_steps.push(step);
     }
 
@@ -254,11 +207,6 @@ fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
     }
 
     WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."))
-}
-
-fn collect_modified_files(root: &Path, max_files: usize) -> Vec<String> {
-    let project = agy_common::ProjectConfig::detect_or_load(root);
-    agy_common::JujutsuWorkspace::get_modified_files(root, &project, max_files)
 }
 
 #[cfg(test)]

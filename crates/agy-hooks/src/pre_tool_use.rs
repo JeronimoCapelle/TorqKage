@@ -242,7 +242,7 @@ pub(crate) fn evaluate_path_policies(
 
     let project = agy_common::ProjectConfig::detect_or_load(root);
 
-    for cand in candidates {
+    for cand in &candidates {
         let full_path = if Path::new(cand).is_absolute() {
             PathBuf::from(cand)
         } else {

@@ -2,9 +2,7 @@
 
 use std::{path::Path, process::Command};
 
-use agy_common::{
-    AgyStatePaths, DEFAULT_VCS_QUERY_TIMEOUT_SECS, JujutsuWorkspace, SubprocessSupervisor,
-};
+use agy_common::{DEFAULT_VCS_QUERY_TIMEOUT_SECS, JujutsuWorkspace, SubprocessSupervisor};
 
 pub(crate) fn execute(workspace_root: &Path) -> (String, bool) {
     let branch = query_current_branch(workspace_root);
@@ -120,25 +118,7 @@ fn query_vcs_status(root: &Path) -> String {
 }
 
 fn read_last_handoff(root: &Path) -> Option<String> {
-    let paths = AgyStatePaths::new(root);
-    let json_handoff = paths.handoff_json_file();
-    if json_handoff.exists()
-        && let Ok(content) = std::fs::read_to_string(&json_handoff)
-        && let Ok(handoff) = serde_json::from_str::<agy_common::PipelineHandoff>(&content)
-    {
-        return Some(handoff.to_injection_message());
-    }
-
-    let handoff_path = paths.handoff_md_file();
-    if handoff_path.exists()
-        && let Ok(content) = std::fs::read_to_string(&handoff_path)
-    {
-        let trimmed = content.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_owned());
-        }
-    }
-    None
+    agy_common::handoff::read_last_handoff_message(root)
 }
 
 #[cfg(test)]
@@ -148,6 +128,8 @@ fn read_last_handoff(root: &Path) -> Option<String> {
     reason = "Unit test assertions"
 )]
 mod tests {
+    use agy_common::AgyStatePaths;
+
     use super::*;
 
     #[test]
