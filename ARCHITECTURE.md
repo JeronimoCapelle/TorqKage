@@ -202,7 +202,7 @@ TorqKage/
 │   ├── tkg-hooks/      # High-assurance lifecycle interceptors (<1ms native execution)
 │   └── tkg-ctrl/       # Ratatui 0.30 TUI dashboard (binary: tkg), fleet matrix, and session explorer
 └── plugins/
-    └── torqkage/       # Self-contained Antigravity plugin distribution bundle
+    └── torqkage/       # Self-contained plugin & fleet distribution bundle
         ├── plugin.json # Host manifest
         ├── hooks.json  # Host lifecycle hook bindings
         ├── project.toml# Declarative project contracts and multi-language scaffolds

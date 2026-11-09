@@ -41,7 +41,7 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
 
 ```
                                  +-------------------------+
-                                 |   Antigravity Host UI   |
+                                 |   Agent Harness Host    |
                                  +------------+------------+
                                               |
                      +------------------------+------------------------+
@@ -81,12 +81,12 @@ The suite is built around a **zero-hardcoded-assumptions, declarative-first arch
 
 ## Plugin File Hierarchy
 
-Within `plugins/torqkage/` (and its mirrored installation directory `~/.gemini/config/plugins/torqkage/`):
+Within `plugins/torqkage/` (and its installed harness plugin directory):
 
 ```
 plugins/torqkage/
-├── plugin.json         # Antigravity host plugin manifest (metadata, schema, logo)
-├── hooks.json          # Antigravity hook registrations (PreToolUse, PreInvocation, etc.)
+├── plugin.json         # Host plugin manifest (metadata, schema, logo)
+├── hooks.json          # Host lifecycle hook registrations (PreToolUse, PreInvocation, etc.)
 ├── project.toml        # Declarative ecosystem config (gates, paths, containers, security)
 ├── hooks.toml          # Declarative lifecycle pipeline rules (circuit breaker, guards)
 ├── tools.toml          # Declarative MCP tool definitions, inheritance, and agent perimeters
@@ -114,8 +114,8 @@ plugins/torqkage/
 ## Configuration Files & Lifecycle Roles
 
 ### 1. `plugin.json` (Host Manifest)
-- **Role:** Registers the plugin with Antigravity.
-- **Parser:** Antigravity Host Plugin Loader on startup.
+- **Role:** Registers the plugin bundle with the host harness.
+- **Parser:** Host Plugin Loader on startup.
 - **Contents:**
   - `name`: Unique plugin identifier (`"torqkage"`).
   - `version`: Semantic version string.
@@ -124,8 +124,8 @@ plugins/torqkage/
   - `logo`: Relative path to SVG badge (`"assets/logo.svg"`).
 
 ### 2. `hooks.json` (Host Lifecycle Event Map)
-- **Role:** Tells the Antigravity engine which shell executables to invoke on specific agent lifecycle events.
-- **Parser:** Antigravity Hook Dispatcher.
+- **Role:** Tells the host harness which shell executables to invoke on specific agent lifecycle events.
+- **Parser:** Host Hook Dispatcher.
 - **Events Bound:**
   - `PreToolUse`: Triggers `bin/tkg-hooks pre-tool-use` before ANY tool call executes. Intercepts calls, checks circuit breakers, guards manifests, and enforces agent admission.
   - `PreInvocation`: Triggers `bin/tkg-hooks detect-wip` before each agent turn. Injects turn-by-turn change tracking (diff notices) into the model context.
@@ -133,8 +133,8 @@ plugins/torqkage/
   - `Stop`: Triggers `bin/tkg-hooks record-handoff` when a session terminates. Saves `.tkg/state/handoff.json` and `.tkg/state/last_handoff.md`.
 
 ### 3. Agent Frontmatter MCP Server Bindings (`agents/*.md`)
-- **Role:** Configures Antigravity to launch `tkg-mcp` scoped to the active agent directly in the user's project workspace.
-- **Parser:** Antigravity Agent Configuration Loader.
+- **Role:** Configures the harness to launch `tkg-mcp` scoped to the active agent directly in the user's project workspace.
+- **Parser:** Agent Configuration Loader.
 - **Architecture:**
   - Avoids dual-server namespace collisions (e.g. `torqkage_tkg-tools` vs `tkg-tools`).
   - Guarantees execution `cwd` binds to the user's active workspace rather than the plugin install directory.
@@ -182,7 +182,7 @@ plugins/torqkage/
 
 ## How `agents/*.md` Files Interact with `Torqkage`
 
-Every agent in `plugins/torqkage/agents/` is a self-contained autonomous actor defined via standard Antigravity Markdown with YAML frontmatter.
+Every agent in `plugins/torqkage/agents/` is a self-contained autonomous actor defined via Markdown with YAML frontmatter.
 
 ### Frontmatter Specification
 
@@ -298,7 +298,7 @@ The `tkg` TUI provides deep visibility into the agent fleet:
 sequenceDiagram
     autonumber
     actor Dev as Operator / Agent
-    participant Host as Antigravity Host
+    participant Host as Agent Harness
     participant Hooks as tkg-hooks
     participant MCP as tkg-mcp
     participant VCS as Jujutsu / Git
@@ -475,15 +475,15 @@ reason = "Disk space critical: filesystem write operations blocked."
 
 ## Building & Installation
 
-To build and synchronize the plugin bundle to `~/.gemini/config/plugins/torqkage`:
+To build and synchronize the plugin bundle for your configured harness:
 
 ```bash
 # High-speed Cranelift + Mold compilation (Recommended for local dev)
 ./install.sh --fast
 
-# Optimized standard release build
-./install.sh --profile release
+# Optimized standard release build (or pass --harness claude / opencode / agy)
+./install.sh --profile release --harness claude
 
-# Validate plugin integrity with Antigravity CLI
-agy plugin validate ~/.gemini/config/plugins/torqkage
+# Validate declarative contracts & plugin bundle
+tkg --validate
 ```

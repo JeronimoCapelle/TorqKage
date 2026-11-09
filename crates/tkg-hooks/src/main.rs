@@ -1,10 +1,10 @@
 //! # tkg-hooks
 //!
-//! Dedicated featherweight CLI binary (<500KB, <1ms startup) handling Antigravity lifecycle events.
+//! Dedicated featherweight CLI binary (<500KB, <1ms startup) handling agent harness lifecycle events.
 //!
 //! ## Overview
-//! `tkg-hooks` is invoked ephemerally by the Antigravity agent runtime during lifecycle events
-//! (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`). It exchanges `ProtoJSON`
+//! `tkg-hooks` is invoked ephemerally by the configured agent harness during lifecycle events
+//! (`PreInvocation`, `PreToolUse`, `PostToolUse`, `Stop`, `SessionStart`). It exchanges structured JSON
 //! payloads over `stdin`/`stdout` without background daemon overhead.
 //!
 //! ## Subcommands

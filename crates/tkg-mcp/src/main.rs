@@ -1,6 +1,6 @@
 //! # tkg-mcp
 //!
-//! Declarative, bounded-action Model Context Protocol (MCP) server daemon for Antigravity over stdio.
+//! Declarative, bounded-action Model Context Protocol (MCP) server daemon over stdio.
 //!
 //! ## Overview
 //! `tkg-mcp` is a persistent daemon that implements the JSON-RPC 2.0 MCP specification over `stdin`/`stdout`.

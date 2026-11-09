@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-/// JSON-RPC 2.0 Request or Notification received from Antigravity over stdio.
+/// JSON-RPC 2.0 Request or Notification received from an MCP client over stdio.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct JsonRpcRequest {
     #[serde(default = "default_jsonrpc_version")]

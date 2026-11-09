@@ -115,7 +115,7 @@ tkg launch finisher
 Or run via the underlying harness directly:
 
 ```bash
-agy --agent coder
+claude --agent coder      # or opencode --agent coder / agy --agent coder
 ```
 
 ### 3. Build Acceleration

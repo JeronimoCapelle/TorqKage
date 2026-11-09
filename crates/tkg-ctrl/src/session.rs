@@ -1,11 +1,9 @@
-//! Project-specific conversation session reader and discovery engine for Antigravity.
+//! Project-specific conversation session reader and multi-harness discovery engine.
 //!
 //! # Architecture
-//! This module discovers past conversation sessions for an agent within the active workspace.
-//! Metadata is resolved across multiple Antigravity storage layers:
-//! 1. Direct workspace URI matching in `~/.gemini/antigravity-cli/conversation_summaries.db`
-//! 2. Prompt execution history in `~/.gemini/antigravity-cli/history.jsonl` (CLI sessions)
-//! 3. Full-text search catalog in `conversations_fts` (FTS5 index)
+//! This module discovers past conversation sessions for an agent within the active workspace
+//! via the [`SessionProvider`] trait (`OpenCodeSessionProvider`, `AntigravitySessionProvider`,
+//! `GenericSessionProvider`).
 
 use std::{
     collections::HashMap,

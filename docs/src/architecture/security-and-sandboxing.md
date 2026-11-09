@@ -12,8 +12,8 @@ Security in `Torqkage` operates on a **default-deny capability model**. Sandboxi
 flowchart TD
     subgraph SessionPlane ["1. Session-Level Sandboxing (tkg TUI)"]
         Operator["Operator in tkg"] -->|"Press 'b' or F8"| Toggle["Toggle Sandbox (ON / OFF)"]
-        Toggle -->|"Enabled"| SandboxedAgy["agy --sandbox (Jailed agy binary)"]
-        Toggle -->|"Disabled (Default)"| DirectAgy["agy (Direct Host Execution)"]
+        Toggle -->|"Enabled"| SandboxedAgy["<harness> (Jailed harness session)"]
+        Toggle -->|"Disabled (Default)"| DirectAgy["<harness> (Direct Host Execution)"]
     end
 
     subgraph ToolPlane ["2. Declarative Tool-Level Sandboxing (tools.toml)"]
@@ -25,10 +25,10 @@ flowchart TD
 
 ### Tier 1: Interactive Session Sandboxing (`tkg`)
 
-In the flight control deck, operators choose whether to isolate the entire `agy` CLI executable:
+In the flight control deck, operators choose whether to isolate the launched agent harness session:
 - Press <kbd>b</kbd> or <kbd>F8</kbd> to toggle `Terminal Sandbox ENABLED (bwrap jail)` vs `DISABLED (direct host)`.
-- When **ENABLED**, `tkg` launches the `agy` binary with the `--sandbox` flag, running the agent session inside an isolated container environment.
-- When **DISABLED** (default), `agy` executes directly on the host, avoiding container overhead for standard development while still benefiting from `tkg-hooks` lifecycle gates and path policies.
+- When **ENABLED**, `tkg` passes the configured harness sandbox flag (or wraps the session), running the agent session inside an isolated container environment.
+- When **DISABLED** (default), the harness executes directly on the host, avoiding container overhead for standard development while still benefiting from `tkg-hooks` lifecycle gates and path policies.
 
 ### Tier 2: Granular Tool-Level Sandboxing (`tools.toml`)
 
@@ -100,7 +100,7 @@ When container sandboxing is active (either via session toggle or tool declarati
 
 To prevent container-in-container crashes when running inside Docker, Podman, Kubernetes, or GitHub Actions CI runners, `tkg_common::sandbox::is_inside_outer_sandbox()` dynamically inspects:
 
-1. Environment flags: `AGY_OUTER_SANDBOX=1`.
+1. Environment flags: `TKG_OUTER_SANDBOX=1` (or harness-specific outer-sandbox variables such as `AGY_OUTER_SANDBOX=1`).
 2. Container filesystem indicators: `/.dockerenv` or `/run/.containerenv`.
 3. Control group paths: `/proc/1/cgroup` containing `docker`, `containerd`, or `kubepods`.
 4. Nested PID namespaces: Process namespaces with multiple entries in `/proc/self/status` (`NSpid`).

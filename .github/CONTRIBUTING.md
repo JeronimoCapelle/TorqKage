@@ -1,6 +1,6 @@
 # Contributing to `Torqkage`
 
-Thank you for your interest in contributing to `Torqkage`! This project provides high-assurance systems tooling, declarative MCP daemons, and terminal orchestrators for Google Antigravity.
+Thank you for your interest in contributing to `Torqkage`! This project provides harness-agnostic, language-agnostic systems tooling, declarative MCP daemons, and terminal orchestrators for autonomous AI agent fleets (supporting Claude Code, OpenCode, Cursor, Google Antigravity, and custom CLI runners).
 
 ---
 
@@ -9,7 +9,7 @@ Thank you for your interest in contributing to `Torqkage`! This project provides
 Before writing code, please review [`ARCHITECTURE.md`](../ARCHITECTURE.md). All contributions must uphold these hard requirements:
 
 1. **Pure Safe Rust:** Every crate enforces `#![forbid(unsafe_code)]`. No `unsafe` blocks are accepted.
-2. **Deterministic Sandboxing & Path Boundaries:** Sandboxed `agy` sessions and tools declaring `enforce_sandbox = true` run within non-networked Bubblewrap (`bwrap`) containers. All tools unconditionally enforce workspace path isolation and sensitive file boundaries.
+2. **Deterministic Sandboxing & Path Boundaries:** Sandboxed agent sessions and tools declaring `enforce_sandbox = true` run within non-networked Bubblewrap (`bwrap`) containers. All tools unconditionally enforce workspace path isolation and sensitive file boundaries.
 3. **Hermetic & Machine-Agnostic:** Code and tests must never assume fixed local host paths (such as `/home/<user>`) or machine-specific environments. All tests must run cleanly in CI containers.
 4. **Zero Token Waste:** Agent prompts, manifests, and errors must remain concise, structured, and free of opinionated hardcoded assumptions.
 5. **No Opinionated Language Hardcoding:** Framework tools and error handlers must remain strictly language- and context-agnostic.

@@ -5,8 +5,8 @@ Get started with `Torqkage` in under 60 seconds.
 ## Prerequisites
 
 - **Linux** (x86_64 or aarch64) — `bubblewrap` (`bwrap`) is optional, needed if container sandboxing is enabled.
-- **Rust Toolchain:** Rust 1.85+ (Nightly or Rust 2024 Edition).
-- **Google Antigravity CLI:** `agy` installed on `$PATH`.
+- **Rust Toolchain:** Rust 1.85+ (Nightly or Rust 2024 Edition) when building from source.
+- **Agent Execution Harness:** Any supported CLI harness installed on `$PATH` (Claude Code `claude`, OpenCode `opencode`, Google Antigravity `agy`, or a custom CLI runner).
 - *(Optional for fast compilation):* `mold` linker and `rustc-codegen-cranelift`.
 
 ## Installation
@@ -19,21 +19,27 @@ Runs standalone without requiring you to clone the repository or install the Rus
 curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash
 ```
 
+Pass `--harness <name>` (e.g., `claude`, `opencode`, `agy`, or a custom slug) to target a specific harness:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash -s -- --harness claude
+```
+
 ### Method 2: From Source
 
 Clone the repository and compile using the high-performance `perf` profile (or `--fast` with Cranelift and Mold for development):
 
 ```bash
 git clone https://github.com/JeronimoCapelle/TorqKage.git
-cd Torqkage
+cd TorqKage
 ./install.sh --perf
 ```
 
 The installer will:
 1. Compile `tkg`, `tkg-mcp`, and `tkg-hooks`.
-2. Bundle them into `~/.gemini/config/plugins/torqkage`.
+2. Bundle them into the configured harness plugin directory (e.g., `~/.claude/plugins/torqkage`, `~/.local/share/opencode/plugins/torqkage`, or `~/.gemini/config/plugins/torqkage`).
 3. Create symlinks in `~/.local/bin/`.
-4. Validate the plugin with `agy plugin validate`.
+4. Run harness bundle validation when supported.
 
 ## Running the Flight Deck
 
@@ -53,12 +59,12 @@ tkg
 | <kbd>Tab</kbd> / <kbd>BackTab</kbd> | Switch between Fleet Matrix, Tool Catalog, and Directives |
 | <kbd>Enter</kbd> / <kbd>r</kbd> | Launch or resume session with selected agent |
 | <kbd>n</kbd> | Force launch fresh, unresumed session |
-| <kbd>b</kbd> / <kbd>F8</kbd> | Toggle Bubblewrap OS container isolation for `agy` session |
+| <kbd>b</kbd> / <kbd>F8</kbd> | Toggle Bubblewrap OS container isolation for launched sessions |
 | <kbd>w</kbd> | Toggle Jujutsu isolated worktree (`.tkg/workspaces/<agent>`) |
 | <kbd>p</kbd> | Cycle agent permission policy (Autonomous / Supervised / Plan) |
 | <kbd>c</kbd> / <kbd>Shift+K</kbd> | Reset compiler failure circuit breaker strike counter |
 | <kbd>g</kbd> | Toggle tool permission gate (`ALLOW` vs `ASK`) |
-| <kbd>F2</kbd> / <kbd>S</kbd> | Atomic Save & Pre-flight Validation (`agy plugin validate`) |
+| <kbd>F2</kbd> / <kbd>S</kbd> | Atomic Save & Pre-flight Validation |
 | <kbd>F4</kbd> | Atomic Rollback unsaved changes to disk/VCS state |
 | <kbd>i</kbd> | Run in-deck plugin installer and diagnostics |
 | <kbd>?</kbd> / <kbd>F1</kbd> | Open in-deck manual and controls reference |

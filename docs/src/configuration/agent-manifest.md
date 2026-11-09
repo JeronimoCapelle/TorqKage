@@ -205,12 +205,12 @@ Agent manifests are discovered using the following deterministic search order:
 
 1. `<workspace>/agents/<name>.md` *(Highest precedence: per-project custom personas)*
 2. `<workspace>/plugins/torqkage/agents/<name>.md` *(Project plugin tree)*
-3. `<workspace>/.agents/agents/<name>.md`
-4. `<workspace>/.agents/<name>.md`
-5. `<workspace>/.gemini/agents/<name>.md`
+3. `<workspace>/<harness_dir>/agents/<name>.md` *(Configured harness directory, e.g. `.claude/agents/`, `.opencode/agents/`, `.gemini/agents/`)*
+4. `<workspace>/.agents/agents/<name>.md`
+5. `<workspace>/.agents/<name>.md`
 6. `<workspace>/.tkg/agents/<name>.md`
-7. `~/.gemini/config/plugins/torqkage/agents/<name>.md` *(User global plugin install)*
-8. `~/.gemini/agents/<name>.md`
+7. `<plugin_install_dir>/agents/<name>.md` *(User global harness plugin install)*
+8. `~/.<harness>/agents/<name>.md`
 9. `~/.agents/agents/<name>.md`
 10. `~/.agents/<name>.md` *(Lowest precedence)*
 
@@ -218,7 +218,7 @@ Agent manifests are discovered using the following deterministic search order:
 
 ## The Zero-Skill Policy (`NO SKILL.md`)
 
-Google Antigravity natively supports interpreted Markdown skills (`SKILL.md`). In production systems engineering, this approach exhibits severe defects:
+Many agent harnesses support interpreted Markdown skills (`SKILL.md`). In production systems engineering, this approach exhibits severe defects:
 - **Token Inefficiency:** Injecting multi-kilobyte markdown definitions burns 2,000–4,000+ baseline tokens per conversational turn.
 - **Unconfined Injection Surface:** Bash-based skills execute in ambient shells without argument bounds, timeouts, or output truncation.
 - **`Torqkage` Solution:** All agent capabilities are compiled as native MCP handlers or bounded static commands with strict JSON Schemas, reducing prompt overhead to zero baseline tokens and guaranteeing deterministic execution bounds.

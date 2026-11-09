@@ -1,6 +1,6 @@
 # Lifecycle Interceptors (`tkg-hooks`)
 
-`tkg-hooks` is an ultra-fast (<1ms startup, <500KB RSS) command-line interceptor executed on Antigravity lifecycle events.
+`tkg-hooks` is an ultra-fast (<1ms startup, <500KB RSS) command-line interceptor executed on agent harness lifecycle events (`PreToolUse`, `PreInvocation`, `SessionStart`, `Stop`).
 
 ## Intercepted Events
 

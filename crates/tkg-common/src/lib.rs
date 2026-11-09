@@ -10,7 +10,7 @@
 //! - [`handoff`]: Session state handoff recording and wake-up continuity context loader.
 //! - [`jujutsu`]: Jujutsu workspace isolation, branch sync, and build cache symlinking ([`JujutsuWorkspace`]).
 //! - [`manifest_guard`]: Build manifest protection preventing host IDE proc-macro escape vectors.
-//! - [`models`]: `ProtoJSON` schema models for Antigravity lifecycle hooks, handoffs, and circuit breaker.
+//! - [`models`]: `ProtoJSON` schema models for lifecycle hooks, handoffs, and circuit breaker.
 //! - [`resolver`]: Workspace and repository root discovery across Jujutsu and Git checkouts ([`WorkspaceResolver`]).
 //! - [`sandbox`]: Linux container / outer sandbox detection and Bubblewrap jail builder.
 //! - [`subagent_gate`]: Subagent admission gate verifying declared `pre_launch_checks`.

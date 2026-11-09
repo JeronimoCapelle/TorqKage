@@ -6,7 +6,7 @@ The `hooks.toml` configuration file defines the lifecycle execution pipeline, gu
 
 ## Architectural Role & Lifecycle Events
 
-`hooks.toml` governs how `tkg-hooks` responds to events emitted by the Antigravity host environment:
+`hooks.toml` governs how `tkg-hooks` responds to lifecycle events emitted by the active agent harness:
 
 | Lifecycle Event | `tkg-hooks` Command | Description & Purpose |
 | :--- | :--- | :--- |
@@ -232,4 +232,6 @@ Evaluated on `Stop` when an agent finishes or exits:
 1. `<workspace>/.tkg/hooks.toml` *(Workspace-local custom override)*
 2. `<workspace>/hooks.toml` *(Repository root configuration)*
 3. `<workspace>/plugins/torqkage/hooks.toml` *(In-tree plugin bundle default)*
-4. `~/.gemini/config/plugins/torqkage/hooks.toml` *(Installed plugin global fallback)*
+4. `<workspace>/<harness_dir>/hooks.toml` *(Harness-specific workspace directory, e.g. `.claude/` or `.opencode/`)*
+5. `~/.tkg/hooks.toml` or `~/.config/tkg/hooks.toml` *(User global configuration)*
+6. `<plugin_install_dir>/hooks.toml` *(Installed harness plugin global fallback)*

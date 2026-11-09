@@ -14,7 +14,7 @@ impl WorkspaceResolver {
     /// Correctly distinguishes primary repositories from Jujutsu secondary workspaces
     /// (e.g. `.tkg/workspaces/<agent>`) by resolving pointer files in `.jj/repo`.
     ///
-    /// If `start_dir` is omitted and the process was launched inside an Antigravity plugin
+    /// If `start_dir` is omitted and the process was launched inside an installed harness plugin
     /// installation directory (`PLUGIN_ROOT`), it automatically recovers the caller's actual
     /// workspace root from `$PWD`.
     ///

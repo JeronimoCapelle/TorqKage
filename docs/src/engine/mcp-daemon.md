@@ -1,6 +1,6 @@
 # Declarative MCP Daemon (`tkg-mcp`)
 
-`tkg-mcp` is a persistent JSON-RPC 2.0 stdio server providing declarative tool execution for Google Antigravity.
+`tkg-mcp` is a persistent JSON-RPC 2.0 stdio server providing harness-agnostic, language-agnostic declarative tool execution for any MCP-compatible agent client (Claude Code, OpenCode, Cursor, Google Antigravity, or custom runners).
 
 ## Native Action Handlers
 

@@ -4,20 +4,20 @@
 #
 # PURPOSE & ARCHITECTURAL ROLE:
 # ------------------------------
-# `hooks.toml` defines the execution pipeline and guard rules for Antigravity
+# `hooks.toml` defines the execution pipeline and guard rules for agent harness
 # lifecycle hooks. The tkg-hooks engine evaluates native high-assurance Rust
 # primitives in-memory (<1ms latency) alongside optional declarative custom
 # checks, completely decoupling safety policies from compiled code.
 #
-# INTERACTION WITH ANTIGRAVITY & TORQKAGE:
-# ----------------------------------------
-# 1. Host Event Binding (`hooks.json`):
+# INTERACTION WITH AGENT HARNESSES & TORQKAGE:
+# --------------------------------------------
+# 1. Host Event Binding (`hooks.json` or harness hook config):
 #    - `PreToolUse`:      Invokes `tkg-hooks pre-tool-use` before ANY tool call executes.
 #    - `PreInvocation`:   Invokes `tkg-hooks detect-wip` before each agent turn.
 #    - `SessionStart`:    Invokes `tkg-hooks inject-wake` on turn 1 to provide context.
 #    - `Stop`:            Invokes `tkg-hooks record-handoff` on session termination.
 #
-# 2. Decision Outcomes returned to Antigravity:
+# 2. Decision Outcomes returned to the harness:
 #    - `allow`: Operation proceeds immediately without disruption.
 #    - `deny`:  Operation is blocked; the rejection reason is returned to the agent.
 #    - `ask`:   Operation is paused; operator confirmation prompt [y/n] is shown.
@@ -25,8 +25,10 @@
 # 3. Discovery Order:
 #    1. `<project_root>/.tkg/hooks.toml`               (Workspace override)
 #    2. `<project_root>/hooks.toml`                    (Repository root)
-#    3. `<project_root>/plugins/torqkage/hooks.toml`  (Plugin bundle default)
-#    4. `~/.gemini/config/plugins/torqkage/hooks.toml`(Global installed fallback)
+#    3. `<project_root>/plugins/torqkage/hooks.toml`   (Plugin bundle default)
+#    4. `<project_root>/<harness_dir>/hooks.toml`      (Harness workspace dir)
+#    5. `~/.tkg/hooks.toml` or `~/.config/tkg/hooks.toml`
+#    6. `<plugin_install_dir>/hooks.toml`              (Global installed fallback)
 #
 # ==============================================================================
 

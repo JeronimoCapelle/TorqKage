@@ -56,13 +56,13 @@ body:
         - tkg-hooks (Lifecycle Runner)
         - tkg-common (Shared Primitives)
         - Bubblewrap Sandboxing
-        - Antigravity Plugin Integration
+        - Harness & Plugin Integration
 
   - type: input
     id: environment
     attributes:
       label: Environment Info
-      description: OS distribution, Rust version, and Antigravity CLI version.
-      placeholder: Arch Linux (kernel 6.x), Rust 1.85+, agy 0.1.x
+      description: OS distribution, Rust version, and active agent harness version (e.g., Claude Code, OpenCode, agy).
+      placeholder: Arch Linux (kernel 6.x), Rust 1.85+, claude / opencode / agy
     validations:
       required: true

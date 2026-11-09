@@ -1,4 +1,4 @@
-//! VCS snapshotting, atomic serialization, and Antigravity plugin validation engine.
+//! VCS snapshotting, atomic serialization, and declarative contract validation engine.
 
 use std::{fmt::Write, fs, path::Path, process::Command};
 

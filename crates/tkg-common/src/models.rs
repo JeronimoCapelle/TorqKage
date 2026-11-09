@@ -1,4 +1,4 @@
-//! `ProtoJSON` models and lifecycle event payload schemas for Antigravity hooks.
+//! `ProtoJSON` models and lifecycle event payload schemas for `tkg-hooks`.
 
 use std::{
     fmt::Write,
@@ -7,7 +7,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-/// Output decision for Antigravity `PreToolUse` hooks.
+/// Output decision for `PreToolUse` hooks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HookDecision {
@@ -32,7 +32,7 @@ pub struct AgentGuard {
     pub path_policies: Vec<crate::content_filter::PathPolicy>,
 }
 
-/// Common system metadata sent in `stdin` to every Antigravity hook.
+/// Common system metadata sent in `stdin` to lifecycle hooks.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommonHookPayload {
@@ -151,7 +151,7 @@ pub struct PostToolUseInput {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EmptyResponse {}
 
-/// System message wrapper required by the Antigravity conversation protocol.
+/// System message wrapper for conversation prompt injection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemMessagePayload {
     #[serde(rename = "systemMessage")]
