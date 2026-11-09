@@ -1,6 +1,6 @@
 # The 10-Agent Fleet
 
-`Torqkage` provides 10 specialized agent archetypes configured in `plugins/TorqKage/agents/`:
+`Torqkage` provides 10 specialized agent archetypes configured in `plugins/torqkage/agents/`:
 
 | Agent | Role | Default Mode | Key MCP Capabilities |
 | :--- | :--- | :--- | :--- |
@@ -17,7 +17,7 @@
 
 ## Authoring Custom Agents
 
-To create a custom agent, add `<name>.md` to `plugins/TorqKage/agents/`:
+To create a custom agent, add `<name>.md` to `plugins/torqkage/agents/`:
 
 ```yaml
 ---

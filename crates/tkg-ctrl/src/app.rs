@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use crate::{
     model::{
-        AgentManifest, ToolCategory, ToolItem, discover_agents, load_tools_from_file,
-        update_tool_permission_gate_in_file,
+        AgentManifest, ToolCategory, ToolItem, discover_agents, find_tools_config_path,
+        load_tools_from_file, update_tool_permission_gate_in_file,
     },
     vcs::{
         rollback_agent_file, run_plugin_install, run_plugin_validation, save_agent_to_disk,
@@ -97,35 +97,17 @@ impl App {
 
     /// Constructs a new `App` state by discovering agents and tools in `workspace_root`.
     pub(crate) fn new(workspace_root: PathBuf) -> Result<Self, String> {
-        let tools_path = workspace_root.join("tools.toml");
-        let tools = if tools_path.is_file() {
-            load_tools_from_file(&tools_path)?
+        let tools = if let Some(path) = find_tools_config_path(&workspace_root) {
+            eprintln!(
+                "[tkg] Notice: Loaded tools configuration from: {}",
+                path.display()
+            );
+            load_tools_from_file(&path)?
         } else {
-            let plugin_tools = workspace_root.join("plugins/torqkage/tools.toml");
-            if plugin_tools.is_file() {
-                eprintln!(
-                    "[tkg] Notice: Loaded tools configuration from in-tree plugin: {}",
-                    plugin_tools.display()
-                );
-                load_tools_from_file(&plugin_tools)?
-            } else if let Ok(home) = std::env::var("HOME") {
-                let home_tools =
-                    PathBuf::from(home).join(".gemini/config/plugins/torqkage/tools.toml");
-                if home_tools.is_file() {
-                    eprintln!(
-                        "[tkg] Notice: Loaded tools configuration from installed plugin: {}",
-                        home_tools.display()
-                    );
-                    load_tools_from_file(&home_tools)?
-                } else {
-                    eprintln!(
-                        "[tkg] Advisory: No tools.toml found across workspace, plugins, or ~/.gemini/config."
-                    );
-                    Vec::new()
-                }
-            } else {
-                Vec::new()
-            }
+            eprintln!(
+                "[tkg] Advisory: No tools.toml found across workspace, .tkg, plugins, or user config."
+            );
+            Vec::new()
         };
 
         let agents = discover_agents(&workspace_root);
@@ -450,14 +432,19 @@ impl App {
         self.manual_scroll = 0;
     }
 
-    /// Runs in-deck plugin installation and system health diagnostics.
+    /// Runs in-deck harness registration/installation and system health diagnostics.
     pub(crate) fn run_installer_and_diagnostics(&mut self) {
-        match crate::installer::install_plugin_interactive(&self.workspace_root) {
+        let project_cfg = tkg_common::project::ProjectConfig::detect_or_load(&self.workspace_root);
+        let runner = project_cfg.resolved_runner();
+        match crate::installer::register_harness_config(&self.workspace_root, &runner) {
             Ok(msg) => {
                 let diag = crate::installer::run_diagnostics(&self.workspace_root);
                 self.validation_modal = Some((true, format!("{msg}\n\n{}", diag.summary())));
                 self.status_message = Some((
-                    "✔ Plugin installed & diagnostics updated!".to_owned(),
+                    format!(
+                        "✔ Registered configuration for harness '{}'!",
+                        runner.harness
+                    ),
                     false,
                 ));
             },
@@ -465,10 +452,17 @@ impl App {
                 let diag = crate::installer::run_diagnostics(&self.workspace_root);
                 self.validation_modal = Some((
                     false,
-                    format!("Failed to install plugin: {err}\n\n{}", diag.summary()),
+                    format!(
+                        "Failed to configure harness '{}': {err}\n\n{}",
+                        runner.harness,
+                        diag.summary()
+                    ),
                 ));
                 self.status_message = Some((
-                    "❌ Plugin installation failed! Check diagnostics.".to_owned(),
+                    format!(
+                        "❌ Configuration failed for '{}'! Check diagnostics.",
+                        runner.harness
+                    ),
                     true,
                 ));
             },
@@ -496,19 +490,14 @@ impl App {
         ));
 
         // 2. Save modified tool permission gates to disk
-        let tools_path = self.workspace_root.join("tools.toml");
-        let plugin_tools_path = self.workspace_root.join("plugins/torqkage/tools.toml");
+        let target_path = find_tools_config_path(&self.workspace_root)
+            .unwrap_or_else(|| self.workspace_root.join("tools.toml"));
         for tool in &mut self.tools {
             if !tool.modified {
                 continue;
             }
             drop(update_tool_permission_gate_in_file(
-                &tools_path,
-                &tool.name,
-                tool.require_permission_gate(),
-            ));
-            drop(update_tool_permission_gate_in_file(
-                &plugin_tools_path,
+                &target_path,
                 &tool.name,
                 tool.require_permission_gate(),
             ));
@@ -574,19 +563,7 @@ impl App {
         }
 
         // Reload tools from disk if tools were modified
-        let tools_path = self.workspace_root.join("tools.toml");
-        let plugin_tools = self.workspace_root.join("plugins/torqkage/tools.toml");
-        let candidate = if tools_path.is_file() {
-            tools_path
-        } else if plugin_tools.is_file() {
-            plugin_tools
-        } else if let Ok(home) = std::env::var("HOME") {
-            PathBuf::from(home).join(".gemini/config/plugins/torqkage/tools.toml")
-        } else {
-            tools_path
-        };
-
-        if candidate.is_file()
+        if let Some(candidate) = find_tools_config_path(&self.workspace_root)
             && let Ok(loaded) = load_tools_from_file(&candidate)
         {
             self.tools = loaded;

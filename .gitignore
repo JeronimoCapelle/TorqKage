@@ -1,5 +1,5 @@
 # Build Artifacts
-# Note: In isolated agent workspaces (.workspaces/<agent>), `target` is a symlink to repo root target.
+# Note: In isolated agent workspaces (.tkg/workspaces/<agent>), `target` is a symlink to repo root target.
 # Jujutsu processes gitignore rules differently for symlinks; tkg_common::is_workspace_clean explicitly filters `target`.
 target
 target/

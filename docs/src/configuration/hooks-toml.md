@@ -231,5 +231,5 @@ Evaluated on `Stop` when an agent finishes or exits:
 
 1. `<workspace>/.tkg/hooks.toml` *(Workspace-local custom override)*
 2. `<workspace>/hooks.toml` *(Repository root configuration)*
-3. `<workspace>/plugins/TorqKage/hooks.toml` *(In-tree plugin bundle default)*
-4. `~/.gemini/config/plugins/TorqKage/hooks.toml` *(Installed plugin global fallback)*
+3. `<workspace>/plugins/torqkage/hooks.toml` *(In-tree plugin bundle default)*
+4. `~/.gemini/config/plugins/torqkage/hooks.toml` *(Installed plugin global fallback)*

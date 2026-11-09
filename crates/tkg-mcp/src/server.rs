@@ -223,7 +223,7 @@ impl McpServer {
 
 fn handle_notification(req: &JsonRpcRequest) {
     if req.method == "notifications/initialized" {
-        eprintln!("[tkg-mcp] Handshake complete: Antigravity client successfully connected");
+        eprintln!("[tkg-mcp] Handshake complete: MCP client successfully connected");
     } else if req.method == "notifications/cancelled" {
         eprintln!("[tkg-mcp] Received operation cancellation notification from client");
     }

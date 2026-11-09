@@ -186,11 +186,11 @@ paths = [
 tool_name = "query_project_spec"
 
 # Context description explaining what information is stored in these paths.
-description = "Antigravity systems suite specification, RFCs, and architecture manual."
+description = "Torqkage engine specification, RFCs, and architecture manual."
 
 
 # ------------------------------------------------------------------------------
-# 7. SECURITY & SENSITIVE FILE PROTECTION
+# 8. SECURITY & SENSITIVE FILE PROTECTION
 # ------------------------------------------------------------------------------
 # Declarative security policy enforced by tkg-mcp across all filesystem tools
 # (`read_project_file`, `write_file`, `modify_code`, `search_codebase`).
@@ -218,6 +218,20 @@ allowed_patterns = []
 # Additional banned filename patterns or glob matches to block across all tools.
 # Example: extra_banned_patterns = ["secrets/*", "*.secret", "internal_keys/*"]
 extra_banned_patterns = []
+
+
+# ------------------------------------------------------------------------------
+# 9. EXECUTION HARNESS & RUNNER
+# ------------------------------------------------------------------------------
+# Configures the agent execution harness platform launched by `tkg`.
+# Supported platforms: "agy" (Google Antigravity, default), "opencode", "claude", "custom"
+[runner]
+harness = "agy"
+# command = ["agy"]                  # Optional custom binary or wrapper script
+# agent_flag = "--agent"             # CLI flag to pass agent persona
+# sandbox_flag = "--sandbox"         # CLI flag for Bubblewrap container jail
+# resume_flag = "--conversation"     # CLI flag for resuming existing session
+# extra_args = []                    # Additional arguments passed to harness
 
 
 # ==============================================================================

@@ -161,34 +161,8 @@ fn execute_custom_check(check: &CustomCheck, root: &Path) -> Option<PreToolRespo
 }
 
 fn resolve_active_agent(input: &PreToolUseInput, root: &Path) -> Option<String> {
-    if let Ok(agent) = std::env::var("AGY_AGENT").or_else(|_| std::env::var("AGENT")) {
-        let trimmed = agent.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_owned());
-        }
-    }
-
-    let paths = tkg_common::state::TkgStatePaths::new(root);
-    let json_path = paths.active_agent_file();
-    if json_path.is_file()
-        && let Ok(content) = std::fs::read_to_string(&json_path)
-        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
-        && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
-    {
-        let trimmed = name.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_owned());
-        }
-    }
-
-    let txt_path = paths.state_dir().join("active_agent");
-    if txt_path.is_file()
-        && let Ok(content) = std::fs::read_to_string(&txt_path)
-    {
-        let trimmed = content.trim();
-        if !trimmed.is_empty() {
-            return Some(trimmed.to_owned());
-        }
+    if let Some(agent) = tkg_common::resolve_active_agent(root) {
+        return Some(agent);
     }
 
     if let Some(ref model) = input.common.model_name {

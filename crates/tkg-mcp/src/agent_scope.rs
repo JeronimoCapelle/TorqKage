@@ -21,50 +21,8 @@ pub(crate) fn resolve_agent_scope(args: &[String], workspace_root: &Path) -> Opt
         i = i.saturating_add(1);
     }
 
-    // 2. Check environment variables (AGY_AGENT, MCP_SCOPE)
-    if let Ok(val) = std::env::var("AGY_AGENT")
-        && !val.trim().is_empty()
-    {
-        return Some(val.trim().to_owned());
-    }
-    if let Ok(val) = std::env::var("MCP_SCOPE")
-        && !val.trim().is_empty()
-    {
-        return Some(val.trim().to_owned());
-    }
-
-    // 3. Check persistent agent state bridge (.tkg/state/active_agent.json or .tkg/state/active_agent)
-    if let Some(agent) = read_active_agent_from_state(workspace_root) {
-        return Some(agent);
-    }
-
-    None
-}
-
-/// Reads the active agent identity from `.tkg/state/active_agent.json` or `.tkg/state/active_agent`.
-fn read_active_agent_from_state(workspace_root: &Path) -> Option<String> {
-    let paths = tkg_common::TkgStatePaths::new(workspace_root);
-    let json_path = paths.active_agent_file();
-    if json_path.is_file()
-        && let Ok(content) = fs::read_to_string(&json_path)
-        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
-        && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
-        && !name.trim().is_empty()
-    {
-        return Some(name.trim().to_owned());
-    }
-
-    let txt_path = paths.state_dir().join("active_agent");
-    if txt_path.is_file()
-        && let Ok(content) = fs::read_to_string(&txt_path)
-    {
-        let name = content.trim();
-        if !name.is_empty() {
-            return Some(name.to_owned());
-        }
-    }
-
-    None
+    // 2. Check environment variables and persistent agent state bridge via tkg-common
+    tkg_common::resolve_active_agent(workspace_root)
 }
 
 /// Resolves the list of allowed MCP tools for the given agent name.
@@ -178,7 +136,7 @@ mod tests {
         // 1. JSON state
         fs::write(paths.active_agent_file(), r#"{"agent": "agent_alpha"}"#).expect("write json");
         assert_eq!(
-            read_active_agent_from_state(&temp_dir),
+            tkg_common::resolve_active_agent(&temp_dir),
             Some("agent_alpha".to_owned())
         );
 
@@ -186,7 +144,7 @@ mod tests {
         fs::remove_file(paths.active_agent_file()).expect("remove json");
         fs::write(state_dir.join("active_agent"), "agent_beta\n").expect("write txt");
         assert_eq!(
-            read_active_agent_from_state(&temp_dir),
+            tkg_common::resolve_active_agent(&temp_dir),
             Some("agent_beta".to_owned())
         );
 

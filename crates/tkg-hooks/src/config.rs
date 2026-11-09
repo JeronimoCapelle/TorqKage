@@ -175,12 +175,14 @@ pub(crate) struct HooksConfig {
 
 impl HooksConfig {
     /// Loads `hooks.toml` using hierarchical discovery:
-    /// 1. `<root>/hooks.toml` (per-repo custom override)
-    /// 2. `<root>/plugins/torqkage/hooks.toml` (in-tree plugin default)
-    /// 3. `~/.gemini/config/plugins/torqkage/hooks.toml` (installed plugin fallback)
+    /// 1. `<root>/.tkg/hooks.toml` (workspace-local custom override)
+    /// 2. `<root>/hooks.toml` (per-repo custom override)
+    /// 3. `<root>/plugins/torqkage/hooks.toml` (in-tree plugin default)
+    /// 4. `~/.gemini/config/plugins/torqkage/hooks.toml` (installed plugin fallback)
     #[must_use]
     pub(crate) fn load(workspace_root: &Path) -> Self {
         let mut candidates = vec![
+            workspace_root.join(".tkg/hooks.toml"),
             workspace_root.join("hooks.toml"),
             workspace_root.join("plugins/torqkage/hooks.toml"),
         ];

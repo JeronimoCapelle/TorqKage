@@ -19,7 +19,7 @@ Instead of shelling out to generic scripts, `tkg-mcp` compiles high-assurance na
 
 ## Dynamic Agent Scoping
 
-`tkg-mcp` dynamically discovers the calling agent via `.tkg/state/active_agent` and evaluates its permissions against the `mcp_tools:` frontmatter defined in `plugins/TorqKage/agents/<name>.md`. If an unconfigured or unauthorized agent calls a tool, the daemon rejects execution with an explicit policy violation error.
+`tkg-mcp` dynamically discovers the calling agent via `.tkg/state/active_agent` and evaluates its permissions against the `mcp_tools:` frontmatter defined in `plugins/torqkage/agents/<name>.md`. If an unconfigured or unauthorized agent calls a tool, the daemon rejects execution with an explicit policy violation error.
 
 ---
 

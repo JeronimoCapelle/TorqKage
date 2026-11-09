@@ -17,7 +17,7 @@ flowchart TD
     end
 
     subgraph ToolPlane ["2. Declarative Tool-Level Sandboxing (tools.toml)"]
-        AgyMCP["tkg-mcp Daemon"] --> InspectTool{"Inspect Tool Definition"}
+        TkgMCP["tkg-mcp Daemon"] --> InspectTool{"Inspect Tool Definition"}
         InspectTool -->|"enforce_sandbox = true"| BwrapJail["bwrap Container Jail (Bubblewrap)"]
         InspectTool -->|"enforce_sandbox = false (Default)"| HostExec["Direct Host Execution (With Path Guards)"]
     end

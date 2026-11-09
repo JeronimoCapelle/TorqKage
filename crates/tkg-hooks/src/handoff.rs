@@ -31,9 +31,9 @@ pub(crate) fn execute_record_handoff() {
         return;
     }
 
-    let agent_name = std::env::var("AGY_AGENT")
-        .or_else(|_| input.common.model_name.clone().ok_or(()))
-        .unwrap_or_else(|()| "agent".to_owned());
+    let agent_name = tkg_common::resolve_active_agent(&root)
+        .or_else(|| input.common.model_name.clone())
+        .unwrap_or_else(|| "agent".to_owned());
 
     let summary = format!("Session completed by agent '{agent_name}'.");
     drop(tkg_common::handoff::record_session_handoff(
@@ -91,30 +91,7 @@ fn resolve_handoff_step(
 }
 
 fn resolve_active_agent(paths: &tkg_common::TkgStatePaths) -> String {
-    std::env::var("AGY_AGENT")
-        .or_else(|_| std::env::var("MCP_SCOPE"))
-        .ok()
-        .or_else(|| {
-            let json_path = paths.active_agent_file();
-            if json_path.is_file()
-                && let Ok(content) = std::fs::read_to_string(&json_path)
-                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
-                && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
-            {
-                return Some(name.to_owned());
-            }
-            let txt_path = paths.state_dir().join("active_agent");
-            if txt_path.is_file()
-                && let Ok(content) = std::fs::read_to_string(&txt_path)
-            {
-                let name = content.trim();
-                if !name.is_empty() {
-                    return Some(name.to_owned());
-                }
-            }
-            None
-        })
-        .unwrap_or_default()
+    tkg_common::resolve_active_agent(paths.workspace_root()).unwrap_or_default()
 }
 
 fn evaluate_custom_injections(

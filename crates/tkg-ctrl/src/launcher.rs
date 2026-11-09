@@ -99,14 +99,7 @@ pub(crate) fn run_pre_launch_checks(
     }
 
     // Check 4: Plugin and tools configuration integrity
-    let tools_toml = workspace_root.join("tools.toml");
-    let plugin_tools = workspace_root.join("plugins/torqkage/tools.toml");
-    let has_home_tools = std::env::var("HOME").is_ok_and(|home| {
-        Path::new(&home)
-            .join(".gemini/config/plugins/torqkage/tools.toml")
-            .is_file()
-    });
-    if !tools_toml.is_file() && !plugin_tools.is_file() && !has_home_tools {
+    if crate::model::find_tools_config_path(workspace_root).is_none() {
         report
             .warnings
             .push("No tools.toml configuration found in workspace or plugin install.".to_owned());
@@ -496,7 +489,7 @@ mod tests {
         // When run against an empty temporary directory with no Cargo.toml, gatekeeper passes cleanly
         let temp_dir = std::env::temp_dir();
         let report = run_pre_launch_checks(&temp_dir, &manifest);
-        // The only errors should be missing manifest file and possibly agy CLI if PATH is weird,
+        // The only errors should be missing manifest file and possibly harness CLI if PATH is weird,
         // but no cargo check errors from gatekeeper
         assert!(
             !report

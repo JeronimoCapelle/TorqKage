@@ -2,7 +2,7 @@
 
 Agent manifests define persona identity, reasoning effort, permission boundaries, sandboxing policies, tool whitelists, admission prerequisites, and behavioral directives. In `Torqkage`, agent manifests are authored as Markdown documents with YAML frontmatter bounded by triple-dash (`---`) fences.
 
-Manifest files reside in `plugins/TorqKage/agents/<name>.md`, `<workspace>/agents/<name>.md`, or custom locations, where `<name>` corresponds to the persona identifier (such as `coder`, `test-author`, `doc-author`, `finisher`, `planner`, or `copilot`).
+Manifest files reside in `plugins/torqkage/agents/<name>.md`, `<workspace>/agents/<name>.md`, or custom locations, where `<name>` corresponds to the persona identifier (such as `coder`, `test-author`, `doc-author`, `finisher`, `planner`, or `copilot`).
 
 ---
 
@@ -204,12 +204,12 @@ The content following the closing `---` fence defines the persona's cognitive di
 Agent manifests are discovered using the following deterministic search order:
 
 1. `<workspace>/agents/<name>.md` *(Highest precedence: per-project custom personas)*
-2. `<workspace>/plugins/TorqKage/agents/<name>.md` *(Project plugin tree)*
+2. `<workspace>/plugins/torqkage/agents/<name>.md` *(Project plugin tree)*
 3. `<workspace>/.agents/agents/<name>.md`
 4. `<workspace>/.agents/<name>.md`
 5. `<workspace>/.gemini/agents/<name>.md`
 6. `<workspace>/.tkg/agents/<name>.md`
-7. `~/.gemini/config/plugins/TorqKage/agents/<name>.md` *(User global plugin install)*
+7. `~/.gemini/config/plugins/torqkage/agents/<name>.md` *(User global plugin install)*
 8. `~/.gemini/agents/<name>.md`
 9. `~/.agents/agents/<name>.md`
 10. `~/.agents/<name>.md` *(Lowest precedence)*

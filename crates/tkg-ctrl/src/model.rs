@@ -271,6 +271,41 @@ impl ToolItem {
     }
 }
 
+/// Discovers the path to `tools.toml` across workspace overrides, plugin bundles, and user home configurations.
+#[must_use]
+pub(crate) fn find_tools_config_path(workspace_root: &Path) -> Option<PathBuf> {
+    let candidates = [
+        workspace_root.join(".tkg/tools.toml"),
+        workspace_root.join("tools.toml"),
+        workspace_root.join("plugins/torqkage/tools.toml"),
+        workspace_root.join(".opencode/tools.toml"),
+        workspace_root.join(".claude/tools.toml"),
+    ];
+
+    for c in &candidates {
+        if c.is_file() {
+            return Some(c.clone());
+        }
+    }
+
+    if let Ok(home) = std::env::var("HOME") {
+        let home_p = PathBuf::from(home);
+        let home_candidates = [
+            home_p.join(".gemini/config/plugins/torqkage/tools.toml"),
+            home_p.join(".local/share/opencode/plugins/torqkage/tools.toml"),
+            home_p.join(".claude/plugins/torqkage/tools.toml"),
+        ];
+
+        for hc in &home_candidates {
+            if hc.is_file() {
+                return Some(hc.clone());
+            }
+        }
+    }
+
+    None
+}
+
 /// Loads all tools from a `tools.toml` file path.
 ///
 /// # Errors

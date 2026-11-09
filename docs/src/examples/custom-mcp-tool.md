@@ -12,7 +12,7 @@ Suppose you want to give `perf-analyst` the ability to inspect binary size and i
 
 ## Step 1: Add Tool Definition to `tools.toml`
 
-Open `tools.toml` (or `plugins/TorqKage/tools.toml`) and declare the tool under `[tools]`:
+Open `tools.toml` (or `plugins/torqkage/tools.toml`) and declare the tool under `[tools]`:
 
 ```toml
 [tools.cargo_bloat]
@@ -34,7 +34,7 @@ enforce_sandbox = true
 
 ## Step 2: Grant the Tool in the Agent Manifest
 
-Open `plugins/TorqKage/agents/perf-analyst.md` and add `cargo_bloat` to the `mcp_tools` YAML list:
+Open `plugins/torqkage/agents/perf-analyst.md` and add `cargo_bloat` to the `mcp_tools` YAML list:
 
 ```yaml
 ---

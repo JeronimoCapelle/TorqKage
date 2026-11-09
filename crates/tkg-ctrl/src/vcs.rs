@@ -78,15 +78,7 @@ pub(crate) fn validate_declarative_contracts(workspace_root: &Path) -> Result<St
     );
 
     // 2. Validate tools.toml
-    let tools_path = workspace_root.join("tools.toml");
-    let plugin_tools = workspace_root.join("plugins/torqkage/tools.toml");
-    let target_tools = if tools_path.is_file() {
-        Some(tools_path)
-    } else if plugin_tools.is_file() {
-        Some(plugin_tools)
-    } else {
-        None
-    };
+    let target_tools = crate::model::find_tools_config_path(workspace_root);
 
     if let Some(tp) = target_tools {
         let tools = crate::model::load_tools_from_file(&tp)
@@ -113,9 +105,10 @@ pub(crate) fn validate_declarative_contracts(workspace_root: &Path) -> Result<St
     }
 
     // 4. Validate hooks.toml if present
+    let tkg_hooks = workspace_root.join(".tkg/hooks.toml");
     let hooks_path = workspace_root.join("hooks.toml");
     let plugin_hooks = workspace_root.join("plugins/torqkage/hooks.toml");
-    if hooks_path.is_file() || plugin_hooks.is_file() {
+    if tkg_hooks.is_file() || hooks_path.is_file() || plugin_hooks.is_file() {
         report.push_str("✔ hooks.toml: Lifecycle hook policies verified\n");
     }
 

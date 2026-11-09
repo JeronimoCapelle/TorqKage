@@ -264,6 +264,6 @@ Ready-to-use production configuration templates are located in `docs/templates/`
 
 1. `<workspace>/.tkg/project.toml` *(Workspace-local override)*
 2. `<workspace>/project.toml` *(Repository root configuration)*
-3. `<workspace>/plugins/TorqKage/project.toml` *(In-tree plugin default)*
-4. `~/.gemini/config/plugins/TorqKage/project.toml` *(Global installed plugin fallback)*
+3. `<workspace>/plugins/torqkage/project.toml` *(In-tree plugin default)*
+4. `~/.gemini/config/plugins/torqkage/project.toml` *(Global installed plugin fallback)*
 5. Dynamic synthesis via ecosystem auto-detection.

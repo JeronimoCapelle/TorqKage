@@ -454,6 +454,8 @@ pub fn candidate_agent_directories_with_config(
         } else if runner.harness_kind() == crate::project::HarnessKind::OpenCode {
             dirs.push(home_p.join(".local/share/opencode/agents"));
             dirs.push(home_p.join(".opencode/agents"));
+        } else if runner.harness_kind() == crate::project::HarnessKind::Claude {
+            dirs.push(home_p.join(".claude/agents"));
         }
         dirs.push(home_p.join(".agents/agents"));
         dirs.push(home_p.join(".agents"));

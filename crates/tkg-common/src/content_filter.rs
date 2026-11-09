@@ -252,11 +252,18 @@ impl PathPolicy {
                 }
             },
             ContentFilterKind::Delimited => {
-                let start = self
-                    .start_marker
-                    .as_deref()
-                    .unwrap_or("// AGY:EDITABLE_START");
-                let end = self.end_marker.as_deref().unwrap_or("// AGY:EDITABLE_END");
+                let (start, end) = match (&self.start_marker, &self.end_marker) {
+                    (Some(s), Some(e)) => (s.as_str(), e.as_str()),
+                    (Some(s), None) => (s.as_str(), "// TKG:EDITABLE_END"),
+                    (None, Some(e)) => ("// TKG:EDITABLE_START", e.as_str()),
+                    (None, None) => {
+                        if original.contains("// AGY:EDITABLE_START") {
+                            ("// AGY:EDITABLE_START", "// AGY:EDITABLE_END")
+                        } else {
+                            ("// TKG:EDITABLE_START", "// TKG:EDITABLE_END")
+                        }
+                    },
+                };
 
                 let norm_orig = strip_delimited_and_normalize(original, start, end);
                 let norm_new = strip_delimited_and_normalize(new_content, start, end);
@@ -1371,5 +1378,27 @@ let version = 2;
 
         assert!(policy.verify(original, valid_update).is_ok());
         assert!(policy.verify(original, tampered_footer).is_err());
+
+        // Test default markers (TKG:EDITABLE_START / TKG:EDITABLE_END)
+        let default_policy = PathPolicy {
+            path: "src/tkg.rs".to_owned(),
+            filter: ContentFilterKind::Delimited,
+            ..Default::default()
+        };
+        let tkg_orig =
+            "// Header\n// TKG:EDITABLE_START\nval = 1\n// TKG:EDITABLE_END\n// Footer\n";
+        let tkg_valid =
+            "// Header\n// TKG:EDITABLE_START\nval = 2\n// TKG:EDITABLE_END\n// Footer\n";
+        let tkg_tampered =
+            "// Tampered\n// TKG:EDITABLE_START\nval = 2\n// TKG:EDITABLE_END\n// Footer\n";
+        assert!(default_policy.verify(tkg_orig, tkg_valid).is_ok());
+        assert!(default_policy.verify(tkg_orig, tkg_tampered).is_err());
+
+        // Test backwards-compatible default markers (AGY:EDITABLE_START / AGY:EDITABLE_END)
+        let agy_orig =
+            "// Header\n// AGY:EDITABLE_START\nval = 1\n// AGY:EDITABLE_END\n// Footer\n";
+        let agy_valid =
+            "// Header\n// AGY:EDITABLE_START\nval = 2\n// AGY:EDITABLE_END\n// Footer\n";
+        assert!(default_policy.verify(agy_orig, agy_valid).is_ok());
     }
 }

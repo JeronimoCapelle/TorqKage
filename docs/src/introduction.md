@@ -5,7 +5,7 @@ Welcome to **The `Torqkage` Engine Manual**.
 > ### Sandboxed Meta-MCP Runtime and Declarative Fleet Engine
 > Turn any CLI binary, compiler, or script into an isolated, schema-validated MCP tool with declarative TOML configurations.
 
-`Torqkage` (Antigravity Systems Suite) is a declarative governance engine, Meta-MCP server, featherweight lifecycle runner, and Ratatui 0.30 interactive flight deck designed as an enterprise-grade extension layer for **Google Antigravity** (`agy`).
+`Torqkage` is a declarative governance engine, Meta-MCP server, featherweight lifecycle runner, and Ratatui 0.30 interactive flight deck designed as an enterprise-grade extension layer for **Google Antigravity** (`agy`).
 
 ```
                     ┌──────────────────────────────────────────────┐

@@ -216,5 +216,5 @@ The `tkg-mcp` daemon and `tkg-hooks` engine discover `tools.toml` across the fol
 
 1. `<workspace>/.tkg/tools.toml` *(Workspace-local custom override)*
 2. `<workspace>/tools.toml` *(Per-repository project overrides)*
-3. `<workspace>/plugins/TorqKage/tools.toml` *(In-tree plugin bundle default)*
-4. `~/.gemini/config/plugins/TorqKage/tools.toml` *(Global user configuration)*
+3. `<workspace>/plugins/torqkage/tools.toml` *(In-tree plugin bundle default)*
+4. `~/.gemini/config/plugins/torqkage/tools.toml` *(Global user configuration)*

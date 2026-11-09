@@ -143,6 +143,50 @@ impl TkgStatePaths {
     }
 }
 
+/// Resolves the currently active agent name using hierarchical discovery:
+/// 1. `TKG_AGENT` environment variable
+/// 2. `AGY_AGENT` environment variable
+/// 3. `AGENT` environment variable
+/// 4. `MCP_SCOPE` environment variable
+/// 5. `.tkg/state/active_agent.json` (`{"agent": "..."}`)
+/// 6. `.tkg/state/active_agent` (plain text)
+#[must_use]
+pub fn resolve_active_agent(workspace_root: &Path) -> Option<String> {
+    for var in &["TKG_AGENT", "AGY_AGENT", "AGENT", "MCP_SCOPE"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_owned());
+            }
+        }
+    }
+
+    let paths = TkgStatePaths::new(workspace_root);
+    let json_path = paths.active_agent_file();
+    if json_path.is_file()
+        && let Ok(content) = std::fs::read_to_string(&json_path)
+        && let Ok(val) = serde_json::from_str::<serde_json::Value>(&content)
+        && let Some(name) = val.get("agent").and_then(serde_json::Value::as_str)
+    {
+        let trimmed = name.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_owned());
+        }
+    }
+
+    let txt_path = paths.state_dir().join("active_agent");
+    if txt_path.is_file()
+        && let Ok(content) = std::fs::read_to_string(&txt_path)
+    {
+        let trimmed = content.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_owned());
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -204,6 +248,26 @@ mod tests {
         assert_eq!(content, "*\n");
 
         drop(std::fs::remove_dir_all(paths.root()));
+        drop(std::fs::remove_dir_all(&temp_dir));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used, reason = "Unit test assertions")]
+    fn test_resolve_active_agent_from_file() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("tkg_test_resolve_agent_{}", std::process::id()));
+        let paths = TkgStatePaths::new(&temp_dir);
+        drop(paths.ensure_directories());
+
+        let json = serde_json::json!({ "agent": "reviewer" });
+        std::fs::write(
+            paths.active_agent_file(),
+            serde_json::to_string(&json).unwrap(),
+        )
+        .unwrap();
+
+        assert_eq!(resolve_active_agent(&temp_dir), Some("reviewer".to_owned()));
+
         drop(std::fs::remove_dir_all(&temp_dir));
     }
 }
