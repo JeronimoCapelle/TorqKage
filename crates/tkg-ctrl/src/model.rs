@@ -406,9 +406,19 @@ impl AgentManifest {
         desc
     }
 
-    /// Serializes this agent manifest to YAML frontmatter + Markdown directives.
+    /// Serializes this agent manifest to YAML frontmatter + Markdown directives using the default (`Antigravity`) dialect.
     #[must_use]
+    #[allow(
+        dead_code,
+        reason = "Convenience serializer for default harness and tests"
+    )]
     pub(crate) fn serialize(&self) -> String {
+        self.serialize_for_harness(&tkg_common::harness::Antigravity)
+    }
+
+    /// Serializes this agent manifest to YAML frontmatter + Markdown directives tailored for `harness`.
+    #[must_use]
+    pub(crate) fn serialize_for_harness(&self, harness: &dyn tkg_common::Harness) -> String {
         let mut out = String::new();
         out.push_str("---\n");
         _ = writeln!(out, "name: {}", self.name);
@@ -418,21 +428,23 @@ impl AgentManifest {
             self.description.replace('"', "\\\"")
         );
         _ = writeln!(out, "effort: {}", self.effort);
-        if !self.permission_mode.is_empty() {
-            _ = writeln!(out, "permissionMode: {}", self.permission_mode);
-        }
-        if !self.command_execution_policy.is_empty() {
-            _ = writeln!(
-                out,
-                "commandExecutionPolicy: {}",
-                self.command_execution_policy
-            );
-        }
-        if self.role_flags.main_agent {
-            out.push_str("mainAgent: true\n");
-        }
-        if self.role_flags.subagent {
-            out.push_str("subagent: true\n");
+        if harness.uses_agy_frontmatter() {
+            if !self.permission_mode.is_empty() {
+                _ = writeln!(out, "permissionMode: {}", self.permission_mode);
+            }
+            if !self.command_execution_policy.is_empty() {
+                _ = writeln!(
+                    out,
+                    "commandExecutionPolicy: {}",
+                    self.command_execution_policy
+                );
+            }
+            if self.role_flags.main_agent {
+                out.push_str("mainAgent: true\n");
+            }
+            if self.role_flags.subagent {
+                out.push_str("subagent: true\n");
+            }
         }
         if !self.allowed_subagents.is_empty() {
             out.push_str("allowed_subagents:\n");
@@ -470,13 +482,15 @@ impl AgentManifest {
                 _ = writeln!(out, "  - {file}");
             }
         }
-        if !self.inherit_mcp {
-            out.push_str("inheritMcp: false\n");
+        if harness.uses_agy_frontmatter() {
+            if !self.inherit_mcp {
+                out.push_str("inheritMcp: false\n");
+            }
+            out.push_str("mcpServers:\n");
+            out.push_str("  - name: tkg-tools\n");
+            out.push_str("    command: tkg-mcp\n");
+            _ = writeln!(out, "    args: [\"--agent\", \"{}\"]", self.name);
         }
-        out.push_str("mcpServers:\n");
-        out.push_str("  - name: tkg-tools\n");
-        out.push_str("    command: tkg-mcp\n");
-        _ = writeln!(out, "    args: [\"--agent\", \"{}\"]", self.name);
 
         if self.native_tools.is_empty() {
             out.push_str("tools: []\n");

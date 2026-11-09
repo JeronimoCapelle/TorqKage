@@ -16,7 +16,7 @@ use crate::{
 
 /// Executes the unified `pre-tool-use` hook.
 pub(crate) fn execute() {
-    let input = stdin::read_stdin_payload::<PreToolUseInput>();
+    let input = stdin::read_pre_tool_use_input();
     let root = input
         .common
         .workspace_paths
@@ -29,9 +29,7 @@ pub(crate) fn execute() {
     let config = HooksConfig::load(&root);
     let response = evaluate_pre_tool_use(&input, &root, &config);
 
-    if let Ok(json) = serde_json::to_string(&response) {
-        println!("{json}");
-    }
+    stdin::write_pre_tool_use_response(&response);
 }
 
 /// Evaluates a tool invocation input against the configured hybrid pipeline.

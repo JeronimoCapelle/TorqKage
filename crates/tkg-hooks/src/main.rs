@@ -81,7 +81,7 @@ fn main() -> ExitCode {
 }
 
 fn print_usage() {
-    eprintln!("tkg-hooks: Antigravity native lifecycle hook runner");
+    eprintln!("tkg-hooks: Torqkage native lifecycle hook runner");
     eprintln!();
     eprintln!("USAGE:");
     eprintln!("  tkg-hooks <COMMAND>");

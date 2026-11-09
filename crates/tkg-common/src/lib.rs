@@ -53,6 +53,7 @@ pub use handoff::{
     read_last_handoff_message, read_session_handoff, read_session_handoff_record,
     record_session_handoff,
 };
+pub use harness::Harness;
 pub use jujutsu::JujutsuWorkspace;
 pub use limits::{
     DEFAULT_GATE_TIMEOUT_SECS, DEFAULT_HELP_PREVIEW_LINES, DEFAULT_MAN_PREVIEW_LINES,
@@ -72,9 +73,8 @@ pub use models::{
     ToolCallPayload, extract_bracketed_error_code, extract_compiler_error_signature,
 };
 pub use project::{
-    GateDefinition, HarnessKind, ProjectConfig, ProjectDocsConfig, ProjectMeta,
-    ProjectRunnerConfig, ProjectSandboxConfig, ProjectSecurityConfig, ProjectWorkspaceConfig,
-    SecurityCategory,
+    GateDefinition, ProjectConfig, ProjectDocsConfig, ProjectMeta, ProjectRunnerConfig,
+    ProjectSandboxConfig, ProjectSecurityConfig, ProjectWorkspaceConfig, SecurityCategory,
 };
 pub use resolver::WorkspaceResolver;
 pub use rustc_hash::{

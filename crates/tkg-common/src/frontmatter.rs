@@ -430,40 +430,13 @@ pub fn candidate_agent_directories_with_config(
     dirs.push(workspace_root.join(".agents"));
 
     // 3. Harness-specific workspace paths
-    match runner.harness_kind() {
-        crate::project::HarnessKind::OpenCode => {
-            dirs.push(workspace_root.join(".opencode/agents"));
-            dirs.push(workspace_root.join(".opencode"));
-        },
-        crate::project::HarnessKind::Claude => {
-            dirs.push(workspace_root.join(".claude/agents"));
-            dirs.push(workspace_root.join(".claude"));
-        },
-        crate::project::HarnessKind::Agy => {
-            dirs.push(workspace_root.join(".gemini/agents"));
-        },
-        crate::project::HarnessKind::Custom => {
-            if let Some(slug) = crate::harness::harness_slug(runner) {
-                dirs.push(workspace_root.join(format!(".{slug}/agents")));
-                dirs.push(workspace_root.join(format!(".{slug}")));
-            }
-        },
-    }
+    let harness = runner.harness();
+    dirs.extend(harness.workspace_agent_dirs(workspace_root));
 
     // 4. User home locations
     if let Ok(home) = std::env::var("HOME") {
         let home_p = PathBuf::from(home);
-        if runner.harness_kind() == crate::project::HarnessKind::Agy {
-            dirs.push(home_p.join(".gemini/config/plugins/torqkage/agents"));
-            dirs.push(home_p.join(".gemini/agents"));
-        } else if runner.harness_kind() == crate::project::HarnessKind::OpenCode {
-            dirs.push(home_p.join(".local/share/opencode/agents"));
-            dirs.push(home_p.join(".opencode/agents"));
-        } else if runner.harness_kind() == crate::project::HarnessKind::Claude {
-            dirs.push(home_p.join(".claude/agents"));
-        } else if let Some(slug) = crate::harness::harness_slug(runner) {
-            dirs.push(home_p.join(format!(".{slug}/agents")));
-        }
+        dirs.extend(harness.home_agent_dirs(&home_p));
         dirs.push(home_p.join(".agents/agents"));
         dirs.push(home_p.join(".agents"));
     }

@@ -191,13 +191,7 @@ impl SessionProvider for GenericSessionProvider {
 pub(crate) fn create_session_provider(
     runner_cfg: &tkg_common::ProjectRunnerConfig,
 ) -> Box<dyn SessionProvider> {
-    match runner_cfg.harness_kind() {
-        tkg_common::HarnessKind::Agy => Box::new(AntigravitySessionProvider),
-        tkg_common::HarnessKind::OpenCode => Box::new(OpenCodeSessionProvider),
-        tkg_common::HarnessKind::Claude | tkg_common::HarnessKind::Custom => {
-            Box::new(GenericSessionProvider)
-        },
-    }
+    crate::installer::driver_for(runner_cfg).session_provider()
 }
 
 /// Discovers the latest resumable session for a given agent in the given workspace using explicit runner settings.

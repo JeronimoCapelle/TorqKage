@@ -13,17 +13,9 @@ use tkg_common::{
 pub(crate) fn execute() {
     let root = WorkspaceResolver::find_root(None).unwrap_or_else(|_| PathBuf::from("."));
 
-    if let Some(reason) = detect_conflicts(&root) {
-        let response = PreToolResponse::deny(reason);
-        if let Ok(json) = serde_json::to_string(&response) {
-            println!("{json}");
-        }
-    } else {
-        let response = PreToolResponse::allow();
-        if let Ok(json) = serde_json::to_string(&response) {
-            println!("{json}");
-        }
-    }
+    let response =
+        detect_conflicts(&root).map_or_else(PreToolResponse::allow, PreToolResponse::deny);
+    crate::stdin::write_pre_tool_use_response(&response);
 }
 
 /// Checks whether any conflicts exist in the repository.

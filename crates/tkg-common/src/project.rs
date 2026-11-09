@@ -198,78 +198,6 @@ pub struct ProjectPolicyConfig {
     pub path_policies: Vec<crate::content_filter::PathPolicy>,
 }
 
-/// Supported agent execution harness platforms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
-pub enum HarnessKind {
-    #[default]
-    Agy,
-    OpenCode,
-    Claude,
-    Custom,
-}
-
-impl HarnessKind {
-    /// Parses a harness kind from a string identifier (case-insensitive).
-    #[must_use]
-    pub fn parse(s: &str) -> Self {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "agy" | "antigravity" => Self::Agy,
-            "opencode" => Self::OpenCode,
-            "claude" | "claude-code" => Self::Claude,
-            _ => Self::Custom,
-        }
-    }
-
-    /// Returns the canonical lowercase string identifier of the harness.
-    #[must_use]
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Agy => "agy",
-            Self::OpenCode => "opencode",
-            Self::Claude => "claude",
-            Self::Custom => "custom",
-        }
-    }
-
-    /// Default binary name for this harness kind.
-    #[must_use]
-    pub const fn default_binary(&self) -> &'static str {
-        match self {
-            Self::Agy => "agy",
-            Self::OpenCode => "opencode",
-            Self::Claude => "claude",
-            Self::Custom => "custom",
-        }
-    }
-
-    /// Default CLI flag for selecting an agent persona.
-    #[must_use]
-    pub const fn default_agent_flag(&self) -> Option<&'static str> {
-        match self {
-            Self::Agy | Self::OpenCode | Self::Claude | Self::Custom => Some("--agent"),
-        }
-    }
-
-    /// Default CLI flag for enabling sandboxing.
-    #[must_use]
-    pub const fn default_sandbox_flag(&self) -> Option<&'static str> {
-        match self {
-            Self::Agy => Some("--sandbox"),
-            Self::OpenCode | Self::Claude | Self::Custom => None,
-        }
-    }
-
-    /// Default CLI flag for resuming prior sessions.
-    #[must_use]
-    pub const fn default_resume_flag(&self) -> Option<&'static str> {
-        match self {
-            Self::Agy => Some("--conversation"),
-            Self::OpenCode => Some("--session"),
-            Self::Claude | Self::Custom => Some("--resume"),
-        }
-    }
-}
-
 /// Declarative execution harness / agent system runner configuration.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectRunnerConfig {
@@ -321,10 +249,10 @@ impl Default for ProjectRunnerConfig {
 }
 
 impl ProjectRunnerConfig {
-    /// Resolves the classified harness kind.
+    /// Resolves the harness implementation selected by `harness`.
     #[must_use]
-    pub fn harness_kind(&self) -> HarnessKind {
-        HarnessKind::parse(&self.harness)
+    pub fn harness(&self) -> Box<dyn crate::harness::Harness> {
+        crate::harness::resolve(&self.harness)
     }
 
     /// Resolves the executable binary name.
@@ -336,42 +264,31 @@ impl ProjectRunnerConfig {
         {
             return first.clone();
         }
-        if self.harness_kind() == HarnessKind::Custom
-            && let Some(slug) = crate::harness::harness_slug(self)
-        {
-            return slug;
-        }
-        self.harness_kind().default_binary().to_owned()
+        self.harness().default_binary()
     }
 
     /// Resolves the agent selection flag.
     #[must_use]
     pub fn resolved_agent_flag(&self) -> Option<String> {
-        self.agent_flag.clone().or_else(|| {
-            self.harness_kind()
-                .default_agent_flag()
-                .map(ToOwned::to_owned)
-        })
+        self.agent_flag
+            .clone()
+            .or_else(|| self.harness().agent_flag().map(ToOwned::to_owned))
     }
 
     /// Resolves the sandbox flag.
     #[must_use]
     pub fn resolved_sandbox_flag(&self) -> Option<String> {
-        self.sandbox_flag.clone().or_else(|| {
-            self.harness_kind()
-                .default_sandbox_flag()
-                .map(ToOwned::to_owned)
-        })
+        self.sandbox_flag
+            .clone()
+            .or_else(|| self.harness().sandbox_flag().map(ToOwned::to_owned))
     }
 
     /// Resolves the conversation resumption flag.
     #[must_use]
     pub fn resolved_resume_flag(&self) -> Option<String> {
-        self.resume_flag.clone().or_else(|| {
-            self.harness_kind()
-                .default_resume_flag()
-                .map(ToOwned::to_owned)
-        })
+        self.resume_flag
+            .clone()
+            .or_else(|| self.harness().resume_flag().map(ToOwned::to_owned))
     }
 }
 
@@ -1547,7 +1464,7 @@ name = "default-app"
         let parsed = parse_project_toml(sample).unwrap();
         let runner = parsed.resolved_runner();
         assert_eq!(runner.harness, "agy");
-        assert_eq!(runner.harness_kind(), HarnessKind::Agy);
+        assert_eq!(runner.harness().id(), "agy");
         assert_eq!(runner.resolved_binary(), "agy");
         assert_eq!(runner.resolved_agent_flag().as_deref(), Some("--agent"));
         assert_eq!(runner.resolved_sandbox_flag().as_deref(), Some("--sandbox"));
@@ -1570,7 +1487,7 @@ extra_args = ["--verbose"]
         let parsed = parse_project_toml(sample).unwrap();
         let runner = parsed.resolved_runner();
         assert_eq!(runner.harness, "opencode");
-        assert_eq!(runner.harness_kind(), HarnessKind::OpenCode);
+        assert_eq!(runner.harness().id(), "opencode");
         assert_eq!(runner.resolved_binary(), "opencode");
         assert_eq!(runner.resolved_agent_flag().as_deref(), Some("--agent"));
         assert_eq!(runner.resolved_sandbox_flag(), None);
@@ -1590,7 +1507,7 @@ resume_flag = "-r"
         let parsed = parse_project_toml(sample).unwrap();
         let runner = parsed.resolved_runner();
         assert_eq!(runner.harness, "custom");
-        assert_eq!(runner.harness_kind(), HarnessKind::Custom);
+        assert_eq!(runner.harness().id(), "custom");
         assert_eq!(runner.resolved_binary(), "my-cli");
         assert_eq!(runner.resolved_agent_flag().as_deref(), Some("-a"));
         assert_eq!(runner.resolved_resume_flag().as_deref(), Some("-r"));

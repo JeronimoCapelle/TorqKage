@@ -14,11 +14,9 @@ use crate::stdin;
 /// If any check fails, it outputs a blocking `PreToolResponse::deny` payload.
 /// Otherwise, outputs `PreToolResponse::allow`.
 pub(crate) fn execute() {
-    let input = stdin::read_stdin_payload::<PreToolUseInput>();
+    let input = stdin::read_pre_tool_use_input();
     let response = evaluate_tool_invocation(&input);
-    if let Ok(json) = serde_json::to_string(&response) {
-        println!("{json}");
-    }
+    stdin::write_pre_tool_use_response(&response);
 }
 
 /// Evaluates a tool invocation input and produces a `PreToolResponse`.

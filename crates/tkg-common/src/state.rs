@@ -145,14 +145,18 @@ impl TkgStatePaths {
 
 /// Resolves the currently active agent name using hierarchical discovery:
 /// 1. `TKG_AGENT` environment variable
-/// 2. `AGY_AGENT` environment variable
+/// 2. harness-specific environment variables (see [`crate::Harness::agent_env_vars`])
 /// 3. `AGENT` environment variable
 /// 4. `MCP_SCOPE` environment variable
 /// 5. `.tkg/state/active_agent.json` (`{"agent": "..."}`)
 /// 6. `.tkg/state/active_agent` (plain text)
 #[must_use]
 pub fn resolve_active_agent(workspace_root: &Path) -> Option<String> {
-    for var in &["TKG_AGENT", "AGY_AGENT", "AGENT", "MCP_SCOPE"] {
+    let harness = crate::harness::runner_for(workspace_root).harness();
+    let env_vars = std::iter::once("TKG_AGENT")
+        .chain(harness.agent_env_vars().iter().copied())
+        .chain(["AGENT", "MCP_SCOPE"]);
+    for var in env_vars {
         if let Ok(val) = std::env::var(var) {
             let trimmed = val.trim();
             if !trimmed.is_empty() {

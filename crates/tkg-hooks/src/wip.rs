@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use tkg_common::{PreInvocationInput, PreInvocationResponse, WorkspaceResolver};
 
-use crate::stdin::read_stdin_payload;
+use crate::stdin::{read_pre_invocation_input, write_pre_invocation_response};
 
 /// Executes the `detect-wip` hook.
 ///
@@ -12,7 +12,7 @@ use crate::stdin::read_stdin_payload;
 /// If files were modified on disk since the previous turn, emits a transient ephemeral notification.
 /// If unchanged or clean, emits `{}` burning zero tokens.
 pub(crate) fn execute() {
-    let input: PreInvocationInput = read_stdin_payload();
+    let input = read_pre_invocation_input();
 
     let root = resolve_workspace_root(&input);
     let config = crate::config::HooksConfig::load(&root);
@@ -23,9 +23,7 @@ pub(crate) fn execute() {
         PreInvocationResponse::empty()
     };
 
-    if let Ok(json) = serde_json::to_string(&resp) {
-        println!("{json}");
-    }
+    write_pre_invocation_response(&resp);
 }
 
 fn resolve_workspace_root(input: &PreInvocationInput) -> PathBuf {

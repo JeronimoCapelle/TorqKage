@@ -19,9 +19,12 @@ where
 {
     // 1. Explicit environment variable set by tkg or outer orchestrator
     if env_lookup("TKG_OUTER_SANDBOX")
-        || env_lookup("AGY_OUTER_SANDBOX")
         || env_lookup("SANDBOX")
         || env_lookup("CONTAINER")
+        || crate::harness::builtin_harnesses()
+            .iter()
+            .flat_map(|h| h.outer_sandbox_env_vars().iter())
+            .any(|var| env_lookup(var))
     {
         return true;
     }

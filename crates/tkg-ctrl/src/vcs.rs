@@ -6,9 +6,12 @@ use tkg_common::{DEFAULT_TOOL_TIMEOUT_SECS, DEFAULT_VCS_QUERY_TIMEOUT_SECS, Subp
 
 use crate::model::AgentManifest;
 
-/// Writes an agent manifest back to disk.
-pub(crate) fn save_agent_to_disk(agent: &AgentManifest) -> Result<(), String> {
-    let content = agent.serialize();
+/// Writes an agent manifest back to disk using the frontmatter format of the configured harness.
+pub(crate) fn save_agent_to_disk(
+    agent: &AgentManifest,
+    harness: &dyn tkg_common::Harness,
+) -> Result<(), String> {
+    let content = agent.serialize_for_harness(harness);
     fs::write(&agent.file_path, content)
         .map_err(|e| format!("Failed to write {}: {e}", agent.file_path.display()))
 }
@@ -110,47 +113,49 @@ pub(crate) fn validate_declarative_contracts(workspace_root: &Path) -> Result<St
     Ok(report)
 }
 
-/// Validates the declarative contracts natively, and conditionally chains `agy plugin validate` if the harness is `agy`.
+/// Validates the declarative contracts natively, and conditionally chains the harness's plugin validator if supported.
 pub(crate) fn run_plugin_validation(workspace_root: &Path) -> Result<String, String> {
     let mut report = validate_declarative_contracts(workspace_root)?;
     let project_cfg = tkg_common::ProjectConfig::detect_or_load(workspace_root);
     let runner = project_cfg.resolved_runner();
+    let harness = runner.harness();
 
-    if runner.harness_kind() == tkg_common::HarnessKind::Agy {
-        if which::which("agy").is_ok() {
-            if let Some(plugin_dir) = resolve_plugin_directory(workspace_root) {
-                let mut cmd = Command::new("agy");
-                cmd.current_dir(workspace_root);
-                cmd.args(["plugin", "validate", &plugin_dir.to_string_lossy()]);
-                let output =
-                    SubprocessSupervisor::run_supervised(cmd, DEFAULT_TOOL_TIMEOUT_SECS)
-                        .map_err(|e| format!("Failed to execute 'agy plugin validate': {e}"))?;
+    if let Some(plugin_dir) = resolve_plugin_directory(workspace_root)
+        && let Some(val_argv) = harness.validate_plugin_command(&plugin_dir)
+        && let Some((prog, args)) = val_argv.split_first()
+    {
+        if which::which(prog).is_ok() {
+            let mut cmd = Command::new(prog);
+            cmd.current_dir(workspace_root);
+            cmd.args(args);
+            let output = SubprocessSupervisor::run_supervised(cmd, DEFAULT_TOOL_TIMEOUT_SECS)
+                .map_err(|e| format!("Failed to execute '{}': {e}", val_argv.join(" ")))?;
 
-                let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-                let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-                let combined = format!("{stdout}\n{stderr}").trim().to_owned();
+            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            let combined = format!("{stdout}\n{stderr}").trim().to_owned();
 
-                if output.status.success()
-                    && !combined.contains("failed")
-                    && !combined.contains("Error")
-                {
-                    _ = writeln!(
-                        report,
-                        "\n--- Antigravity Plugin Validation ---\n{combined}"
-                    );
-                } else if !combined.is_empty() {
-                    return Err(format!(
-                        "{report}\n🛑 'agy plugin validate' failed:\n{combined}"
-                    ));
-                }
+            if output.status.success()
+                && !combined.contains("failed")
+                && !combined.contains("Error")
+            {
+                _ = writeln!(report, "\n--- Harness Plugin Validation ---\n{combined}");
+            } else if !combined.is_empty() {
+                return Err(format!(
+                    "{report}\n🛑 '{}' failed:\n{combined}",
+                    val_argv.join(" ")
+                ));
             }
         } else {
-            report.push_str("\nℹ Antigravity CLI ('agy') not found on host ($PATH); native declarative validation passed.\n");
+            _ = writeln!(
+                report,
+                "\nℹ Harness CLI ('{prog}') not found on host ($PATH); native declarative validation passed."
+            );
         }
     } else {
         _ = writeln!(
             report,
-            "\nℹ Execution harness: '{}' (native validation active; zero 'agy' runtime dependencies)",
+            "\nℹ Execution harness: '{}' (native validation active)",
             runner.harness
         );
     }

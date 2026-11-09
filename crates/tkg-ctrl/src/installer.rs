@@ -88,6 +88,150 @@ pub(crate) fn is_binary_available(name: &str) -> bool {
     which::which(name).is_ok()
 }
 
+/// Behavioural contract for installing, registering, and checking configuration of an execution harness.
+pub(crate) trait HarnessDriver: Send + Sync {
+    /// Returns `(config_or_bundle_path, is_installed, is_symlink)` for diagnostics.
+    fn config_status(
+        &self,
+        workspace_root: &Path,
+        runner: &tkg_common::ProjectRunnerConfig,
+    ) -> (PathBuf, bool, bool);
+
+    /// Installs or registers the harness configuration for the given workspace.
+    fn register_config(
+        &self,
+        workspace_root: &Path,
+        runner: &tkg_common::ProjectRunnerConfig,
+    ) -> Result<String, String>;
+
+    /// Creates the session discovery provider for this harness.
+    fn session_provider(&self) -> Box<dyn crate::session::SessionProvider>;
+}
+
+/// Driver for Google Antigravity (`agy`).
+pub(crate) struct AntigravityDriver;
+
+impl HarnessDriver for AntigravityDriver {
+    fn config_status(
+        &self,
+        _workspace_root: &Path,
+        runner: &tkg_common::ProjectRunnerConfig,
+    ) -> (PathBuf, bool, bool) {
+        let p = tkg_common::harness::plugin_install_dir(runner)
+            .unwrap_or_else(|| PathBuf::from(".gemini/config/plugins/torqkage"));
+        let exists = p.exists();
+        let is_sym = p
+            .symlink_metadata()
+            .is_ok_and(|m| m.file_type().is_symlink());
+        (p, exists, is_sym)
+    }
+
+    fn register_config(
+        &self,
+        workspace_root: &Path,
+        runner: &tkg_common::ProjectRunnerConfig,
+    ) -> Result<String, String> {
+        install_plugin_interactive(workspace_root, runner)
+    }
+
+    fn session_provider(&self) -> Box<dyn crate::session::SessionProvider> {
+        Box::new(crate::session::AntigravitySessionProvider)
+    }
+}
+
+/// Driver for `OpenCode`.
+pub(crate) struct OpenCodeDriver;
+
+impl HarnessDriver for OpenCodeDriver {
+    fn config_status(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> (PathBuf, bool, bool) {
+        let p = workspace_root.join("opencode.json");
+        let exists = p.is_file();
+        (p, exists, false)
+    }
+
+    fn register_config(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> Result<String, String> {
+        register_opencode_config(workspace_root)
+    }
+
+    fn session_provider(&self) -> Box<dyn crate::session::SessionProvider> {
+        Box::new(crate::session::OpenCodeSessionProvider)
+    }
+}
+
+/// Driver for Claude Code.
+pub(crate) struct ClaudeDriver;
+
+impl HarnessDriver for ClaudeDriver {
+    fn config_status(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> (PathBuf, bool, bool) {
+        let p = workspace_root.join("claude.json");
+        let exists = p.is_file();
+        (p, exists, false)
+    }
+
+    fn register_config(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> Result<String, String> {
+        register_claude_config(workspace_root)
+    }
+
+    fn session_provider(&self) -> Box<dyn crate::session::SessionProvider> {
+        // TODO(harness): Implement native ClaudeSessionProvider reading ~/.claude/projects/ JSONL transcripts.
+        Box::new(crate::session::GenericSessionProvider)
+    }
+}
+
+/// Driver for generic / custom CLI harnesses.
+pub(crate) struct GenericDriver;
+
+impl HarnessDriver for GenericDriver {
+    fn config_status(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> (PathBuf, bool, bool) {
+        let p = workspace_root.join(".tkg/state/mcp_servers.json");
+        let exists = p.is_file();
+        (p, exists, false)
+    }
+
+    fn register_config(
+        &self,
+        workspace_root: &Path,
+        _runner: &tkg_common::ProjectRunnerConfig,
+    ) -> Result<String, String> {
+        register_custom_mcp_config(workspace_root)
+    }
+
+    fn session_provider(&self) -> Box<dyn crate::session::SessionProvider> {
+        Box::new(crate::session::GenericSessionProvider)
+    }
+}
+
+/// Resolves the [`HarnessDriver`] matching the configured runner.
+#[must_use]
+pub(crate) fn driver_for(runner: &tkg_common::ProjectRunnerConfig) -> Box<dyn HarnessDriver> {
+    match runner.harness().id() {
+        "agy" => Box::new(AntigravityDriver),
+        "opencode" => Box::new(OpenCodeDriver),
+        "claude" => Box::new(ClaudeDriver),
+        _ => Box::new(GenericDriver),
+    }
+}
+
 /// Runs a diagnostic scan of the host environment, plugin install path,
 /// and dynamically validates all binaries declared across tools.toml and project.toml.
 #[must_use]
@@ -96,32 +240,8 @@ pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
     let runner = project_cfg.resolved_runner();
     let harness_binary = runner.resolved_binary();
 
-    let (plugin_path, plugin_installed, is_symlink) = match runner.harness_kind() {
-        tkg_common::HarnessKind::Agy => {
-            let p = tkg_common::harness::plugin_install_dir(&runner)
-                .unwrap_or_else(|| PathBuf::from(".gemini/config/plugins/torqkage"));
-            let exists = p.exists();
-            let is_sym = p
-                .symlink_metadata()
-                .is_ok_and(|m| m.file_type().is_symlink());
-            (p, exists, is_sym)
-        },
-        tkg_common::HarnessKind::OpenCode => {
-            let p = workspace_root.join("opencode.json");
-            let exists = p.is_file();
-            (p, exists, false)
-        },
-        tkg_common::HarnessKind::Claude => {
-            let p = workspace_root.join("claude.json");
-            let exists = p.is_file();
-            (p, exists, false)
-        },
-        tkg_common::HarnessKind::Custom => {
-            let p = workspace_root.join(".tkg/state/mcp_servers.json");
-            let exists = p.is_file();
-            (p, exists, false)
-        },
-    };
+    let (plugin_path, plugin_installed, is_symlink) =
+        driver_for(&runner).config_status(workspace_root, &runner);
 
     let mut binary_checks = vec![
         BinaryCheck {
@@ -322,16 +442,20 @@ pub(crate) fn install_plugin_interactive(
     #[cfg(unix)]
     ensure_binaries_executable(&dest_bin);
 
-    // Run agy plugin validate if agy is installed
-    let mut validate_cmd = Command::new("agy");
-    validate_cmd.args(["plugin", "validate", &dest.to_string_lossy()]);
-    validate_cmd.current_dir(workspace_root);
-    let val_result = SubprocessSupervisor::run_supervised(validate_cmd, DEFAULT_TOOL_TIMEOUT_SECS);
-
-    let val_status = match val_result {
-        Ok(out) if out.status.success() => "✔ Validation passed",
-        Ok(_) => "○ Installed (agy plugin validate returned warnings)",
-        Err(_) => "○ Installed (agy CLI not found in PATH for pre-validation)",
+    // Run harness plugin validation command if supported by the harness
+    let val_status = if let Some(val_argv) = runner.harness().validate_plugin_command(&dest)
+        && let Some((prog, args)) = val_argv.split_first()
+    {
+        let mut validate_cmd = Command::new(prog);
+        validate_cmd.args(args);
+        validate_cmd.current_dir(workspace_root);
+        match SubprocessSupervisor::run_supervised(validate_cmd, DEFAULT_TOOL_TIMEOUT_SECS) {
+            Ok(out) if out.status.success() => "✔ Validation passed",
+            Ok(_) => "○ Installed (plugin validation returned warnings)",
+            Err(_) => "○ Installed (harness CLI not found in PATH for pre-validation)",
+        }
+    } else {
+        "✔ Installed"
     };
 
     Ok(format!(
@@ -346,12 +470,7 @@ pub(crate) fn register_harness_config(
     workspace_root: &Path,
     runner: &tkg_common::ProjectRunnerConfig,
 ) -> Result<String, String> {
-    match runner.harness_kind() {
-        tkg_common::HarnessKind::Agy => install_plugin_interactive(workspace_root, runner),
-        tkg_common::HarnessKind::OpenCode => register_opencode_config(workspace_root),
-        tkg_common::HarnessKind::Claude => register_claude_config(workspace_root),
-        tkg_common::HarnessKind::Custom => register_custom_mcp_config(workspace_root),
-    }
+    driver_for(runner).register_config(workspace_root, runner)
 }
 
 /// Registers `tkg-mcp` in `opencode.json` for `OpenCode` integration.

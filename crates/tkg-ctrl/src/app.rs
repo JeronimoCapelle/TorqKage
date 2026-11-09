@@ -505,11 +505,12 @@ impl App {
         }
 
         // 3. Save modified manifests to disk
+        let harness = self.runner_config.harness();
         for agent in &mut self.agents {
             if !agent.modified {
                 continue;
             }
-            if let Err(err) = save_agent_to_disk(agent) {
+            if let Err(err) = save_agent_to_disk(agent, harness.as_ref()) {
                 self.validation_modal = Some((
                     false,
                     format!("Failed to save {}:\n{err}", agent.file_path.display()),

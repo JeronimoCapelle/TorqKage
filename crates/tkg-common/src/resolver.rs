@@ -85,7 +85,7 @@ impl WorkspaceResolver {
         current.canonicalize().map_err(TkgError::Io)
     }
 
-    /// Detects if `cwd` is locked inside an Antigravity plugin installation directory
+    /// Detects if `cwd` is locked inside a harness plugin installation directory
     /// and recovers the caller's actual project directory from `$PWD` if valid.
     #[must_use]
     pub fn detect_plugin_sandbox_escape(cwd: &Path) -> Option<PathBuf> {
@@ -94,12 +94,10 @@ impl WorkspaceResolver {
 
         let is_in_plugin_dir = std::env::var("PLUGIN_ROOT").map_or_else(
             |_| {
-                cwd_str.contains("/.gemini/config/plugins/")
-                    || cwd_str.contains("/.antigravity/plugins/")
-                    || cwd_str.contains("/.gemini/plugins/")
-                    || cwd_str.contains("/.opencode/plugins/")
-                    || cwd_str.contains("/.local/share/opencode/plugins/")
-                    || cwd_str.contains("/.claude/plugins/")
+                crate::harness::builtin_harnesses()
+                    .iter()
+                    .flat_map(|h| h.plugin_path_markers())
+                    .any(|marker| cwd_str.contains(marker.as_str()))
             },
             |plugin_root| {
                 Path::new(&plugin_root)

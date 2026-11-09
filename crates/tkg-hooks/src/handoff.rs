@@ -6,11 +6,11 @@ use std::{
     process::Command,
 };
 
-use tkg_common::{
-    InjectStep, SessionStartInput, SessionStartResponse, StopInput, StopResponse, WorkspaceResolver,
-};
+use tkg_common::{InjectStep, SessionStartResponse, StopResponse, WorkspaceResolver};
 
-use crate::stdin::read_stdin_payload;
+use crate::stdin::{
+    read_session_start_input, read_stop_input, write_session_start_response, write_stop_response,
+};
 
 /// Executes the `record-handoff` hook (`Stop`).
 ///
@@ -18,16 +18,14 @@ use crate::stdin::read_stdin_payload;
 /// to `.tkg/state/last_handoff.md` and structured JSON to `.tkg/state/handoff.json`.
 /// Emits `{}` on `stdout` permitting loop termination.
 pub(crate) fn execute_record_handoff() {
-    let input: StopInput = read_stdin_payload();
+    let input = read_stop_input();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
     let config = crate::config::HooksConfig::load(&root);
 
     if !config.stop.enabled || !config.stop.record_handoff {
         let resp = StopResponse::allow();
-        if let Ok(json) = serde_json::to_string(&resp) {
-            println!("{json}");
-        }
+        write_stop_response(&resp);
         return;
     }
 
@@ -47,9 +45,7 @@ pub(crate) fn execute_record_handoff() {
     ));
 
     let resp = StopResponse::allow();
-    if let Ok(json) = serde_json::to_string(&resp) {
-        println!("{json}");
-    }
+    write_stop_response(&resp);
 }
 
 /// Executes the `inject-wake` hook (`SessionStart`).
@@ -142,16 +138,14 @@ fn evaluate_custom_injections(
 }
 
 pub(crate) fn execute_inject_wake() {
-    let input: SessionStartInput = read_stdin_payload();
+    let input = read_session_start_input();
 
     let root = resolve_workspace_root(input.common.workspace_paths.first());
     let config = crate::config::HooksConfig::load(&root);
 
     if !config.session_start.enabled {
         let resp = SessionStartResponse::default();
-        if let Ok(json) = serde_json::to_string(&resp) {
-            println!("{json}");
-        }
+        write_session_start_response(&resp);
         return;
     }
 
@@ -171,9 +165,7 @@ pub(crate) fn execute_inject_wake() {
         &mut resp.inject_steps,
     );
 
-    if let Ok(json) = serde_json::to_string(&resp) {
-        println!("{json}");
-    }
+    write_session_start_response(&resp);
 }
 
 fn resolve_workspace_root(candidate: Option<&PathBuf>) -> PathBuf {
