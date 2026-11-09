@@ -57,7 +57,7 @@ name = "torqkage"
 language = "rust"
 
 # Project release or development version.
-version = "0.1.3"
+version = "0.1.4"
 
 
 # ------------------------------------------------------------------------------

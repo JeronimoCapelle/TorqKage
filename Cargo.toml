@@ -9,7 +9,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 authors = ["Jerónimo Capelle"]
@@ -20,7 +20,7 @@ categories = ["development-tools", "command-line-utilities"]
 
 [workspace.dependencies]
 # Internal workspace crates
-tkg-common = { path = "crates/tkg-common", version = "0.1.3" }
+tkg-common = { path = "crates/tkg-common", version = "0.1.4" }
 
 # Serialization & Configuration
 serde = { version = "1.0", features = ["derive"] }
