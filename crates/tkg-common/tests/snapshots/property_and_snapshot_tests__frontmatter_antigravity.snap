@@ -1,0 +1,40 @@
+---
+source: crates/tkg-common/tests/property_and_snapshot_tests.rs
+expression: fm.serialize_for_harness(&Antigravity)
+---
+---
+name: test-author
+description: "Design Verification & Formal Test Engineer"
+effort: high
+permissionMode: default
+commandExecutionPolicy: turbo
+mainAgent: true
+subagent: true
+allowed_subagents:
+  - mini
+pre_launch_checks:
+  - workspace_clean
+allowed_dirs:
+  - tests
+  - src
+disallowed_dirs:
+  - docs
+disallowed_files:
+  - Cargo.toml
+path_policies:
+  - path: src/**
+    filter: tests_only
+inheritMcp: false
+mcpServers:
+  - name: tkg-tools
+    command: tkg-mcp
+    args: ["--agent", "test-author"]
+tools:
+  - read_file
+mcp_tools:
+  - cargo_nextest
+  - modify_code
+---
+
+# Verification Directives
+Write deterministic property tests.

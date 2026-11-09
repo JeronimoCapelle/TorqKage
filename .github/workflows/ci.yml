@@ -61,14 +61,19 @@ jobs:
       - name: Install Rust toolchain (Stable)
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@cargo-deny
+      - name: Install cargo-deny and cargo-machete
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-machete
 
       - name: Security, License & Banned Dependency Audit (cargo-deny)
         env:
           RUSTC_WRAPPER: ""
           RUSTC_WORKSPACE_WRAPPER: ""
         run: cargo deny check
+
+      - name: Unused Dependency Audit (cargo-machete)
+        run: cargo machete
 
   quality-gate:
     name: Build, Test & Lint
@@ -93,17 +98,22 @@ jobs:
         with:
           shared-key: "torqkage-cache"
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
       - name: Verify code formatting (rustfmt)
         run: cargo fmt --check
 
-      - name: Verify compilation across all workspace crates
-        run: cargo check --workspace --all-targets
+      - name: Verify compilation across all workspace crates, benches, and examples
+        run: cargo check --workspace --all-targets --benches --examples
 
       - name: Enforce strict pedantic linter clean rules (clippy)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Execute automated unit and integration tests
-        run: cargo test --workspace
+      - name: Execute automated unit, property, and snapshot tests (nextest)
+        run: cargo nextest run --workspace --profile ci
 
       - name: Execute documentation tests
         run: cargo test --workspace --doc

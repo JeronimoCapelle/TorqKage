@@ -51,14 +51,12 @@ pub trait Harness: Send + Sync + std::fmt::Debug {
 
     /// Workspace-relative directories searched for agent manifests.
     fn workspace_agent_dirs(&self, workspace_root: &Path) -> Vec<PathBuf> {
-        self.workspace_dir()
-            .map(|d| {
-                vec![
-                    workspace_root.join(&d).join("agents"),
-                    workspace_root.join(d),
-                ]
-            })
-            .unwrap_or_default()
+        self.workspace_dir().map_or_default(|d| {
+            vec![
+                workspace_root.join(&d).join("agents"),
+                workspace_root.join(d),
+            ]
+        })
     }
 
     /// User-global directories searched for agent manifests.

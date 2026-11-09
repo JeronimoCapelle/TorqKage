@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+homepage.workspace = true
 repository.workspace = true
-description = "Ultra-fast ephemeral lifecycle hook CLI runner (<500KB, <1ms) for Torqkage"
+documentation.workspace = true
+description = "Sub-millisecond lifecycle hook interceptor for AI coding agents: enforces path policies, manifest guards, circuit breakers, and session handoffs"
 readme.workspace = true
-keywords.workspace = true
+keywords = ["mcp", "ai", "agents", "hooks", "security"]
 categories.workspace = true
 
 [dependencies]

@@ -303,6 +303,7 @@ mod tests {
             mcp_tool.input_schema["properties"]["lib"]["type"],
             json!("boolean")
         );
+        insta::assert_json_snapshot!("inspect_module_structure_schema", &mcp_tool.input_schema);
     }
 
     #[test]

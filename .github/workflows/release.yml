@@ -18,8 +18,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Generate Release Notes via git-cliff
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES=$(git-cliff --latest --strip header || git-cliff --unreleased --strip header)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${TAG}"
+          fi
+          printf "# Changelog\n\n## [%s]\n\n%s\n" "${TAG#v}" "$NOTES" > CHANGELOG.md
+
       - uses: taiki-e/create-gh-release-action@v1
         with:
+          changelog: CHANGELOG.md
           token: ${{ secrets.GITHUB_TOKEN }}
 
   upload-assets:

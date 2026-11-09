@@ -42,7 +42,9 @@ pub mod wip;
 pub use content_filter::{
     BlockCommentDelimiters, ContentFilterKind, PathPolicy, SyntaxConfig, check_agent_guard_direct,
     check_agent_path_policies_direct, matches_directory_scope,
-    matches_directory_scope_with_containers, path_matches_pattern,
+    matches_directory_scope_with_containers, path_matches_pattern, strip_comments_and_normalize,
+    strip_comments_and_normalize_with_syntax, strip_delimited, strip_delimited_and_normalize,
+    strip_tests_and_normalize, strip_tests_and_normalize_with_syntax,
 };
 pub use error::{Result, TkgError};
 pub use frontmatter::{AgentFrontmatter, discover_agent_frontmatters};

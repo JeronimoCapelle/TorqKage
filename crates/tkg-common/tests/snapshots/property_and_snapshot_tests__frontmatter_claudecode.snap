@@ -1,0 +1,31 @@
+---
+source: crates/tkg-common/tests/property_and_snapshot_tests.rs
+expression: fm.serialize_for_harness(&ClaudeCode)
+---
+---
+name: test-author
+description: "Design Verification & Formal Test Engineer"
+effort: high
+allowed_subagents:
+  - mini
+pre_launch_checks:
+  - workspace_clean
+allowed_dirs:
+  - tests
+  - src
+disallowed_dirs:
+  - docs
+disallowed_files:
+  - Cargo.toml
+path_policies:
+  - path: src/**
+    filter: tests_only
+tools:
+  - read_file
+mcp_tools:
+  - cargo_nextest
+  - modify_code
+---
+
+# Verification Directives
+Write deterministic property tests.

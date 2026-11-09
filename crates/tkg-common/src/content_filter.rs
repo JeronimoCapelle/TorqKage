@@ -391,6 +391,17 @@ pub fn normalize_whitespace(s: &str) -> String {
 }
 
 /// Strips all comments from source code using default Rust syntax and normalizes whitespace.
+///
+/// # Examples
+/// ```
+/// use tkg_common::strip_comments_and_normalize;
+///
+/// let src = "fn add(a: i32, b: i32) -> i32 {\n    // compute sum\n    a + b /* inline */\n}";
+/// assert_eq!(
+///     strip_comments_and_normalize(src),
+///     "fn add(a: i32, b: i32) -> i32 { a + b }"
+/// );
+/// ```
 #[must_use]
 pub fn strip_comments_and_normalize(input: &str) -> String {
     let syntax = SyntaxConfig::generic();
@@ -709,6 +720,14 @@ fn strip_indentation_test_items(input: &str, syntax: &SyntaxConfig) -> String {
 }
 
 /// Strips all content strictly enclosed between `start_marker` and `end_marker`.
+///
+/// # Examples
+/// ```
+/// use tkg_common::strip_delimited;
+///
+/// let src = "keep_before /*BEGIN*/mutable_zone/*END*/ keep_after";
+/// assert_eq!(strip_delimited(src, "/*BEGIN*/", "/*END*/"), "keep_before  keep_after");
+/// ```
 #[must_use]
 pub fn strip_delimited(input: &str, start_marker: &str, end_marker: &str) -> String {
     let mut out = String::with_capacity(input.len());

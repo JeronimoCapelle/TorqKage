@@ -29,9 +29,11 @@ ft           = "test --profile fast"
 
 # Cranelift + Mold rapid iteration (requires Nightly + Cranelift + Mold)
 # Invoke with `+nightly` (e.g. `cargo +nightly cranelift-build`) or `./plugins/torqkage/bin/cargo-fast build`
-cranelift-check = "check --config .cargo/config.fast.toml --profile fast"
-cranelift-build = "build --config .cargo/config.fast.toml --profile fast"
-cranelift-test  = "test --config .cargo/config.fast.toml --profile fast"
+cranelift-check  = "check --config .cargo/config.fast.toml --profile fast"
+cranelift-build  = "build --config .cargo/config.fast.toml --profile fast"
+cranelift-test   = "test --config .cargo/config.fast.toml --profile fast"
+cranelift-clippy = "clippy --config .cargo/config.fast.toml --profile fast"
+cranelift-run    = "run --config .cargo/config.fast.toml --profile fast"
 
 # ==============================================================================
 # 2. TESTING, SANITIZERS & VERIFICATION

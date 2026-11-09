@@ -359,21 +359,21 @@ description = "Creates a new file strictly within the canonical workspace bounds
 # --- Compilation & Compiler Diagnostics ---
 
 [tools.quick_check]
-description = "Runs cargo fast check with zero token noise (exit code only) for maximum incremental iteration speed"
+description = "Runs cargo +nightly fast check with zero token noise (exit code only) for maximum incremental iteration speed"
 action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = false
-command = ["cargo", "fast", "check", "--tests"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "check", "--profile", "fast", "--tests"]
 output_capture = "exit_code_only"
 timeout_seconds = 60
 success_exit_codes = [0]
 
 [tools.cargo_check]
-description = "Runs cargo fast check and returns concise compiler diagnostics"
+description = "Runs cargo +nightly fast check and returns concise compiler diagnostics"
 action = "parameterized_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "check", "--message-format=short", "--color=never"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "check", "--profile", "fast", "--message-format=short", "--color=never"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to check (defaults to workspace)" },
     { name = "all_targets", required = false, flag = "--all-targets", switch = true, description = "Check all targets including tests, benches, and examples" }
@@ -384,11 +384,11 @@ truncate_lines = 120
 timeout_seconds = 120
 
 [tools.cargo_clippy]
-description = "Runs cargo fast clippy across all targets with -D warnings, emitting concise diagnostics"
+description = "Runs cargo +nightly fast clippy across all targets with -D warnings, emitting concise diagnostics"
 action = "parameterized_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "clippy", "--all-targets", "--message-format=short", "--color=never", "--", "-D", "warnings"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "clippy", "--profile", "fast", "--all-targets", "--message-format=short", "--color=never", "--", "-D", "warnings"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to lint (defaults to workspace)" }
 ]
@@ -398,22 +398,22 @@ truncate_lines = 120
 timeout_seconds = 120
 
 [tools.cargo_clippy_fix]
-description = "Runs cargo fast clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
+description = "Runs cargo +nightly fast clippy --fix to automatically resolve compiler-suggested lint fixes (supervised gate)"
 action = "static_command"
 category = "compilation"
 mutating = true
-command = ["cargo", "fast", "clippy", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "clippy", "--profile", "fast", "--fix", "--allow-dirty", "--allow-staged", "--all-targets", "--", "-D", "warnings"]
 output_capture = "stdout"
 truncate_lines = 100
 timeout_seconds = 180
 require_permission_gate = true
 
 [tools.cargo_build]
-description = "Compiles packages and binaries using cargo fast build (Cranelift + Mold + O0 deps) for high-speed compilation"
+description = "Compiles packages and binaries using cargo +nightly fast build (Cranelift + Mold + O0 deps) for high-speed compilation"
 action = "parameterized_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "build"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "build", "--profile", "fast"]
 args = [
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package to build (defaults to workspace)" },
     { name = "bin", required = false, flag = "--bin", conflicts_with = ["all_targets"], regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific binary to build" },
@@ -425,10 +425,10 @@ truncate_lines = 100
 timeout_seconds = 180
 
 [tools.cargo_run]
-description = "Compiles and executes a specific workspace binary via cargo fast run"
+description = "Compiles and executes a specific workspace binary via cargo +nightly fast run"
 action = "parameterized_command"
 category = "compilation"
-command = ["cargo", "fast", "run"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "run", "--profile", "fast"]
 args = [
     { name = "bin", required = false, flag = "--bin", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific binary name to execute" },
     { name = "package", required = false, flag = "-p", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", description = "Specific package containing the binary" }
@@ -642,11 +642,11 @@ timeout_seconds = 10
 # --- Test Suite & Formal Verification Tooling ---
 
 [tools.cargo_test]
-description = "Executes unit and integration tests via cargo fast test with optional target/filter overrides"
+description = "Executes unit and integration tests via cargo +nightly fast test with optional target/filter overrides"
 action = "parameterized_command"
 category = "testing"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "test"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "test", "--profile", "fast"]
 args = [
     { name = "test_target", required = false, regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--test", description = "Optional test binary name (e.g. 'concurrency_test', 'property_test')" },
     { name = "filter", required = false, regex = "^[a-zA-Z0-9_:]+$", description = "Optional test name filter" }
@@ -797,6 +797,19 @@ command = ["cargo", "flamegraph", "--root", "--deterministic"]
 output_capture = "stdout"
 truncate_lines = 50
 timeout_seconds = 240
+
+[tools.samply_profile]
+description = "Records a CPU sampling profile via samply without opening a browser, saving the profile JSON to .tkg/cache/samply-profile.json"
+action = "parameterized_command"
+category = "profiling"
+require_gates = ["tests"]
+command = ["samply", "record", "--save-only", "-o", ".tkg/cache/samply-profile.json", "--", "cargo", "bench"]
+args = [
+    { name = "bench_target", required = false, default = "core_benches", regex = "^[a-zA-Z0-9_][a-zA-Z0-9_-]*$", flag = "--bench", description = "Target benchmark binary to profile under samply (defaults to 'core_benches')" }
+]
+output_capture = "both"
+truncate_lines = 60
+timeout_seconds = 180
 
 [tools.cargo_perf]
 description = "Collects hardware performance counters (cache misses, branch mispredictions, cycle count) during test execution via Linux perf"
@@ -1124,24 +1137,24 @@ truncate_lines = 100
 timeout_seconds = 120
 
 [tools.cargo_check_targets]
-description = "Verifies compilation health of benches and examples (cargo fast check --benches --examples)"
+description = "Verifies compilation health of benches and examples (cargo +nightly --config .cargo/config.fast.toml check --profile fast --benches --examples)"
 action = "static_command"
 category = "compilation"
 tracks_circuit_breaker = true
-command = ["cargo", "fast", "check", "--benches", "--examples"]
+command = ["cargo", "+nightly", "--config", ".cargo/config.fast.toml", "check", "--profile", "fast", "--benches", "--examples"]
 output_capture = "both"
 truncate_lines = 100
 timeout_seconds = 60
 
 [tools.pre_release_gauntlet]
-description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, auto-format, tests, clippy -D warnings, ancillary targets, and docs) in a single pass"
+description = "Executes the deterministic pre-release quality gauntlet (VCS conflicts, auto-format, unused deps via cargo-machete, tests, clippy -D warnings, ancillary targets, and docs) in a single pass"
 action = "static_command"
 category = "release"
 tracks_circuit_breaker = true
 command = [
     "bash",
     "-c",
-    "echo '=== 1. VCS Conflict Check ===' && (git diff --check || (echo 'FAILED: Unresolved VCS conflict markers detected' && exit 1)) && echo 'PASSED: No conflict markers' && echo '=== 2. Codebase Auto-Format ===' && cargo fmt && echo 'PASSED: Formatter executed' && echo '=== 3. Deterministic Nextest ===' && (cargo fast test || cargo test) && echo 'PASSED: All tests green' && echo '=== 4. Pedantic Clippy (-D warnings) ===' && (cargo fast clippy --all-targets -- -D warnings || cargo clippy --all-targets -- -D warnings) && echo 'PASSED: Clippy 0 warnings' && echo '=== 5. Ancillary Targets Check ===' && (cargo fast check --benches --examples || cargo check --benches --examples) && echo 'PASSED: Benches and examples compile' && echo '=== 6. Offline Docs Check ===' && cargo doc --no-deps && echo 'PASSED: Documentation builds without broken links' && echo '=== ALL PRE-RELEASE GAUNTLET CHECKS PASSED ==='"
+    "echo '=== 1. VCS Conflict Check ===' && (git diff --check || (echo 'FAILED: Unresolved VCS conflict markers detected' && exit 1)) && echo 'PASSED: No conflict markers' && echo '=== 2. Codebase Auto-Format ===' && cargo fmt && echo 'PASSED: Formatter executed' && echo '=== 3. Unused Dependency Audit ===' && (! command -v cargo-machete &>/dev/null || cargo machete) && echo 'PASSED: No unused dependencies' && echo '=== 4. Deterministic Nextest ===' && (cargo +nightly --config .cargo/config.fast.toml test --profile fast || cargo test) && echo 'PASSED: All tests green' && echo '=== 5. Pedantic Clippy (-D warnings) ===' && (cargo +nightly --config .cargo/config.fast.toml clippy --profile fast --all-targets -- -D warnings || cargo clippy --all-targets -- -D warnings) && echo 'PASSED: Clippy 0 warnings' && echo '=== 6. Ancillary Targets Check ===' && (cargo +nightly --config .cargo/config.fast.toml check --profile fast --benches --examples || cargo check --benches --examples) && echo 'PASSED: Benches and examples compile' && echo '=== 7. Offline Docs Check ===' && cargo doc --no-deps && echo 'PASSED: Documentation builds without broken links' && echo '=== ALL PRE-RELEASE GAUNTLET CHECKS PASSED ==='"
 ]
 output_capture = "both"
 truncate_lines = 150

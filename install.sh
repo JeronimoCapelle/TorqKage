@@ -355,30 +355,30 @@ build_from_source_install() {
     case "${PROFILE}" in
         perf)
             echo "--> Building high-performance binaries with 'cargo build --profile perf' (fat LTO, stripped)..."
-            cargo build --profile perf -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+            cargo build --profile perf -p tkg-mcp -p tkg-hooks -p torqkage
             bin_source_dir="${workspace_root}/target/perf"
             ;;
         release)
             echo "--> Building release binaries with standard cargo..."
-            cargo build --release -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+            cargo build --release -p tkg-mcp -p tkg-hooks -p torqkage
             bin_source_dir="${workspace_root}/target/release"
             ;;
         fast)
             if [[ -x "${workspace_root}/plugins/torqkage/bin/cargo-fast" ]]; then
                 echo "--> Building fast profile with local cargo-fast..."
-                "${workspace_root}/plugins/torqkage/bin/cargo-fast" build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+                "${workspace_root}/plugins/torqkage/bin/cargo-fast" build -p tkg-mcp -p tkg-hooks -p torqkage
             elif command -v cargo-fast >/dev/null 2>&1; then
                 echo "--> Building fast profile with cargo-fast..."
-                cargo-fast build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+                cargo-fast build -p tkg-mcp -p tkg-hooks -p torqkage
             else
                 echo "--> Notice: cargo-fast not found; building with 'cargo build --profile fast'..."
-                cargo build --profile fast -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+                cargo build --profile fast -p tkg-mcp -p tkg-hooks -p torqkage
             fi
             bin_source_dir="${workspace_root}/target/fast"
             ;;
         dev|debug)
             echo "--> Building dev/debug binaries..."
-            cargo build -p tkg-mcp -p tkg-hooks -p tkg-ctrl
+            cargo build -p tkg-mcp -p tkg-hooks -p torqkage
             bin_source_dir="${workspace_root}/target/debug"
             ;;
         *)

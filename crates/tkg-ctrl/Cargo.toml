@@ -1,14 +1,21 @@
 [package]
-name = "tkg-ctrl"
+name = "torqkage"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+homepage.workspace = true
 repository.workspace = true
-description = "Offline Ratatui terminal configuration deck for Torqkage"
+documentation.workspace = true
+description = "Torqkage (tkg): Interactive Ratatui TUI control deck & launcher for managing AI coding agents, MCP tool permissions, Jujutsu workspaces, and sandboxes"
 readme.workspace = true
-keywords.workspace = true
-categories.workspace = true
+keywords = ["mcp", "tui", "ratatui", "agents", "torqkage"]
+categories = [
+    "command-line-utilities",
+    "development-tools",
+    "command-line-interface",
+    "config",
+]
 
 [[bin]]
 name = "tkg"
@@ -24,7 +31,6 @@ toml = { workspace = true }
 toml_edit = { workspace = true }
 which = { workspace = true }
 rusqlite = { workspace = true }
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

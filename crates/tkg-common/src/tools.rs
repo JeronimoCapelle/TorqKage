@@ -29,6 +29,14 @@ pub enum ToolAction {
 
 impl ToolAction {
     /// Returns the canonical `snake_case` identifier for this tool action.
+    ///
+    /// # Examples
+    /// ```
+    /// use tkg_common::tools::ToolAction;
+    ///
+    /// assert_eq!(ToolAction::FileRead.as_str(), "file_read");
+    /// assert_eq!(ToolAction::MpatchEdit.as_str(), "mpatch_edit");
+    /// ```
     #[must_use]
     pub const fn as_str(&self) -> &str {
         match self {

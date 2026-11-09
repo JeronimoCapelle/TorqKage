@@ -1,0 +1,26 @@
+[package]
+name = "tkg-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tkg-common = { path = "../crates/tkg-common" }
+
+[[bin]]
+name = "fuzz_content_filter"
+path = "fuzz_targets/fuzz_content_filter.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_parsers"
+path = "fuzz_targets/fuzz_parsers.rs"
+test = false
+doc = false
+bench = false

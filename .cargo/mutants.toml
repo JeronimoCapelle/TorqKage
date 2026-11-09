@@ -1,0 +1,21 @@
+# ==============================================================================
+# .cargo/mutants.toml — Mutation Testing Configuration (cargo-mutants)
+# ==============================================================================
+# Focuses mutation testing on security guards, parsers, and policy enforcement
+# while skipping terminal TUI layout rendering and CLI entrypoint boilerplate.
+
+test_tool = "nextest"
+timeout_multiplier = 3.0
+minimum_test_timeout = 15.0
+
+exclude_globs = [
+    "crates/tkg-ctrl/src/ui.rs",
+    "crates/tkg-ctrl/src/main.rs",
+    "crates/tkg-ctrl/src/manual.rs",
+    "crates/*/src/main.rs",
+]
+
+exclude_re = [
+    "impl std::fmt::Display",
+    "impl Debug",
+]

@@ -4,10 +4,12 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
+homepage.workspace = true
 repository.workspace = true
-description = "High-performance native Rust Model Context Protocol (MCP) daemon for Torqkage"
+documentation.workspace = true
+description = "Declarative Model Context Protocol (MCP) server & security firewall for AI coding agents (Claude Code, OpenCode, Cursor, Antigravity) with Bubblewrap sandboxing"
 readme.workspace = true
-keywords.workspace = true
+keywords = ["mcp", "ai", "agents", "sandbox", "claude"]
 categories.workspace = true
 
 [dependencies]
@@ -20,11 +22,12 @@ which = { workspace = true }
 mpatch = { workspace = true }
 regex = { workspace = true }
 anstream = { workspace = true }
-globset = { workspace = true }
 ignore = { workspace = true }
 grep-regex = { workspace = true }
 grep-searcher = { workspace = true }
-tempfile = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
 
 [lints]
 workspace = true

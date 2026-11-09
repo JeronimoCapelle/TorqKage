@@ -1,0 +1,18 @@
+---
+source: crates/tkg-mcp/src/schema.rs
+expression: "&mcp_tool.input_schema"
+---
+{
+  "properties": {
+    "lib": {
+      "description": "Library switch",
+      "type": "boolean"
+    },
+    "max_depth": {
+      "default": 3,
+      "description": "Maximum depth",
+      "type": "integer"
+    }
+  },
+  "type": "object"
+}
