@@ -14,7 +14,9 @@ set -euo pipefail
 
 GITHUB_REPO="JeronimoCapelle/TorqKage"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd || pwd)"
-TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/torqkage"
+HARNESS="${TKG_HARNESS:-agy}"
+PLUGIN_DIR_OVERRIDE=""
+TARGET_PLUGIN_DIR=""
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 
 # Options
@@ -37,7 +39,10 @@ Options:
   --fast                         Shortcut for '--profile fast' (uses cargo-fast if available)
   --version <tag>                Specific release version to download (default: latest)
   --local-only                   Only stage into ./plugins/torqkage/bin/ without global install
-  --no-symlinks                  Install to ~/.gemini/config/plugins/torqkage but skip ~/.local/bin symlinks
+  --no-symlinks                  Install the bundle but skip ~/.local/bin symlinks
+  --harness <name>               Target agent harness: agy (default), opencode, claude, or any custom name
+                                 (also settable via TKG_HARNESS). Selects the global bundle location.
+  --plugin-dir <path>            Override the global bundle install directory
   -h, --help                     Display this help message
 EOF
 }
@@ -79,6 +84,14 @@ while [[ $# -gt 0 ]]; do
             SKIP_SYMLINKS=true
             shift
             ;;
+        --harness)
+            HARNESS="$2"
+            shift 2
+            ;;
+        --plugin-dir)
+            PLUGIN_DIR_OVERRIDE="$2"
+            shift 2
+            ;;
         -h|--help)
             print_usage
             exit 0
@@ -90,6 +103,43 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Resolve the global plugin bundle directory for the selected harness.
+resolve_target_plugin_dir() {
+    if [[ -n "${PLUGIN_DIR_OVERRIDE}" ]]; then
+        TARGET_PLUGIN_DIR="${PLUGIN_DIR_OVERRIDE}"
+        return
+    fi
+    local slug
+    slug="$(echo "${HARNESS}" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9_-')"
+    case "${slug}" in
+        agy|antigravity) TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/torqkage" ;;
+        opencode)        TARGET_PLUGIN_DIR="${HOME}/.local/share/opencode/plugins/torqkage" ;;
+        claude|claude-code) TARGET_PLUGIN_DIR="${HOME}/.claude/plugins/torqkage" ;;
+        ""|custom)       TARGET_PLUGIN_DIR="${HOME}/.config/tkg/plugins/torqkage" ;;
+        *)               TARGET_PLUGIN_DIR="${HOME}/.${slug}/plugins/torqkage" ;;
+    esac
+}
+resolve_target_plugin_dir
+
+# Persist the harness selection into the installed bundle's project.toml ([runner] harness).
+record_harness_selection() {
+    local toml="${TARGET_PLUGIN_DIR}/project.toml"
+    if [[ -f "${toml}" ]]; then
+        if grep -q '^harness = ' "${toml}"; then
+            sed -i "s|^harness = .*|harness = \"${HARNESS}\"|" "${toml}"
+        else
+            printf '\n[runner]\nharness = "%s"\n' "${HARNESS}" >> "${toml}"
+        fi
+    fi
+}
+
+is_agy_harness() {
+    case "$(echo "${HARNESS}" | tr '[:upper:]' '[:lower:]')" in
+        agy|antigravity) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 detect_target() {
     local arch
@@ -123,7 +173,7 @@ install_bundle_to_system() {
     local plugin_manifest_dir="$1"
     local bin_source_dir="$2"
 
-    echo "--> Synchronizing bundle to Gemini plugin root: ${TARGET_PLUGIN_DIR}..."
+    echo "--> Synchronizing bundle to ${HARNESS} plugin root: ${TARGET_PLUGIN_DIR}..."
     if [[ -L "${TARGET_PLUGIN_DIR}" ]]; then
         echo "--> Removing existing legacy symlink at ${TARGET_PLUGIN_DIR}..."
         rm -f "${TARGET_PLUGIN_DIR}"
@@ -177,8 +227,6 @@ install_bundle_to_system() {
     if [[ "${SKIP_SYMLINKS}" = false ]]; then
         echo "--> Configuring user CLI symlinks in ${LOCAL_BIN_DIR}..."
         mkdir -p "${LOCAL_BIN_DIR}"
-        # Clean any legacy symlinks
-        rm -f "${LOCAL_BIN_DIR}/agy-ctrl" "${LOCAL_BIN_DIR}/agy-mcp" "${LOCAL_BIN_DIR}/agy-hooks"
         # Link new binaries
         ln -sf "${TARGET_PLUGIN_DIR}/bin/tkg" "${LOCAL_BIN_DIR}/tkg"
         ln -sf "${TARGET_PLUGIN_DIR}/bin/tkg-mcp" "${LOCAL_BIN_DIR}/tkg-mcp"
@@ -194,8 +242,12 @@ install_bundle_to_system() {
         fi
     fi
 
-    # Validate installed plugin with agy CLI if present
-    if command -v agy >/dev/null 2>&1; then
+    record_harness_selection
+
+    # Validate installed plugin with the harness CLI when supported (agy only)
+    if ! is_agy_harness; then
+        echo "--> Harness '${HARNESS}': skipping 'agy plugin validate'. Set [runner] harness = \"${HARNESS}\" in <project>/.tkg/project.toml."
+    elif command -v agy >/dev/null 2>&1; then
         echo "--> Validating installed plugin with 'agy plugin validate'..."
         agy plugin validate "${TARGET_PLUGIN_DIR}"
     else
@@ -353,7 +405,7 @@ build_from_source_install() {
     chmod +x "${plugin_dir}/bin"/*
 
     if [[ "${LOCAL_ONLY}" = true ]]; then
-        if command -v agy >/dev/null 2>&1; then
+        if is_agy_harness && command -v agy >/dev/null 2>&1; then
             echo "--> Validating local workspace bundle with 'agy plugin validate'..."
             agy plugin validate "${plugin_dir}"
         fi

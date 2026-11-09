@@ -285,15 +285,13 @@ impl ParsedToolsConfig {
     pub(crate) fn load(root: &Path) -> Self {
         let ws_root =
             WorkspaceResolver::find_root(Some(root)).unwrap_or_else(|_| root.to_path_buf());
-        let mut candidates = vec![
-            root.join("tools.toml"),
-            root.join("plugins/torqkage/tools.toml"),
-            ws_root.join("tools.toml"),
-            ws_root.join("plugins/torqkage/tools.toml"),
-        ];
-
-        if let Ok(home) = std::env::var("HOME") {
-            candidates.push(PathBuf::from(home).join(".gemini/config/plugins/torqkage/tools.toml"));
+        let runner = tkg_common::harness::runner_for(root);
+        let mut candidates =
+            tkg_common::harness::config_file_candidates(root, &runner, "tools.toml");
+        for extra in tkg_common::harness::config_file_candidates(&ws_root, &runner, "tools.toml") {
+            if !candidates.contains(&extra) {
+                candidates.push(extra);
+            }
         }
 
         let mut merged = Self::default();

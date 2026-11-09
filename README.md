@@ -56,6 +56,18 @@ Install the engine and register the Torqkage plugin:
 curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash
 ```
 
+Select the target agent harness with `--harness` (default `agy`; also `opencode`, `claude`, or any custom name) and persist the same choice in `project.toml`:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/JeronimoCapelle/TorqKage/main/install.sh | bash -s -- --harness claude
+```
+
+```toml
+# <project>/.tkg/project.toml
+[runner]
+harness = "claude"
+```
+
 ### 2. Build From Source
 To compile from source:
 

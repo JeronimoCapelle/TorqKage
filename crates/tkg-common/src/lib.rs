@@ -25,6 +25,7 @@ pub mod error;
 pub mod frontmatter;
 pub mod gatekeeper;
 pub mod handoff;
+pub mod harness;
 pub mod jujutsu;
 pub mod limits;
 pub mod manifest_guard;

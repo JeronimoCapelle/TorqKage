@@ -336,6 +336,11 @@ impl ProjectRunnerConfig {
         {
             return first.clone();
         }
+        if self.harness_kind() == HarnessKind::Custom
+            && let Some(slug) = crate::harness::harness_slug(self)
+        {
+            return slug;
+        }
         self.harness_kind().default_binary().to_owned()
     }
 

@@ -12,12 +12,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET_PLUGIN_DIR="${HOME}/.gemini/config/plugins/torqkage"
+EXTRA_PLUGIN_DIRS=(
+    "${HOME}/.local/share/opencode/plugins/torqkage"
+    "${HOME}/.claude/plugins/torqkage"
+    "${HOME}/.config/tkg/plugins/torqkage"
+)
 LOCAL_BIN_DIR="${HOME}/.local/bin"
 
 echo "==> [Torqkage] Removing plugin bundle and symlinks..."
 
-# Remove new symlinks and legacy symlinks
-for bin in tkg tkg-mcp tkg-hooks agy-ctrl agy-mcp agy-hooks; do
+# Remove CLI symlinks
+for bin in tkg tkg-mcp tkg-hooks; do
     if [[ -L "${LOCAL_BIN_DIR}/${bin}" ]]; then
         echo "--> Removing symlink ${LOCAL_BIN_DIR}/${bin}..."
         rm -f "${LOCAL_BIN_DIR}/${bin}"
@@ -30,19 +35,18 @@ if [[ -d "${TARGET_PLUGIN_DIR}" ]]; then
     rm -rf "${TARGET_PLUGIN_DIR}"
 fi
 
-# Clean legacy plugin directory if exists
-if [[ -d "${HOME}/.gemini/config/plugins/agy-suite" ]]; then
-    echo "--> Removing legacy plugin directory ${HOME}/.gemini/config/plugins/agy-suite..."
-    rm -rf "${HOME}/.gemini/config/plugins/agy-suite"
-fi
+# Remove bundles installed for other harnesses
+for extra in "${EXTRA_PLUGIN_DIRS[@]}"; do
+    if [[ -d "${extra}" ]]; then
+        echo "--> Removing plugin directory ${extra}..."
+        rm -rf "${extra}"
+    fi
+done
 
 # Clean local workspace bin if exists
 if [[ -d "${SCRIPT_DIR}/plugins/torqkage/bin" ]]; then
     echo "--> Cleaning local workspace bundle ${SCRIPT_DIR}/plugins/torqkage/bin..."
     rm -rf "${SCRIPT_DIR}/plugins/torqkage/bin"
-fi
-if [[ -d "${SCRIPT_DIR}/plugins/agy-suite/bin" ]]; then
-    rm -rf "${SCRIPT_DIR}/plugins/agy-suite/bin"
 fi
 
 echo "================================================================================"

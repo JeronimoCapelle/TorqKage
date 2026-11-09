@@ -101,37 +101,14 @@ fn resolve_workspace_and_config() -> (PathBuf, PathBuf, Option<String>) {
     });
 
     let config_path = custom_config.unwrap_or_else(|| {
-        let candidates = [
-            workspace_root.join("tools.toml"),
-            workspace_root.join(".tkg/tools.toml"),
-            workspace_root.join("plugins/torqkage/tools.toml"),
-            workspace_root.join(".opencode/tools.toml"),
-            workspace_root.join(".claude/tools.toml"),
-        ];
-
-        for c in &candidates {
-            if c.is_file() {
-                return c.clone();
+        if let Some(found) = tkg_common::harness::find_tools_toml(&workspace_root) {
+            if !found.starts_with(&workspace_root) {
+                eprintln!(
+                    "[tkg-mcp] Notice: Using installed plugin configuration: {}",
+                    found.display()
+                );
             }
-        }
-
-        if let Ok(home) = std::env::var("HOME") {
-            let home_p = PathBuf::from(home);
-            let home_candidates = [
-                home_p.join(".gemini/config/plugins/torqkage/tools.toml"),
-                home_p.join(".local/share/opencode/plugins/torqkage/tools.toml"),
-                home_p.join(".claude/plugins/torqkage/tools.toml"),
-            ];
-
-            for hc in &home_candidates {
-                if hc.is_file() {
-                    eprintln!(
-                        "[tkg-mcp] Notice: Using installed plugin configuration: {}",
-                        hc.display()
-                    );
-                    return hc.clone();
-                }
-            }
+            return found;
         }
 
         let fallback = workspace_root.join("tools.toml");

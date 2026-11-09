@@ -1,6 +1,6 @@
 //! Declarative `hooks.toml` parser and hybrid configuration models.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tkg_common::models::HookDecision;
 
@@ -174,29 +174,14 @@ pub(crate) struct HooksConfig {
 }
 
 impl HooksConfig {
-    /// Loads `hooks.toml` using hierarchical discovery:
-    /// 1. `<root>/.tkg/hooks.toml` (workspace-local custom override)
-    /// 2. `<root>/hooks.toml` (per-repo custom override)
-    /// 3. `<root>/plugins/torqkage/hooks.toml` (in-tree plugin default)
-    /// 4. `~/.gemini/config/plugins/torqkage/hooks.toml` (installed plugin fallback)
+    /// Loads `hooks.toml` using harness-neutral hierarchical discovery
+    /// (see [`tkg_common::harness::config_file_candidates`]).
     #[must_use]
     pub(crate) fn load(workspace_root: &Path) -> Self {
-        let mut candidates = vec![
-            workspace_root.join(".tkg/hooks.toml"),
-            workspace_root.join("hooks.toml"),
-            workspace_root.join("plugins/torqkage/hooks.toml"),
-        ];
-
-        if let Ok(home) = std::env::var("HOME") {
-            candidates.push(PathBuf::from(home).join(".gemini/config/plugins/torqkage/hooks.toml"));
-        }
-
-        for path in candidates {
-            if path.is_file()
-                && let Ok(content) = std::fs::read_to_string(&path)
-            {
-                return parse_hooks_config(&content);
-            }
+        if let Some(path) = tkg_common::harness::find_hooks_toml(workspace_root)
+            && let Ok(content) = std::fs::read_to_string(&path)
+        {
+            return parse_hooks_config(&content);
         }
 
         Self::default()

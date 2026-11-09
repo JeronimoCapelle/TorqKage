@@ -442,7 +442,12 @@ pub fn candidate_agent_directories_with_config(
         crate::project::HarnessKind::Agy => {
             dirs.push(workspace_root.join(".gemini/agents"));
         },
-        crate::project::HarnessKind::Custom => {},
+        crate::project::HarnessKind::Custom => {
+            if let Some(slug) = crate::harness::harness_slug(runner) {
+                dirs.push(workspace_root.join(format!(".{slug}/agents")));
+                dirs.push(workspace_root.join(format!(".{slug}")));
+            }
+        },
     }
 
     // 4. User home locations
@@ -456,6 +461,8 @@ pub fn candidate_agent_directories_with_config(
             dirs.push(home_p.join(".opencode/agents"));
         } else if runner.harness_kind() == crate::project::HarnessKind::Claude {
             dirs.push(home_p.join(".claude/agents"));
+        } else if let Some(slug) = crate::harness::harness_slug(runner) {
+            dirs.push(home_p.join(format!(".{slug}/agents")));
         }
         dirs.push(home_p.join(".agents/agents"));
         dirs.push(home_p.join(".agents"));

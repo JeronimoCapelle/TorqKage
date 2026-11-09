@@ -217,6 +217,8 @@ extra_args = ["--verbose"]       # Additional CLI arguments passed on launch
 agent_dirs = ["agents", ".opencode/agents"] # Optional explicit agent discovery search paths
 ```
 
+The harness is chosen by `[runner] harness` in `project.toml` and, at install time, by `./install.sh --harness <name>` (which selects the global bundle location and records the choice in the installed `project.toml`). Unknown names are treated as custom harnesses and use convention-based paths (`.<name>/agents`, `~/.<name>/plugins/torqkage`) with the harness name as the default binary. All configuration discovery (`tools.toml`, `hooks.toml`, plugin directories) is centralized in `tkg_common::harness`.
+
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `harness` | String | `"agy"` | Execution platform: `"agy"`, `"opencode"`, `"claude"`, or `"custom"`. Determines the default binary name and session discovery backend. |

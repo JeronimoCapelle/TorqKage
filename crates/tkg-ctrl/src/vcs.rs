@@ -56,13 +56,8 @@ fn resolve_plugin_directory(workspace_root: &Path) -> Option<std::path::PathBuf>
     if local.is_dir() {
         return Some(local);
     }
-    if let Ok(home) = std::env::var("HOME") {
-        let installed = std::path::PathBuf::from(home).join(".gemini/config/plugins/torqkage");
-        if installed.is_dir() {
-            return Some(installed);
-        }
-    }
-    None
+    let runner = tkg_common::harness::runner_for(workspace_root);
+    tkg_common::harness::plugin_install_dir(&runner).filter(|p| p.is_dir())
 }
 
 /// Runs in-process native schema validation across project.toml, tools.toml, and agent manifests.

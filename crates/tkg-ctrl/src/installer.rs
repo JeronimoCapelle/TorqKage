@@ -98,10 +98,8 @@ pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
 
     let (plugin_path, plugin_installed, is_symlink) = match runner.harness_kind() {
         tkg_common::HarnessKind::Agy => {
-            let p = std::env::var("HOME").map_or_else(
-                |_| PathBuf::from(".gemini/config/plugins/torqkage"),
-                |h| PathBuf::from(h).join(".gemini/config/plugins/torqkage"),
-            );
+            let p = tkg_common::harness::plugin_install_dir(&runner)
+                .unwrap_or_else(|| PathBuf::from(".gemini/config/plugins/torqkage"));
             let exists = p.exists();
             let is_sym = p
                 .symlink_metadata()
@@ -159,7 +157,9 @@ pub(crate) fn run_diagnostics(workspace_root: &Path) -> DiagnosticsReport {
     checked_names.insert("bwrap".to_owned());
 
     // Dynamically check tools declared in tools.toml
-    if let Ok(tools) = load_tools_from_file(workspace_root) {
+    if let Some(tools_path) = tkg_common::harness::find_tools_toml(workspace_root)
+        && let Ok(tools) = load_tools_from_file(&tools_path)
+    {
         for tool in &tools {
             if let Some(cmd) = &tool.command
                 && let Some(bin) = cmd.first()
@@ -259,20 +259,23 @@ fn resolve_source_plugin(workspace_root: &Path) -> Result<PathBuf, String> {
 }
 
 /// Installs the plugin bundle by copying all declarative files, agents, and binaries
-/// directly into `~/.gemini/config/plugins/torqkage`.
+/// into the user-global plugin directory of the configured harness
+/// (see [`tkg_common::harness::plugin_install_dir`]).
 ///
 /// # Errors
 /// Returns an error string if source resolution, directory creation, or file copying fails.
-pub(crate) fn install_plugin_interactive(workspace_root: &Path) -> Result<String, String> {
+pub(crate) fn install_plugin_interactive(
+    workspace_root: &Path,
+    runner: &tkg_common::ProjectRunnerConfig,
+) -> Result<String, String> {
     let local_plugin = resolve_source_plugin(workspace_root)?;
 
-    let home =
-        std::env::var("HOME").map_err(|e| format!("HOME environment variable error: {e}"))?;
-    let target_dir = PathBuf::from(home).join(".gemini/config/plugins");
-    std::fs::create_dir_all(&target_dir)
-        .map_err(|e| format!("Failed to create {}: {e}", target_dir.display()))?;
-
-    let dest = target_dir.join("torqkage");
+    let dest = tkg_common::harness::plugin_install_dir(runner)
+        .ok_or_else(|| "HOME environment variable error: HOME is not set".to_owned())?;
+    if let Some(target_dir) = dest.parent() {
+        std::fs::create_dir_all(target_dir)
+            .map_err(|e| format!("Failed to create {}: {e}", target_dir.display()))?;
+    }
 
     // Remove existing target whether it's an old symlink or directory
     if let Ok(meta) = dest.symlink_metadata() {
@@ -344,7 +347,7 @@ pub(crate) fn register_harness_config(
     runner: &tkg_common::ProjectRunnerConfig,
 ) -> Result<String, String> {
     match runner.harness_kind() {
-        tkg_common::HarnessKind::Agy => install_plugin_interactive(workspace_root),
+        tkg_common::HarnessKind::Agy => install_plugin_interactive(workspace_root, runner),
         tkg_common::HarnessKind::OpenCode => register_opencode_config(workspace_root),
         tkg_common::HarnessKind::Claude => register_claude_config(workspace_root),
         tkg_common::HarnessKind::Custom => register_custom_mcp_config(workspace_root),
